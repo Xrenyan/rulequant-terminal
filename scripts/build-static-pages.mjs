@@ -6,7 +6,7 @@ const root = process.cwd();
 const apiDir = path.join(root, "src", "app", "api");
 const disabledApiDir = path.join(root, "src", "app", "_api_static_disabled");
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-const githubPagesBasePath = process.env.GITHUB_PAGES_BASE_PATH || "/rulequant-terminal";
+const githubPagesBasePath = process.env.GITHUB_PAGES_BASE_PATH || "/rulequant-terminal-pages";
 
 function restoreApiDir() {
   if (fs.existsSync(disabledApiDir) && !fs.existsSync(apiDir)) {

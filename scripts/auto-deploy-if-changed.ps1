@@ -52,7 +52,7 @@ try {
   }
 
   $deployAffecting = $changedFiles | Where-Object {
-    $_ -match "^(src/|public/|tests/|package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|next\.config\.ts|vercel\.json|\.vercelignore|postcss\.config\.mjs|tsconfig\.json|vitest\.config\.ts|eslint\.config\.mjs|\.github/workflows/)"
+    $_ -match "^(src/|public/|tests/|scripts/|package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|next\.config\.ts|vercel\.json|\.vercelignore|postcss\.config\.mjs|tsconfig\.json|vitest\.config\.ts|eslint\.config\.mjs|\.github/workflows/)"
   }
 
   if (-not $deployAffecting.Count) {
@@ -84,6 +84,11 @@ try {
   & (Join-Path $ProjectRoot "scripts\publish-production.ps1") -ProjectRoot $ProjectRoot
   if ($LASTEXITCODE -ne 0) {
     throw "publish failed with code $LASTEXITCODE"
+  }
+
+  & (Join-Path $ProjectRoot "scripts\publish-github-pages.ps1") -ProjectRoot $ProjectRoot
+  if ($LASTEXITCODE -ne 0) {
+    throw "GitHub Pages publish failed with code $LASTEXITCODE"
   }
 
   Set-Content -LiteralPath $markerFile -Value $latestSha -Encoding ASCII
