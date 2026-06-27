@@ -713,8 +713,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const isSeedOnly = !hasLiveDraws && draws.length === seedDraws.length && draws.every((draw, index) => draw.issue === seedDraws[index]?.issue);
   const isCloudData = Boolean(cloudStateMeta?.enabled && cloudStateMeta.recordCount);
   const hasSharedDraws = hasLiveDraws || isCloudData || websiteDraws.length > 0;
+  const isStaticShareHost = typeof window !== "undefined" && window.location.hostname.endsWith("github.io");
   const cloudSyncAt = cloudStateMeta?.updatedAt ? new Date(cloudStateMeta.updatedAt).toLocaleString("zh-CN", { hour12: false }) : "";
-  const displayLastSyncAt = lastSyncAt || cloudSyncAt;
+  const staticSnapshotAt = isStaticShareHost && hasSharedDraws ? (cloudSyncAt || latestRawDraw?.date || "静态快照") : "";
+  const displayLastSyncAt = lastSyncAt || cloudSyncAt || staticSnapshotAt;
   const isUsingSyncedData = websiteDraws.length > 0 || isCloudData || hasLiveDraws;
   const dataSourceLabel = sourceLoading ? "同步中" : websiteDraws.length ? "网站全年数据" : isCloudData ? "云端数据库" : hasLiveDraws ? "实时网址" : isSeedOnly ? "示例数据" : "本地库";
   const latestNumbersLabel = drawNumbersWithZodiac(latestRawDraw, config);
@@ -878,6 +880,13 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   ];
 
   const fetchSourceDraws = useCallback(async (syncPreview = true, saveMode: "none" | "merge" | "replace" = "none") => {
+    if (isStaticShareHost) {
+      setImportErrors([]);
+      setSourceRecords([]);
+      setSourceSummaries([]);
+      setSourceStatus(`静态分享版已内置最新开奖数据，最新期 ${latestRawDraw?.issue ?? "-"}，共 ${activeDraws.length} 条。`);
+      return;
+    }
     setSourceLoading(true);
     setSourceStatus("正在抓取网址数据...");
     try {
@@ -923,10 +932,16 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     } finally {
       setSourceLoading(false);
     }
-  }, [sourceUrl, sourceFromYear, sourceToYear, store]);
+  }, [activeDraws.length, isStaticShareHost, latestRawDraw?.issue, sourceUrl, sourceFromYear, sourceToYear, store]);
 
   useEffect(() => {
     if (sourceLoading || !WEBSITE_FIRST_VIEWS.has(activeView)) return;
+    if (isStaticShareHost) {
+      if (!sourceStatus && hasSharedDraws) {
+        setSourceStatus(`静态分享版已内置最新开奖数据，最新期 ${latestRawDraw?.issue ?? "-"}，共 ${activeDraws.length} 条。`);
+      }
+      return;
+    }
 
     const syncToday = () => {
       const today = new Date().toLocaleDateString("zh-CN");
@@ -938,7 +953,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     queueMicrotask(syncToday);
     const timer = window.setInterval(syncToday, 30 * 60 * 1000);
     return () => window.clearInterval(timer);
-  }, [activeView, fetchSourceDraws, sourceLoading]);
+  }, [activeDraws.length, activeView, fetchSourceDraws, hasSharedDraws, isStaticShareHost, latestRawDraw?.issue, sourceLoading, sourceStatus]);
 
   async function handleParseImport() {
     const result = parseDrawText(importText);
