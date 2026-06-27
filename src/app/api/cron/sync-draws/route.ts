@@ -23,7 +23,7 @@ function makeLog(input: Omit<OperationLog, "id" | "timestamp">): OperationLog {
   };
 }
 
-export async function GET(request: Request) {
+async function runSync(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
@@ -71,4 +71,12 @@ export async function GET(request: Request) {
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
+}
+
+export async function GET(request: Request) {
+  return runSync(request);
+}
+
+export async function POST(request: Request) {
+  return runSync(request);
 }
