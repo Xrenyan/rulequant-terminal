@@ -9,34 +9,42 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: ${{ secrets.VERCEL_TOKEN != '' }}
     env:
       VERCEL_ORG_ID: team_P24QLq5l3GJslmP4BBgCgcBw
       VERCEL_PROJECT_ID: prj_b8ZECDbmlTZk93OlTiGrbCovpBSM
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
+      - name: Check deployment token
+        id: token
+        shell: bash
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Vercel automatic deployment is configured but waiting for VERCEL_TOKEN."
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
+        if: steps.token.outputs.available == 'true'
         uses: actions/checkout@v4
 
       - name: Enable Corepack
+        if: steps.token.outputs.available == 'true'
         run: corepack enable
 
       - name: Install dependencies
+        if: steps.token.outputs.available == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Pull Vercel environment
-        run: pnpm dlx vercel@latest pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        if: steps.token.outputs.available == 'true'
+        run: pnpm dlx vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       - name: Build
-        run: pnpm dlx vercel@latest build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        if: steps.token.outputs.available == 'true'
+        run: pnpm dlx vercel@latest build --prod --token="$VERCEL_TOKEN"
 
       - name: Deploy
-        run: pnpm dlx vercel@latest deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
-
-  waiting-for-vercel-token:
-    runs-on: ubuntu-latest
-    if: ${{ secrets.VERCEL_TOKEN == '' }}
-    steps:
-      - name: Skip deployment
-        run: |
-          echo "Vercel automatic deployment is configured but waiting for VERCEL_TOKEN."
-          echo "The production app can still be deployed from the local verified release flow."
+        if: steps.token.outputs.available == 'true'
+        run: pnpm dlx vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
