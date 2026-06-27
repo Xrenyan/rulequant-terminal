@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { loadCloudState, saveCloudStatePatch } from "@/lib/cloud/server-db";
+import { loadSharedCloudState, saveSharedCloudStatePatch } from "@/lib/cloud/server-state";
 import { fetchDrawsFromUrl } from "@/lib/server/draw-sync";
 import { seedConfig, seedRules, seedSampleCases } from "@/lib/data/seed";
 import type { OperationLog } from "@/types/domain";
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
     const result = await fetchDrawsFromUrl({ baseUrl, fromYear, toYear });
     const sorted = [...result.records].sort((a, b) => a.issue.localeCompare(b.issue, "zh-CN", { numeric: true }));
     const latest = sorted.at(-1);
-    const current = await loadCloudState();
+    const current = await loadSharedCloudState();
     const log = makeLog({
       type: "sync_draws",
       message: `Cloud sync ${sorted.length} draw records, latest issue ${latest?.issue ?? "-"}`,
@@ -52,7 +52,7 @@ export async function GET(request: Request) {
     });
 
     const nextLogs = [log, ...current.logs].sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 200);
-    const state = await saveCloudStatePatch({
+    const state = await saveSharedCloudStatePatch({
       draws: sorted,
       rules: current.rules.length ? current.rules : seedRules,
       samples: current.samples.length ? current.samples : seedSampleCases,

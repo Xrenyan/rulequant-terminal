@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { loadCloudState, saveCloudStatePatch } from "@/lib/cloud/server-db";
+import { loadSharedCloudState, saveSharedCloudStatePatch } from "@/lib/cloud/server-state";
 import type { RuleQuantCloudState } from "@/lib/cloud/cloud-state";
 
 export const runtime = "nodejs";
@@ -13,7 +13,7 @@ function isAuthorized(request: Request) {
 
 export async function GET() {
   try {
-    const state = await loadCloudState();
+    const state = await loadSharedCloudState();
     return NextResponse.json(state, {
       headers: {
         "Cache-Control": "no-store",
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
 
   try {
     const body = (await request.json()) as Partial<Omit<RuleQuantCloudState, "meta">>;
-    const state = await saveCloudStatePatch({
+    const state = await saveSharedCloudStatePatch({
       draws: body.draws,
       rules: body.rules,
       samples: body.samples,

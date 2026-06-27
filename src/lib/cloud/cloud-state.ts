@@ -9,7 +9,7 @@ export type RuleQuantCloudState = {
   backups: RuleLibraryBackup[];
   meta: {
     enabled: boolean;
-    source: "postgres" | "disabled";
+    source: "postgres" | "github" | "disabled";
     updatedAt?: string;
     latestIssue?: string;
     recordCount?: number;
