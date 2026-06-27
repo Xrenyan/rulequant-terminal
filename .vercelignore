@@ -1,0 +1,10 @@
+.git
+.next
+node_modules
+output
+release
+coverage
+*.log
+*.tsbuildinfo
+dev-server*.log
+RuleQuant_Web_Package_*.zip
