@@ -719,6 +719,13 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const displayLastSyncAt = lastSyncAt || cloudSyncAt || staticSnapshotAt;
   const isUsingSyncedData = websiteDraws.length > 0 || isCloudData || hasLiveDraws;
   const dataSourceLabel = sourceLoading ? "同步中" : websiteDraws.length ? "网站全年数据" : isCloudData ? "云端数据库" : hasLiveDraws ? "实时网址" : isSeedOnly ? "示例数据" : "本地库";
+  const sourceRecordBadgeTone = sourceRecords.length || (isStaticShareHost && hasSharedDraws) ? "green" : "slate";
+  const sourceRecordBadgeLabel = sourceRecords.length
+    ? `${sourceRecords.length} 条网址记录`
+    : isStaticShareHost && hasSharedDraws
+      ? `${activeDraws.length} 条静态记录`
+      : "未同步";
+  const shouldWarnStaleData = !websiteDraws.length && !(isStaticShareHost && hasSharedDraws);
   const latestNumbersLabel = drawNumbersWithZodiac(latestRawDraw, config);
   const shouldBuildBacktest = activeView === "dashboard" || activeView === "rules" || activeView === "formula-detail" || activeView === "sample-check" || activeView === "candidate-pool" || activeView === "formula-discovery" || activeView === "backtest" || activeView === "reports";
   const backtest = useMemo(() => {
@@ -1754,7 +1761,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     <Input type="number" value={sourceToYear} onChange={(event) => setSourceToYear(event.target.value)} />
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-400">
-                    <Badge tone={sourceRecords.length ? "green" : "slate"}>{sourceRecords.length ? `${sourceRecords.length} 条网址记录` : "未同步"}</Badge>
+                    <Badge tone={sourceRecordBadgeTone}>{sourceRecordBadgeLabel}</Badge>
                     <span>{sourceStatus || "打开本页会自动同步一次并写入本地库；网站每天更新后，也可以手动重新同步。"}</span>
                   </div>
                 </Panel>
@@ -1774,7 +1781,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   <Metric label="结果生成时间" value={(referenceGeneratedAt || candidateReport.generatedAt) ? new Date(referenceGeneratedAt || candidateReport.generatedAt).toLocaleString("zh-CN", { hour12: false }) : "-"} hint="当前页面" />
                   <Metric label="是否使用最新同步数据" value={isUsingSyncedData ? "是" : "否"} hint={displayLastSyncAt || "未同步"} tone={isUsingSyncedData ? "green" : "yellow"} />
                 </div>
-                {!websiteDraws.length && (
+                {shouldWarnStaleData && (
                   <Panel className="border-amber-300/25 bg-amber-300/[0.07] p-4">
                     <p className="text-sm text-amber-100">当前可能不是最新开奖数据，请先同步。同步新一期开奖后，系统会重新计算综合参考结果。</p>
                   </Panel>
