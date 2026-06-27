@@ -31,7 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, ty
 import type { ColumnDef } from "@tanstack/react-table";
 import { runBacktest } from "@/lib/backtest/run-backtest";
 import { calculateRule } from "@/lib/formula-engine/formula-engine";
-import { clearCandidatePoolCache, generateCandidatePool } from "@/lib/candidate-pool/candidate-pool";
+import { buildReferenceObservation, clearCandidatePoolCache, generateCandidatePool } from "@/lib/candidate-pool/candidate-pool";
 import { discoverFormulaCandidates, type FormulaDiscoveryCandidate } from "@/lib/formula-discovery/formula-discovery";
 import { buildFormulaLedger, buildOneClickFormulaResults, type FormulaLedgerEntry, type OneClickFormulaResult } from "@/lib/formula-ledger/formula-ledger";
 import {
@@ -62,6 +62,7 @@ import type {
   CandidateZodiac,
   DrawRecord,
   OperationLog,
+  ReferenceObservationReport,
   RuleCategory,
   RuleBacktestResult,
   RuleRecord,
@@ -235,6 +236,8 @@ const EMPTY_CANDIDATE_REPORT: CandidatePoolReport = {
   signals: [],
   allNumbers: [],
   allZodiacs: [],
+  topNumbers8: [],
+  topNumbers12: [],
   topNumbers16: [],
   topNumbers18: [],
   topZodiacs7: [],
@@ -246,6 +249,22 @@ const EMPTY_CANDIDATE_REPORT: CandidatePoolReport = {
 const EMPTY_BACKTEST: BacktestResult = {
   generatedAt: "",
   ruleResults: [],
+};
+
+const EMPTY_REFERENCE_OBSERVATION: ReferenceObservationReport = {
+  window: 10,
+  total: 0,
+  top8Hits: 0,
+  top12Hits: 0,
+  top18Hits: 0,
+  zodiac7Hits: 0,
+  zodiac9Hits: 0,
+  top8Rate: 0,
+  top12Rate: 0,
+  top18Rate: 0,
+  zodiac7Rate: 0,
+  zodiac9Rate: 0,
+  items: [],
 };
 
 const WEBSITE_FIRST_VIEWS = new Set<ViewKey>([
@@ -674,7 +693,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const [sourceStatus, setSourceStatus] = useState("");
   const [sourceLoading, setSourceLoading] = useState(false);
   const sourceAutoFetchedDate = useRef<string | null>(null);
-  const [candidateTab, setCandidateTab] = useState<"numbers18" | "numbers16" | "zodiacs9" | "zodiacs8" | "zodiacs7">("numbers18");
+  const [candidateTab, setCandidateTab] = useState<"numbers8" | "numbers12" | "numbers18" | "numbers16" | "zodiacs9" | "zodiacs8" | "zodiacs7">("numbers8");
   const [candidateFocus, setCandidateFocus] = useState<CandidateFocus>(null);
   const [referenceGeneratedAt, setReferenceGeneratedAt] = useState("");
   const [referenceRunId, setReferenceRunId] = useState(0);
@@ -827,6 +846,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     if (!shouldBuildCandidateReport) return EMPTY_CANDIDATE_REPORT;
     return generateCandidatePool({ draws: researchDraws, rules, config, backtest: candidateBacktest, validationSummaries: ruleValidationSummaries });
   }, [shouldBuildCandidateReport, researchDraws, rules, config, candidateBacktest, ruleValidationSummaries, referenceRunId]);
+  const referenceObservation = useMemo(() => {
+    if (activeView !== "candidate-pool") return EMPTY_REFERENCE_OBSERVATION;
+    return buildReferenceObservation({ draws: researchDraws, rules, config, validationSummaries: ruleValidationSummaries, window: 10 });
+  }, [activeView, researchDraws, rules, config, ruleValidationSummaries, referenceRunId]);
   const manualComboRules = useMemo(() => {
     const selected = rules.filter((rule) => selectedComboRuleIds.includes(rule.id));
     return selected.length ? selected : rules.filter((rule) => canRuleParticipateInReference(rule, ruleValidationById.get(rule.id))).slice(0, 6);
@@ -867,7 +890,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     if (candidateFocus?.type === "number") return candidateReport.allNumbers.find((item) => item.number === candidateFocus.value);
     if (candidateFocus?.type === "zodiac") return candidateReport.allZodiacs.find((item) => item.zodiac === candidateFocus.value);
     if (candidateTab.startsWith("zodiacs")) return candidateReport.topZodiacs9[0];
-    return candidateReport.topNumbers18[0];
+    return candidateReport.topNumbers8[0] ?? candidateReport.topNumbers18[0];
   }, [activeView, candidateFocus, candidateReport, candidateTab]);
 
   const drawColumns: ColumnDef<ReturnType<typeof normalizeDraw>>[] = [
@@ -1308,12 +1331,13 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       </div>
                     </div>
                     <div>
-                      <p className="mb-2 text-xs text-slate-500">参考号码 Top 18</p>
-                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 xl:grid-cols-9">
-                        {candidateReport.topNumbers18.length ? candidateReport.topNumbers18.map((item) => (
+                      <p className="mb-2 text-xs text-slate-500">重点号码 Top 8</p>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+                        {candidateReport.topNumbers8.length ? candidateReport.topNumbers8.map((item) => (
                           <span key={item.number} className="flex h-10 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.04] px-1 font-mono text-xs text-white">{candidateNumberLabel(item)}</span>
-                        )) : <span className="col-span-9 text-sm text-slate-500">暂无可用证据，请检查公式是否已启用、可计算且未被手动排除。</span>}
+                        )) : <span className="col-span-full text-sm text-slate-500">暂无可用证据，请检查公式是否已启用、可计算且未被手动排除。</span>}
                       </div>
+                      <p className="mt-2 text-xs text-slate-500">嫌号码太多时先看这里；需要放宽再进综合参考页看 Top 12 / Top 18。</p>
                     </div>
                   </div>
                   <Link href="/candidate-pool" className="mt-5 inline-flex text-sm text-cyan-200 hover:text-cyan-100">查看详细原因和证据</Link>
@@ -1819,6 +1843,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     <p className="text-sm text-emerald-100">{referenceStatus}</p>
                   </Panel>
                 )}
+                <ReferenceObservationPanel report={referenceObservation} />
                 {exceptionRules.length > 0 && <FormulaExceptionPanel items={exceptionRules} calculableCount={calculableRuleCount} />}
                 <FormulaHealthPanel rows={ruleHealthRows} onToggleReserve={(ruleId) => void store.toggleReferenceParticipation(ruleId)} compact />
                 <ManualCombinationPanel
@@ -1841,7 +1866,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {[
-                            ["numbers18", "号码 Top 18"],
+                            ["numbers8", "重点号码 Top 8"],
+                            ["numbers12", "次选号码 Top 12"],
+                            ["numbers18", "宽参考 Top 18"],
                             ["numbers16", "号码 Top 16"],
                             ["zodiacs9", "生肖 Top 9"],
                             ["zodiacs8", "生肖 Top 8"],
@@ -1853,6 +1880,11 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                           ))}
                         </div>
                       </div>
+                      <div className="mb-4 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.055] p-3 text-xs leading-5 text-cyan-50/85">
+                        先看重点 Top 8；它会优先选择直接支持更强、反对更少、净证据更好的号码。Top 18 只作为宽参考，不建议当作主选择范围。
+                      </div>
+                      {candidateTab === "numbers8" && <CandidateNumberList items={candidateReport.topNumbers8} focus={candidateFocus} onFocus={setCandidateFocus} compact />}
+                      {candidateTab === "numbers12" && <CandidateNumberList items={candidateReport.topNumbers12} focus={candidateFocus} onFocus={setCandidateFocus} compact />}
                       {candidateTab === "numbers18" && <CandidateNumberList items={candidateReport.topNumbers18} focus={candidateFocus} onFocus={setCandidateFocus} />}
                       {candidateTab === "numbers16" && <CandidateNumberList items={candidateReport.topNumbers16} focus={candidateFocus} onFocus={setCandidateFocus} />}
                       {candidateTab === "zodiacs9" && <CandidateZodiacList items={candidateReport.topZodiacs9} focus={candidateFocus} onFocus={setCandidateFocus} />}
@@ -2870,9 +2902,9 @@ function evidenceReason(supportRules: CandidateEvidence[], opposeRules: Candidat
   return "暂无明显公式证据";
 }
 
-function CandidateNumberList({ items, focus, onFocus }: { items: CandidateNumber[]; focus: CandidateFocus; onFocus: (focus: CandidateFocus) => void }) {
+function CandidateNumberList({ items, focus, onFocus, compact = false }: { items: CandidateNumber[]; focus: CandidateFocus; onFocus: (focus: CandidateFocus) => void; compact?: boolean }) {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className={cn("grid gap-3", compact ? "grid-cols-2 xl:grid-cols-4" : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4")}>
       {items.map((item, index) => {
         const active = focus?.type === "number" && focus.value === item.number;
         return (
@@ -2880,7 +2912,7 @@ function CandidateNumberList({ items, focus, onFocus }: { items: CandidateNumber
             key={item.number}
             onClick={() => onFocus({ type: "number", value: item.number })}
             className={cn(
-              "rounded-lg border p-4 text-left transition hover:bg-white/[0.055]",
+              compact ? "rounded-lg border p-3 text-left transition hover:bg-white/[0.055]" : "rounded-lg border p-4 text-left transition hover:bg-white/[0.055]",
               active ? "border-cyan-300/35 bg-cyan-300/10" : "border-white/[0.08] bg-white/[0.03]",
             )}
           >
@@ -2889,7 +2921,7 @@ function CandidateNumberList({ items, focus, onFocus }: { items: CandidateNumber
               <Badge tone={item.opposeCount ? "slate" : "green"}>{item.score}</Badge>
             </div>
             <div className="mt-3 flex items-end justify-between">
-              <span className="font-mono text-[32px] font-semibold leading-none text-white">{padNumber(item.number)}</span>
+              <span className={cn("font-mono font-semibold leading-none text-white", compact ? "text-[28px]" : "text-[32px]")}>{padNumber(item.number)}</span>
               <span className="text-sm text-cyan-100">{item.zodiac}</span>
             </div>
             <p className="mt-3 text-xs text-slate-500">
@@ -3103,6 +3135,72 @@ function ReferenceEmptyState() {
           去公式管理
         </Link>
       </div>
+    </Panel>
+  );
+}
+
+function ObservationMetric({ label, hits, total, rate, tone }: { label: string; hits: number; total: number; rate: number; tone: "green" | "cyan" | "yellow" | "violet" }) {
+  return (
+    <div className="rounded-lg border border-white/[0.08] bg-white/[0.035] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-slate-500">{label}</p>
+        <Badge tone={tone}>{rate}%</Badge>
+      </div>
+      <p className="mt-2 font-mono text-[24px] font-semibold text-white">{hits}/{total}</p>
+    </div>
+  );
+}
+
+function HitBadge({ hit, label }: { hit: boolean; label: string }) {
+  return <Badge tone={hit ? "green" : "rose"}>{label}{hit ? "中" : "未中"}</Badge>;
+}
+
+function ReferenceObservationPanel({ report }: { report: ReferenceObservationReport }) {
+  const rows = [...report.items].reverse();
+  return (
+    <Panel className="p-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h3 className="font-semibold text-white">综合推荐近10期观察</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            每一期都只用上一期以前的数据生成综合推荐，再拿本期开奖特码核对。这个是观察概率，不代表后面一定会中。
+          </p>
+        </div>
+        <Badge tone="cyan">观察 {report.total}/{report.window} 期</Badge>
+      </div>
+      {report.total === 0 ? (
+        <p className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.03] p-4 text-sm text-slate-500">数据还不够，暂时不能观察最近10期综合推荐表现。</p>
+      ) : (
+        <>
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <ObservationMetric label="重点号码 Top8" hits={report.top8Hits} total={report.total} rate={report.top8Rate} tone="green" />
+            <ObservationMetric label="次选号码 Top12" hits={report.top12Hits} total={report.total} rate={report.top12Rate} tone="cyan" />
+            <ObservationMetric label="宽参考 Top18" hits={report.top18Hits} total={report.total} rate={report.top18Rate} tone="violet" />
+            <ObservationMetric label="生肖 Top7" hits={report.zodiac7Hits} total={report.total} rate={report.zodiac7Rate} tone="yellow" />
+            <ObservationMetric label="生肖 Top9" hits={report.zodiac9Hits} total={report.total} rate={report.zodiac9Rate} tone="yellow" />
+          </div>
+          <div className="mt-4 space-y-2">
+            {rows.map((item) => (
+              <div key={item.issue} className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="font-medium text-white">{item.issue}期：开 {padNumber(item.special)} {item.zodiac}</p>
+                    <p className="mt-1 text-xs text-slate-500">用 {item.previousIssue ?? "-"} 期以前数据生成，参与公式 {item.ruleCount} 条，证据 {item.signalCount} 条。</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <HitBadge hit={item.hitTop8} label="Top8" />
+                    <HitBadge hit={item.hitTop12} label="Top12" />
+                    <HitBadge hit={item.hitTop18} label="Top18" />
+                    <HitBadge hit={item.hitZodiac7} label="肖7" />
+                    <HitBadge hit={item.hitZodiac9} label="肖9" />
+                  </div>
+                </div>
+                <p className="mt-2 font-mono text-xs text-cyan-100">Top8：{item.top8Numbers.map(padNumber).join("、") || "-"}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </Panel>
   );
 }

@@ -66,6 +66,36 @@ export function exportSampleReport(results: SampleCheckResult[]) {
 export function exportCandidatePoolExcel(report: CandidatePoolReport) {
   exportWorkbook(
     {
+      top_numbers_8: report.topNumbers8.map((item, index) => ({
+        rank: index + 1,
+        number: item.number,
+        zodiac: item.zodiac,
+        tail: item.tail,
+        head: item.head,
+        sum: item.sum,
+        element: item.element,
+        color: item.color,
+        score: item.score,
+        supportCount: item.supportCount,
+        opposeCount: item.opposeCount,
+        supportRules: item.supportRules.map((rule) => rule.ruleName).join(" | "),
+        opposeRules: item.opposeRules.map((rule) => rule.ruleName).join(" | "),
+      })),
+      top_numbers_12: report.topNumbers12.map((item, index) => ({
+        rank: index + 1,
+        number: item.number,
+        zodiac: item.zodiac,
+        tail: item.tail,
+        head: item.head,
+        sum: item.sum,
+        element: item.element,
+        color: item.color,
+        score: item.score,
+        supportCount: item.supportCount,
+        opposeCount: item.opposeCount,
+        supportRules: item.supportRules.map((rule) => rule.ruleName).join(" | "),
+        opposeRules: item.opposeRules.map((rule) => rule.ruleName).join(" | "),
+      })),
       top_numbers_18: report.topNumbers18.map((item, index) => ({
         rank: index + 1,
         number: item.number,
@@ -130,6 +160,12 @@ function escapeHtml(value: unknown): string {
 }
 
 export function exportCandidatePoolHtml(report: CandidatePoolReport) {
+  const focusedNumberRows = report.topNumbers8
+    .map(
+      (item, index) =>
+        `<tr><td>${index + 1}</td><td>${String(item.number).padStart(2, "0")}</td><td>${escapeHtml(item.zodiac)}</td><td>${item.score}</td><td>${item.supportCount}</td><td>${item.opposeCount}</td><td>${escapeHtml(item.supportRules.map((rule) => rule.ruleName).join("、"))}</td><td>${escapeHtml(item.opposeRules.map((rule) => rule.ruleName).join("、"))}</td></tr>`,
+    )
+    .join("");
   const numberRows = report.topNumbers18
     .map(
       (item, index) =>
@@ -142,6 +178,6 @@ export function exportCandidatePoolHtml(report: CandidatePoolReport) {
         `<tr><td>${index + 1}</td><td>${escapeHtml(item.zodiac)}</td><td>${item.score}</td><td>${escapeHtml(item.numbers.map((number) => String(number.number).padStart(2, "0")).join("、"))}</td><td>${item.supportCount}</td><td>${item.opposeCount}</td></tr>`,
     )
     .join("");
-  const html = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>RuleQuant 规则共识候选池</title><body style="font-family:Arial,'Microsoft YaHei',sans-serif;background:#05070d;color:#eef;padding:32px"><h1>RuleQuant 规则共识候选池</h1><p>生成时间：${escapeHtml(report.generatedAt)}，最新期：${escapeHtml(report.latestIssue ?? "-")}，启用规则：${report.ruleCount}，信号：${report.signalCount}</p><h2>综合评分候选号码 Top 18</h2><table border="1" cellspacing="0" cellpadding="8"><thead><tr><th>排名</th><th>号码</th><th>生肖</th><th>评分</th><th>支持</th><th>反对</th><th>支持规则</th><th>反对规则</th></tr></thead><tbody>${numberRows}</tbody></table><h2>综合评分候选生肖 Top 9</h2><table border="1" cellspacing="0" cellpadding="8"><thead><tr><th>排名</th><th>生肖</th><th>评分</th><th>号码</th><th>支持</th><th>反对</th></tr></thead><tbody>${zodiacRows}</tbody></table><p style="opacity:.7">${escapeHtml(report.riskNotice)}</p></body></html>`;
+  const html = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>RuleQuant 规则共识候选池</title><body style="font-family:Arial,'Microsoft YaHei',sans-serif;background:#05070d;color:#eef;padding:32px"><h1>RuleQuant 规则共识候选池</h1><p>生成时间：${escapeHtml(report.generatedAt)}，最新期：${escapeHtml(report.latestIssue ?? "-")}，启用规则：${report.ruleCount}，信号：${report.signalCount}</p><h2>重点精筛号码 Top 8</h2><p>优先看这里；Top 18 只是宽参考。</p><table border="1" cellspacing="0" cellpadding="8"><thead><tr><th>排名</th><th>号码</th><th>生肖</th><th>评分</th><th>支持</th><th>反对</th><th>支持规则</th><th>反对规则</th></tr></thead><tbody>${focusedNumberRows}</tbody></table><h2>综合评分候选号码 Top 18</h2><table border="1" cellspacing="0" cellpadding="8"><thead><tr><th>排名</th><th>号码</th><th>生肖</th><th>评分</th><th>支持</th><th>反对</th><th>支持规则</th><th>反对规则</th></tr></thead><tbody>${numberRows}</tbody></table><h2>综合评分候选生肖 Top 9</h2><table border="1" cellspacing="0" cellpadding="8"><thead><tr><th>排名</th><th>生肖</th><th>评分</th><th>号码</th><th>支持</th><th>反对</th></tr></thead><tbody>${zodiacRows}</tbody></table><p style="opacity:.7">${escapeHtml(report.riskNotice)}</p></body></html>`;
   downloadBlob(new Blob([html], { type: "text/html;charset=utf-8" }), "rulequant-candidate-pool.html");
 }

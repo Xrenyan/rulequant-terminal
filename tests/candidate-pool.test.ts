@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clearCandidatePoolCache, generateCandidatePool, getCandidatePoolCacheSize } from "@/lib/candidate-pool/candidate-pool";
+import { buildReferenceObservation, clearCandidatePoolCache, generateCandidatePool, getCandidatePoolCacheSize } from "@/lib/candidate-pool/candidate-pool";
 import { runBacktest } from "@/lib/backtest/run-backtest";
 import { seedConfig, seedDraws, seedRules } from "@/lib/data/seed";
 
@@ -22,6 +22,8 @@ describe("candidate pool", () => {
 
     expect(report.latestIssue).toBe(seedDraws.at(-1)?.issue);
     expect(report.ruleCount).toBe(confirmedRules.filter((rule) => rule.enabled).length);
+    expect(report.topNumbers8).toHaveLength(8);
+    expect(report.topNumbers12).toHaveLength(12);
     expect(report.topNumbers16).toHaveLength(16);
     expect(report.topNumbers18).toHaveLength(18);
     expect(report.topZodiacs7).toHaveLength(7);
@@ -98,6 +100,7 @@ describe("candidate pool", () => {
 
     expect(report.ruleCount).toBe(1);
     expect(report.signalCount).toBeGreaterThan(0);
+    expect(report.topNumbers8.every((candidate) => candidate.supportCount + candidate.opposeCount > 0)).toBe(true);
     expect(report.topNumbers18.every((candidate) => candidate.supportCount + candidate.opposeCount > 0)).toBe(true);
   });
 
@@ -112,7 +115,27 @@ describe("candidate pool", () => {
 
     expect(report.ruleCount).toBe(0);
     expect(report.signalCount).toBe(0);
+    expect(report.topNumbers8).toEqual([]);
+    expect(report.topNumbers12).toEqual([]);
     expect(report.topNumbers18).toEqual([]);
     expect(report.topZodiacs9).toEqual([]);
+  });
+
+  it("observes the last 10 comprehensive recommendations against realized specials", () => {
+    const confirmedRules = seedRules.map((rule) => ({ ...rule, manuallyConfirmed: true }));
+    const observation = buildReferenceObservation({ draws: seedDraws, rules: confirmedRules, config: seedConfig, window: 10 });
+
+    expect(observation.total).toBeGreaterThan(0);
+    expect(observation.total).toBeLessThanOrEqual(10);
+    expect(observation.top8Rate).toBeGreaterThanOrEqual(0);
+    expect(observation.top8Rate).toBeLessThanOrEqual(100);
+    expect(observation.items[0]).toMatchObject({
+      issue: expect.any(String),
+      previousIssue: expect.any(String),
+      special: expect.any(Number),
+      zodiac: expect.any(String),
+      hitTop8: expect.any(Boolean),
+    });
+    expect(observation.items.every((item) => item.top8Numbers.length <= 8)).toBe(true);
   });
 });

@@ -323,10 +323,47 @@ export type CandidatePoolReport = {
   signals: RuleSignal[];
   allNumbers: CandidateNumber[];
   allZodiacs: CandidateZodiac[];
+  topNumbers8: CandidateNumber[];
+  topNumbers12: CandidateNumber[];
   topNumbers16: CandidateNumber[];
   topNumbers18: CandidateNumber[];
   topZodiacs7: CandidateZodiac[];
   topZodiacs8: CandidateZodiac[];
   topZodiacs9: CandidateZodiac[];
   riskNotice: string;
+};
+
+export type ReferenceObservationItem = {
+  issue: string;
+  previousIssue?: string;
+  special: number;
+  zodiac: string;
+  top8Numbers: number[];
+  top12Numbers: number[];
+  top18Numbers: number[];
+  top7Zodiacs: string[];
+  top9Zodiacs: string[];
+  hitTop8: boolean;
+  hitTop12: boolean;
+  hitTop18: boolean;
+  hitZodiac7: boolean;
+  hitZodiac9: boolean;
+  ruleCount: number;
+  signalCount: number;
+};
+
+export type ReferenceObservationReport = {
+  window: number;
+  total: number;
+  top8Hits: number;
+  top12Hits: number;
+  top18Hits: number;
+  zodiac7Hits: number;
+  zodiac9Hits: number;
+  top8Rate: number;
+  top12Rate: number;
+  top18Rate: number;
+  zodiac7Rate: number;
+  zodiac9Rate: number;
+  items: ReferenceObservationItem[];
 };

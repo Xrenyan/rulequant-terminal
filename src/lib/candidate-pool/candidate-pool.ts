@@ -1,6 +1,8 @@
 import { aggregateZodiacCandidates, buildNumberCandidates } from "@/lib/scoring/scoring-engine";
 import { buildRuleSignals } from "@/lib/signal-system/signal-system";
-import type { BacktestResult, CandidatePoolReport, DrawRecord, RuleQuantConfig, RuleRecord } from "@/types/domain";
+import { getNumberAttributes } from "@/lib/engine/attributes";
+import { runBacktest } from "@/lib/backtest/run-backtest";
+import type { BacktestResult, CandidateNumber, CandidatePoolReport, DrawRecord, ReferenceObservationReport, RuleQuantConfig, RuleRecord } from "@/types/domain";
 import type { RuleValidationSummary } from "@/lib/rules/rule-validation";
 
 type GenerateCandidatePoolInput = {
@@ -52,6 +54,40 @@ export function getCandidatePoolCacheSize(): number {
   return candidatePoolCache.size;
 }
 
+function focusedNumberScore(candidate: CandidateNumber): number {
+  const strongSupportRules = candidate.supportRules.filter((rule) => rule.scoreDelta >= 0.45);
+  const strongSupportWeight = strongSupportRules.reduce((sum, rule) => sum + rule.scoreDelta, 0);
+  const opposeWeight = candidate.opposeRules.reduce((sum, rule) => sum + Math.abs(rule.scoreDelta), 0);
+  const netEvidence = candidate.supportCount - candidate.opposeCount;
+
+  return Number((
+    candidate.score
+    + strongSupportRules.length * 0.7
+    + strongSupportWeight * 0.22
+    + Math.min(netEvidence, 12) * 0.08
+    - candidate.opposeCount * 0.45
+    - opposeWeight * 0.12
+  ).toFixed(3));
+}
+
+function focusedNumbers(candidates: CandidateNumber[], count: number): CandidateNumber[] {
+  const ranked = [...candidates].sort((a, b) => {
+    const scoreDiff = focusedNumberScore(b) - focusedNumberScore(a);
+    if (scoreDiff) return scoreDiff;
+    return b.score - a.score || b.supportCount - a.supportCount || a.opposeCount - b.opposeCount || a.number - b.number;
+  });
+  const preferred = ranked.filter((candidate) => candidate.opposeCount === 0 || candidate.supportCount >= candidate.opposeCount * 2);
+  const result: CandidateNumber[] = [];
+
+  [...preferred, ...ranked].forEach((candidate) => {
+    if (result.length >= count) return;
+    if (result.some((item) => item.number === candidate.number)) return;
+    result.push(candidate);
+  });
+
+  return result;
+}
+
 export function generateCandidatePool(input: GenerateCandidatePoolInput): CandidatePoolReport {
   const key = candidateCacheKey(input);
   const cached = candidatePoolCache.get(key);
@@ -76,6 +112,8 @@ export function generateCandidatePool(input: GenerateCandidatePoolInput): Candid
     signals,
     allNumbers,
     allZodiacs,
+    topNumbers8: signals.length ? focusedNumbers(evidencedNumbers, 8) : [],
+    topNumbers12: signals.length ? focusedNumbers(evidencedNumbers, 12) : [],
     topNumbers16: signals.length ? evidencedNumbers.slice(0, 16) : [],
     topNumbers18: signals.length ? evidencedNumbers.slice(0, 18) : [],
     topZodiacs7: signals.length ? evidencedZodiacs.slice(0, 7) : [],
@@ -86,4 +124,76 @@ export function generateCandidatePool(input: GenerateCandidatePoolInput): Candid
 
   candidatePoolCache.set(key, report);
   return report;
+}
+
+function rate(hits: number, total: number): number {
+  return total ? Number(((hits / total) * 100).toFixed(2)) : 0;
+}
+
+export function buildReferenceObservation(input: GenerateCandidatePoolInput & { window?: number }): ReferenceObservationReport {
+  const sortedDraws = sortDraws(input.draws);
+  const windowSize = input.window ?? 10;
+  const startIndex = Math.max(1, sortedDraws.length - windowSize);
+  const items = sortedDraws.slice(startIndex).flatMap((targetDraw, offset) => {
+    const targetIndex = startIndex + offset;
+    const previousDraw = sortedDraws[targetIndex - 1];
+    const priorDraws = sortedDraws.slice(0, targetIndex);
+    if (!previousDraw || priorDraws.length < 2) return [];
+
+    const priorBacktest = runBacktest({ draws: priorDraws, rules: input.rules, config: input.config });
+    const report = generateCandidatePool({
+      draws: priorDraws,
+      rules: input.rules,
+      config: input.config,
+      backtest: priorBacktest,
+      validationSummaries: input.validationSummaries,
+    });
+    const attributes = getNumberAttributes(targetDraw.special, input.config);
+    const top8Numbers = report.topNumbers8.map((candidate) => candidate.number);
+    const top12Numbers = report.topNumbers12.map((candidate) => candidate.number);
+    const top18Numbers = report.topNumbers18.map((candidate) => candidate.number);
+    const top7Zodiacs = report.topZodiacs7.map((candidate) => candidate.zodiac);
+    const top9Zodiacs = report.topZodiacs9.map((candidate) => candidate.zodiac);
+
+    return [{
+      issue: targetDraw.issue,
+      previousIssue: previousDraw.issue,
+      special: targetDraw.special,
+      zodiac: attributes.zodiac,
+      top8Numbers,
+      top12Numbers,
+      top18Numbers,
+      top7Zodiacs,
+      top9Zodiacs,
+      hitTop8: top8Numbers.includes(targetDraw.special),
+      hitTop12: top12Numbers.includes(targetDraw.special),
+      hitTop18: top18Numbers.includes(targetDraw.special),
+      hitZodiac7: top7Zodiacs.includes(attributes.zodiac),
+      hitZodiac9: top9Zodiacs.includes(attributes.zodiac),
+      ruleCount: report.ruleCount,
+      signalCount: report.signalCount,
+    }];
+  });
+
+  const top8Hits = items.filter((item) => item.hitTop8).length;
+  const top12Hits = items.filter((item) => item.hitTop12).length;
+  const top18Hits = items.filter((item) => item.hitTop18).length;
+  const zodiac7Hits = items.filter((item) => item.hitZodiac7).length;
+  const zodiac9Hits = items.filter((item) => item.hitZodiac9).length;
+
+  return {
+    window: windowSize,
+    total: items.length,
+    top8Hits,
+    top12Hits,
+    top18Hits,
+    zodiac7Hits,
+    zodiac9Hits,
+    top8Rate: rate(top8Hits, items.length),
+    top12Rate: rate(top12Hits, items.length),
+    top18Rate: rate(top18Hits, items.length),
+    zodiac7Rate: rate(zodiac7Hits, items.length),
+    zodiac9Rate: rate(zodiac9Hits, items.length),
+    items,
+  };
 }
