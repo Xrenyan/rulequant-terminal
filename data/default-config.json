@@ -1,0 +1,7 @@
+{
+  "zodiacOrder": ["马", "蛇", "龙", "兔", "虎", "牛", "鼠", "猪", "狗", "鸡", "猴", "羊"],
+  "sevenTailOffsets": [-3, -2, -1, 0, 1, 2, 4],
+  "eightZodiacPattern": [1, 2, 3, 4, 5, 6, 5, 4, 3, 2],
+  "killThreePattern": [7, 6, 5, 4, 3, 2, 1, 2, 3, 4, 5, 6],
+  "note": "完整默认配置在 src/lib/config/default-config.ts，可在配置中心导出为 JSON。"
+}

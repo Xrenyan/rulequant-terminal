@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>&#25171;&#24320; RuleQuant</title>
+  <HTA:APPLICATION
+    ID="RuleQuantLauncher"
+    APPLICATIONNAME="RuleQuant Launcher"
+    BORDER="thin"
+    CAPTION="yes"
+    SHOWINTASKBAR="yes"
+    SINGLEINSTANCE="yes"
+    SYSMENU="yes"
+    WINDOWSTATE="normal"
+  />
+  <style>
+    body {
+      margin: 0;
+      font-family: "Microsoft YaHei", Arial, sans-serif;
+      background: #060b12;
+      color: #e5f3ff;
+    }
+    .wrap {
+      padding: 36px;
+      min-height: 420px;
+      background:
+        radial-gradient(circle at 15% 10%, rgba(34, 211, 238, .22), transparent 32%),
+        radial-gradient(circle at 85% 5%, rgba(124, 58, 237, .22), transparent 28%),
+        #060b12;
+    }
+    .card {
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      border-radius: 16px;
+      padding: 28px;
+      max-width: 760px;
+      box-shadow: 0 24px 80px rgba(0,0,0,.35);
+    }
+    h1 { margin: 0; font-size: 30px; }
+    p { color: #a8bbcf; line-height: 1.8; font-size: 14px; }
+    button {
+      margin-top: 18px;
+      height: 48px;
+      padding: 0 24px;
+      border-radius: 10px;
+      border: 1px solid rgba(103,232,249,.55);
+      background: rgba(34,211,238,.18);
+      color: #ecfeff;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .muted { margin-top: 18px; color: #7f93aa; font-size: 12px; }
+    .status {
+      margin-top: 18px;
+      padding: 12px 14px;
+      border: 1px solid rgba(52,211,153,.24);
+      border-radius: 10px;
+      background: rgba(16,185,129,.10);
+      color: #d1fae5;
+    }
+  </style>
+  <script language="javascript">
+    function packageRoot() {
+      var fso = new ActiveXObject("Scripting.FileSystemObject");
+      var path = decodeURI(location.pathname);
+      if (path.charAt(0) === "/") path = path.substring(1);
+      path = path.replace(/\//g, "\\");
+      return fso.GetParentFolderName(path);
+    }
+
+    function startRuleQuant() {
+      var status = document.getElementById("status");
+      try {
+        var shell = new ActiveXObject("WScript.Shell");
+        var root = packageRoot();
+        var vbs = root + "\\start-rulequant-hidden.vbs";
+        status.innerText = "Starting local RuleQuant service, please wait...";
+        shell.Run('wscript.exe "' + vbs + '"', 0, false);
+        window.setTimeout(function () {
+          shell.Run("http://127.0.0.1:3030/dashboard", 1, false);
+          status.innerText = "Browser opened. If the page is not ready, wait a few seconds and click again.";
+        }, 3000);
+      } catch (error) {
+        status.innerText = "Windows blocked this launcher. Please double-click start batch file in the same folder.";
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>RuleQuant &#22238;&#27979;&#32456;&#31471;</h1>
+      <p>&#28857;&#20987;&#19979;&#38754;&#25353;&#38062;&#21518;&#65292;&#31995;&#32479;&#20250;&#20351;&#29992;&#21387;&#32553;&#21253;&#20869;&#33258;&#24102;&#30340; node.exe &#21551;&#21160;&#26412;&#22320;&#32593;&#39029;&#26381;&#21153;&#65292;&#24182;&#33258;&#21160;&#25171;&#24320;&#27983;&#35272;&#22120;&#12290;&#26222;&#36890;&#29992;&#25143;&#19981;&#38656;&#35201;&#23433;&#35013; Node.js&#12290;</p>
+      <button onclick="startRuleQuant()">&#21551;&#21160;&#24182;&#25171;&#24320; RuleQuant</button>
+      <div id="status" class="status">&#23578;&#26410;&#21551;&#21160;&#12290;</div>
+      <p class="muted">&#22914;&#26524;&#20844;&#21496;&#30005;&#33041;&#31105;&#27490; HTA&#65292;&#35831;&#20851;&#38381;&#36825;&#20010;&#31383;&#21475;&#65292;&#21452;&#20987;&#21516;&#30446;&#24405;&#19979;&#30340;&#12300;&#21551;&#21160;RuleQuant&#26381;&#21153;.bat&#12301;&#12290;</p>
+    </div>
+  </div>
+</body>
+</html>
