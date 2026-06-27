@@ -15,6 +15,69 @@ if (-not (Test-Path -LiteralPath $StateRoot)) {
 }
 
 $markerFile = Join-Path $StateRoot "last-deployed-sha.txt"
+$cloudStateUrl = "https://rulequant-terminal.vercel.app/api/cloud/state"
+$pagesStateUrl = "https://xrenyan.github.io/rulequant-terminal-pages/static-cloud-state.json"
+
+function Get-RuleQuantStateSummary {
+  param([string]$Url)
+
+  $cacheBust = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+  $state = Invoke-RestMethod -Uri "${Url}?t=$cacheBust" -TimeoutSec 45 -Headers @{
+    "Cache-Control" = "no-cache"
+    "User-Agent" = "RuleQuant-auto-deploy-check"
+  }
+
+  [PSCustomObject]@{
+    LatestIssue = [string]$state.meta.latestIssue
+    UpdatedAt = [string]$state.meta.updatedAt
+    DrawCount = @($state.draws).Count
+  }
+}
+
+function Get-PagesDataStatus {
+  try {
+    $cloud = Get-RuleQuantStateSummary -Url $cloudStateUrl
+    $pages = Get-RuleQuantStateSummary -Url $pagesStateUrl
+    $needsRefresh = ($cloud.LatestIssue -ne $pages.LatestIssue) -or ($cloud.UpdatedAt -ne $pages.UpdatedAt) -or ($cloud.DrawCount -ne $pages.DrawCount)
+
+    [PSCustomObject]@{
+      CheckFailed = $false
+      NeedsRefresh = $needsRefresh
+      CloudLatestIssue = $cloud.LatestIssue
+      PagesLatestIssue = $pages.LatestIssue
+      CloudUpdatedAt = $cloud.UpdatedAt
+      PagesUpdatedAt = $pages.UpdatedAt
+      CloudDrawCount = $cloud.DrawCount
+      PagesDrawCount = $pages.DrawCount
+      Error = ""
+    }
+  } catch {
+    [PSCustomObject]@{
+      CheckFailed = $true
+      NeedsRefresh = $false
+      CloudLatestIssue = ""
+      PagesLatestIssue = ""
+      CloudUpdatedAt = ""
+      PagesUpdatedAt = ""
+      CloudDrawCount = 0
+      PagesDrawCount = 0
+      Error = $_.Exception.Message
+    }
+  }
+}
+
+function Publish-GithubPagesShare {
+  param(
+    [string]$ProjectRoot,
+    [string]$Reason
+  )
+
+  Write-Output $Reason
+  & (Join-Path $ProjectRoot "scripts\publish-github-pages.ps1") -ProjectRoot $ProjectRoot
+  if ($LASTEXITCODE -ne 0) {
+    throw "GitHub Pages publish failed with code $LASTEXITCODE"
+  }
+}
 
 Push-Location $ProjectRoot
 try {
@@ -40,7 +103,19 @@ try {
   }
 
   if ($latestSha -eq $lastSha) {
-    Write-Output "No code changes to deploy. Current SHA: $latestSha"
+    $dataStatus = Get-PagesDataStatus
+    if ($dataStatus.CheckFailed) {
+      Write-Output "No code changes to deploy. Data freshness check failed: $($dataStatus.Error)"
+      return
+    }
+
+    if ($dataStatus.NeedsRefresh) {
+      Publish-GithubPagesShare -ProjectRoot $ProjectRoot -Reason "No code changes, but cloud data changed. Cloud issue: $($dataStatus.CloudLatestIssue), Pages issue: $($dataStatus.PagesLatestIssue)."
+      Write-Output "GitHub Pages data refreshed. Latest issue: $($dataStatus.CloudLatestIssue), draws: $($dataStatus.CloudDrawCount)"
+      return
+    }
+
+    Write-Output "No code changes to deploy. GitHub Pages data is current. Latest issue: $($dataStatus.PagesLatestIssue), draws: $($dataStatus.PagesDrawCount). Current SHA: $latestSha"
     return
   }
 
@@ -56,6 +131,11 @@ try {
   }
 
   if (-not $deployAffecting.Count) {
+    $dataStatus = Get-PagesDataStatus
+    if (-not $dataStatus.CheckFailed -and $dataStatus.NeedsRefresh) {
+      Publish-GithubPagesShare -ProjectRoot $ProjectRoot -Reason "Only non-deploy files changed, but cloud data changed. Refreshing GitHub Pages data."
+    }
+
     Set-Content -LiteralPath $markerFile -Value $latestSha -Encoding ASCII
     Write-Output "Only non-deploy files changed. Marker updated to $latestSha"
     return
@@ -81,10 +161,7 @@ try {
     throw "build failed with code $LASTEXITCODE"
   }
 
-  & (Join-Path $ProjectRoot "scripts\publish-github-pages.ps1") -ProjectRoot $ProjectRoot
-  if ($LASTEXITCODE -ne 0) {
-    throw "GitHub Pages publish failed with code $LASTEXITCODE"
-  }
+  Publish-GithubPagesShare -ProjectRoot $ProjectRoot -Reason "Deploy-affecting code changed. Publishing GitHub Pages share URL first."
 
   $vercelStatus = "Vercel publish not attempted"
   try {
