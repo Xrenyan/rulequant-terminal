@@ -66,6 +66,7 @@ function backtestCacheKey(input: RunBacktestInput): string {
       rule.anchorIssue ?? "",
       rule.anchorPatternIndex ?? "",
       rule.periodSpan,
+      rule.verifyOffset ?? "",
     ]),
     config: input.config,
   });
@@ -100,7 +101,7 @@ function streak(values: boolean[]): { current: number; max: number } {
 
 function buildRuleResult(rule: RuleRecord, normalizedDraws: NormalizedDraw[], config: RuleQuantConfig): RuleBacktestResult {
   const details: BacktestDetail[] = [];
-  const span = Math.max(rule.periodSpan || 1, rule.category === "eight_zodiac_two_period" ? 2 : 1);
+  const span = Math.max(rule.periodSpan || 1, rule.verifyOffset || 1, rule.category === "eight_zodiac_two_period" ? 2 : 1);
 
   try {
     for (let index = 0; index < normalizedDraws.length - span; index += 1) {

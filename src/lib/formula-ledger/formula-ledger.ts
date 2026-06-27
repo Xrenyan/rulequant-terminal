@@ -1,5 +1,6 @@
 import { calculateRule } from "@/lib/formula-engine/formula-engine";
-import { normalizeDraw } from "@/lib/engine/attributes";
+import { getNumberAttributes, normalizeDraw } from "@/lib/engine/attributes";
+import { defaultConfig } from "@/lib/config/default-config";
 import type { BacktestDetail, RuleBacktestResult, RuleCalculation, RuleQuantConfig, RuleRecord, DrawRecord } from "@/types/domain";
 
 export type FormulaLedgerEntry = {
@@ -62,9 +63,17 @@ function padNumber(value: number): string {
   return String(value).padStart(2, "0");
 }
 
-function numbersLabel(numbers: number[]): string {
-  if (numbers.length < 7) return numbers.map(padNumber).join(" ");
-  return `${numbers.slice(0, 6).map(padNumber).join(" ")} + ${padNumber(numbers[6])}`;
+function numberWithZodiac(value: number, config: RuleQuantConfig): string {
+  try {
+    return `${padNumber(value)} ${getNumberAttributes(value, config).zodiac}`;
+  } catch {
+    return padNumber(value);
+  }
+}
+
+function numbersLabel(numbers: number[], config: RuleQuantConfig): string {
+  if (numbers.length < 7) return numbers.map((number) => numberWithZodiac(number, config)).join(" ");
+  return `${numbers.slice(0, 6).map((number) => numberWithZodiac(number, config)).join(" ")} + ${numberWithZodiac(numbers[6], config)}`;
 }
 
 function escapeRegExp(value: string): string {
@@ -95,6 +104,8 @@ function finalOutputLabel(rule: RuleRecord, mappedResult: Array<number | string>
   switch (rule.category) {
     case "kill_zodiac":
       return `杀${value}`;
+    case "include_zodiac":
+      return `参考${value}`;
     case "kill_color":
       return `杀波色${value}`;
     case "include_color":
@@ -136,6 +147,7 @@ function mappingLine(rule: RuleRecord, calculation: Pick<RuleCalculation, "final
   const finalResult = Array.isArray(calculation.finalResult) ? calculation.finalResult.join("、") : calculation.finalResult;
   switch (rule.category) {
     case "kill_zodiac":
+    case "include_zodiac":
     case "kill_element":
       return `${finalResult} 对应${mapped}`;
     case "kill_color":
@@ -177,10 +189,10 @@ function processingLine(detail: Pick<BacktestDetail, "process" | "variables">): 
 function nextOpenLabel(detail: BacktestDetail): string {
   const next = detail.futureChecks[0];
   if (!next) return "暂无下一期开奖";
-  return `${next.issue}期开奖：${next.specialAttributes.zodiac}${padNumber(next.special)}`;
+  return `${next.issue}期开奖：${padNumber(next.special)} ${next.specialAttributes.zodiac}`;
 }
 
-function detailToLedgerEntry(rule: RuleRecord, detail: BacktestDetail, isPending = false): FormulaLedgerEntry {
+function detailToLedgerEntry(rule: RuleRecord, detail: BacktestDetail, config: RuleQuantConfig, isPending = false): FormulaLedgerEntry {
   const variableText = variableLine(detail.variables);
   const equation = equationLine(detail.formula, detail.variables, detail.rawResult);
   const mapping = mappingLine(rule, detail);
@@ -190,7 +202,7 @@ function detailToLedgerEntry(rule: RuleRecord, detail: BacktestDetail, isPending
   const nextLabel = isPending ? "待下一期开奖后自动判断正确或错误" : nextOpenLabel(detail);
   return {
     currentIssue: detail.currentIssue,
-    currentNumbersLabel: numbersLabel(detail.currentNumbers),
+    currentNumbersLabel: numbersLabel(detail.currentNumbers, config),
     formula: detail.formula,
     variableLine: variableText,
     equationLine: equation,
@@ -237,7 +249,8 @@ function buildPendingLatestDetail(rule: RuleRecord, draws: DrawRecord[], config:
 }
 
 export function buildFormulaLedger(ruleResult: RuleBacktestResult, options?: { draws: DrawRecord[]; config: RuleQuantConfig }): FormulaLedger {
-  const entries = ruleResult.details.map((detail) => detailToLedgerEntry(ruleResult.rule, detail));
+  const config = options?.config ?? defaultConfig;
+  const entries = ruleResult.details.map((detail) => detailToLedgerEntry(ruleResult.rule, detail, config));
   if (options?.draws.length) {
     const pendingDetail = buildPendingLatestDetail(
       ruleResult.rule,
@@ -245,7 +258,7 @@ export function buildFormulaLedger(ruleResult: RuleBacktestResult, options?: { d
       options.config,
       new Set(ruleResult.details.map((detail) => detail.currentIssue)),
     );
-    if (pendingDetail) entries.push(detailToLedgerEntry(ruleResult.rule, pendingDetail, true));
+    if (pendingDetail) entries.push(detailToLedgerEntry(ruleResult.rule, pendingDetail, options.config, true));
   }
 
   return {

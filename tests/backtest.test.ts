@@ -89,6 +89,32 @@ describe("backtest engine", () => {
     expect(result.ruleResults[0].details[0].success).toBe(true);
   });
 
+  test("uses verifyOffset when a rule checks a later issue", () => {
+    const offsetDraws: DrawRecord[] = [
+      { issue: "2026176", n1: 1, n2: 2, n3: 3, n4: 4, n5: 5, n6: 6, special: 10 },
+      { issue: "2026177", n1: 1, n2: 2, n3: 3, n4: 4, n5: 5, n6: 6, special: 15 },
+      { issue: "2026178", n1: 1, n2: 2, n3: 3, n4: 4, n5: 5, n6: 6, special: 17 },
+    ];
+    const rule: RuleRecord = {
+      ...baseRule,
+      id: "verify-offset-two",
+      name: "verify offset two",
+      category: "seven_tail",
+      formula: "0",
+      normalizer: "tail_offsets:-3,-2,-1,0,1,2,4",
+      target: "special_tail",
+      verifyOffset: 2,
+      periodSpan: 1,
+    };
+
+    const result = runBacktest({ draws: offsetDraws, rules: [rule], config: defaultConfig });
+    const detail = result.ruleResults[0].details[0];
+
+    expect(result.ruleResults[0].total).toBe(1);
+    expect(detail.nextIssue).toBe("2026178");
+    expect(detail.success).toBe(true);
+  });
+
   test("runs eight zodiac two period and records each future issue", () => {
     const rule: RuleRecord = {
       ...baseRule,

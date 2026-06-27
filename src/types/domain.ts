@@ -2,6 +2,7 @@ export type OrderMode = "L" | "D" | "custom";
 
 export type RuleCategory =
   | "kill_zodiac"
+  | "include_zodiac"
   | "kill_color"
   | "include_color"
   | "kill_parity"
@@ -120,6 +121,7 @@ export type RuleRecord = {
   anchorPatternIndex?: number;
   positionMeaning?: string;
   periodSpan: number;
+  verifyOffset?: number;
   enabled: boolean;
   manuallyConfirmed?: boolean;
   participatesInReference?: boolean;

@@ -36,6 +36,7 @@ function candidateCacheKey(input: GenerateCandidatePoolInput): string {
       rule.anchorIssue ?? "",
       rule.anchorPatternIndex ?? "",
       rule.periodSpan,
+      rule.verifyOffset ?? 1,
     ]),
     validation: input.validationSummaries?.map((summary) => [summary.ruleId, summary.canJoinReference, summary.status]) ?? [],
     backtest: input.backtest?.ruleResults.map((result) => [result.rule.id, result.successRate, result.currentStreak, result.last10]) ?? [],

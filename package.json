@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:static-pages": "node scripts/build-static-pages.mjs",
     "start": "next start",
+    "refresh:static-data": "node scripts/refresh-static-data.mjs",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

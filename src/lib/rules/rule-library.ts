@@ -56,7 +56,7 @@ function normalizedPattern(pattern?: number[]): number[] {
   return (pattern ?? []).map(Number).filter((item) => Number.isFinite(item));
 }
 
-export function buildRuleSignature(rule: Pick<RuleRecord, "category" | "target" | "orderMode" | "formula" | "normalizer" | "positionPattern">): string {
+export function buildRuleSignature(rule: Pick<RuleRecord, "category" | "target" | "orderMode" | "formula" | "normalizer" | "positionPattern" | "verifyOffset">): string {
   return [
     rule.category,
     rule.target,
@@ -64,6 +64,7 @@ export function buildRuleSignature(rule: Pick<RuleRecord, "category" | "target" 
     compact(rule.formula).replace(/\s+/g, ""),
     compact(rule.normalizer),
     normalizedPattern(rule.positionPattern).join(","),
+    String(rule.verifyOffset ?? 1),
   ].join("|");
 }
 
@@ -85,6 +86,7 @@ export function normalizeRuleDraft(draft: RuleLibraryDraft, options: { now?: str
     anchorPatternIndex: draft.anchorPatternIndex ?? options.existingRule?.anchorPatternIndex,
     positionMeaning: draft.positionMeaning ?? options.existingRule?.positionMeaning,
     periodSpan: Number(draft.periodSpan ?? options.existingRule?.periodSpan ?? 1) || 1,
+    verifyOffset: Number(draft.verifyOffset ?? options.existingRule?.verifyOffset ?? draft.periodSpan ?? options.existingRule?.periodSpan ?? 1) || 1,
     enabled: draft.enabled ?? options.existingRule?.enabled ?? true,
     manuallyConfirmed: draft.manuallyConfirmed ?? options.existingRule?.manuallyConfirmed ?? false,
     participatesInReference: draft.participatesInReference ?? options.existingRule?.participatesInReference ?? true,

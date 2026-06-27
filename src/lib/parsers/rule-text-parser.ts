@@ -118,6 +118,8 @@ function slug(text: string): string {
 }
 
 function patternFromText(text: string): number[] {
+  if (/1234567\.1234567/.test(text)) return [1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7];
+  if (/7654321\.7654321/.test(text)) return [7, 6, 5, 4, 3, 2, 1, 7, 6, 5, 4, 3, 2, 1];
   if (/7654321\.23456/.test(text)) return [7, 6, 5, 4, 3, 2, 1, 2, 3, 4, 5, 6];
   if (/123456\.5432\.123456\.5432/.test(text)) return [1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1, 2, 3, 4, 5, 6, 5, 4, 3, 2];
   if (/123456\.5432/.test(text)) return [1, 2, 3, 4, 5, 6, 5, 4, 3, 2];

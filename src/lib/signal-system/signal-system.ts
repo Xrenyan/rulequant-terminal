@@ -52,6 +52,8 @@ function targetForCategory(category: RuleRecord["category"]): { action: RuleSign
   switch (category) {
     case "kill_zodiac":
       return { action: "exclude", targetType: "zodiac" };
+    case "include_zodiac":
+      return { action: "include", targetType: "zodiac" };
     case "kill_color":
       return { action: "exclude", targetType: "color" };
     case "include_color":

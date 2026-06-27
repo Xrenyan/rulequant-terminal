@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { defaultConfig } from "@/lib/config/default-config";
 import { evaluateFormula } from "@/lib/formula/evaluate";
 import { calculateRule, clearFormulaEngineCache, getFormulaEngineCacheSize } from "@/lib/formula-engine/formula-engine";
-import { normalizeDraw } from "@/lib/engine/attributes";
+import { getNumberAttributes, normalizeDraw } from "@/lib/engine/attributes";
 import type { RuleRecord } from "@/types/domain";
 
 const draw = normalizeDraw(
@@ -41,6 +41,33 @@ describe("formula engine", () => {
       平2: 7,
       平7: 19,
     });
+  });
+
+  test("supports include zodiac rules as positive signals", () => {
+    const rule: RuleRecord = {
+      id: "include-zodiac-rule",
+      name: "选生肖",
+      category: "include_zodiac",
+      orderMode: "L",
+      formula: "特码",
+      normalizer: "auto",
+      target: "special_zodiac",
+      verifyMode: "next_special",
+      positionPattern: [],
+      periodSpan: 1,
+      enabled: true,
+      tags: [],
+      description: "",
+      sourceFile: "unit",
+      examples: [],
+      createdAt: "2026-06-27T00:00:00.000Z",
+      updatedAt: "2026-06-27T00:00:00.000Z",
+    };
+
+    const result = calculateRule(rule, draw, defaultConfig);
+
+    expect(result.mappedResult).toEqual([draw.specialAttributes.zodiac]);
+    expect(result.process).toContain(`参考生肖 ${draw.specialAttributes.zodiac}`);
   });
 
   test("keeps special independent when D order sorts only six regular numbers", () => {
@@ -196,6 +223,90 @@ describe("formula engine", () => {
     expect(result.rawResult).toBe(28);
     expect(result.normalizerSteps).toEqual([28, 29]);
     expect(result.mappedResult).toEqual(["虎", "猴", "牛", "鼠", "马", "猪", "狗", "龙", "鸡"]);
+  });
+
+  test("calculates seven-tail offsets with 0-9 closed loop", () => {
+    const rule: RuleRecord = {
+      id: "test-seven-tail-loop",
+      name: "seven tail loop",
+      category: "seven_tail",
+      orderMode: "L",
+      formula: "0",
+      normalizer: "tail_offsets:-3,-2,-1,0,1,2,4",
+      target: "special_tail",
+      verifyMode: "next_special",
+      positionPattern: [],
+      periodSpan: 1,
+      enabled: true,
+      tags: [],
+      description: "",
+      sourceFile: "unit",
+      examples: [],
+      createdAt: "2026-06-27T00:00:00.000Z",
+      updatedAt: "2026-06-27T00:00:00.000Z",
+    };
+
+    const result = calculateRule(rule, draw, defaultConfig);
+
+    expect(result.mappedResult).toEqual([7, 8, 9, 0, 1, 2, 4]);
+    expect(result.process).toContain("0 -3 -> 7");
+  });
+
+  test("calculates custom tail window left and right counts", () => {
+    const rule: RuleRecord = {
+      id: "test-tail-window",
+      name: "tail window",
+      category: "seven_tail",
+      orderMode: "L",
+      formula: "0",
+      normalizer: "tail_window:left=2,right=4",
+      target: "special_tail",
+      verifyMode: "next_special",
+      positionPattern: [],
+      periodSpan: 1,
+      enabled: true,
+      tags: [],
+      description: "",
+      sourceFile: "unit",
+      examples: [],
+      createdAt: "2026-06-27T00:00:00.000Z",
+      updatedAt: "2026-06-27T00:00:00.000Z",
+    };
+
+    const result = calculateRule(rule, draw, defaultConfig);
+
+    expect(result.mappedResult).toEqual([8, 9, 0, 1, 2, 3, 4]);
+  });
+
+  test("calculates nine-zodiac number offsets with 12-step closed loop", () => {
+    const rule: RuleRecord = {
+      id: "test-nine-zodiac-offsets",
+      name: "nine zodiac offsets",
+      category: "nine_zodiac",
+      orderMode: "L",
+      formula: "5",
+      normalizer: "zodiac_offsets:+1234567911",
+      target: "special_zodiac",
+      verifyMode: "next_special",
+      positionPattern: [],
+      periodSpan: 1,
+      enabled: true,
+      tags: [],
+      description: "",
+      sourceFile: "unit",
+      examples: [],
+      createdAt: "2026-06-27T00:00:00.000Z",
+      updatedAt: "2026-06-27T00:00:00.000Z",
+    };
+    const result = calculateRule(rule, draw, defaultConfig);
+    const expectedNumbers = [6, 7, 8, 9, 10, 11, 12, 14, 16];
+
+    expect(result.secondaryMappedResult).toEqual(expectedNumbers);
+    expect(result.mappedResult).toEqual(expectedNumbers.map((number) => getNumberAttributes(number, defaultConfig).zodiac));
+
+    const subtractRule = { ...rule, id: "test-nine-zodiac-negative", normalizer: "zodiac_offsets:-7" };
+    const subtractResult = calculateRule(subtractRule, draw, defaultConfig);
+    expect(subtractResult.secondaryMappedResult).toEqual([10]);
   });
 
   test("caches the same rule and issue calculation once", () => {

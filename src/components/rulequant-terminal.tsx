@@ -47,7 +47,7 @@ import {
 import { parseDrawFile, parseDrawText } from "@/lib/parsers/draw-parser";
 import { parseRuleTextFile } from "@/lib/parsers/rule-text-parser";
 import { runSampleChecks } from "@/lib/sample-check/run-sample-checks";
-import { normalizeDraw } from "@/lib/engine/attributes";
+import { getNumberAttributes, normalizeDraw } from "@/lib/engine/attributes";
 import { seedDraws } from "@/lib/data/seed";
 import { buildRuleReconciliation, type RuleReconciliationRow } from "@/lib/rules/rule-reconciliation";
 import { buildRuleValidationSummaries, canRuleParticipateInReference, type RuleValidationSummary } from "@/lib/rules/rule-validation";
@@ -65,6 +65,7 @@ import type {
   RuleCategory,
   RuleBacktestResult,
   RuleRecord,
+  RuleQuantConfig,
   RuleSourceType,
   SampleCase,
 } from "@/types/domain";
@@ -111,7 +112,7 @@ const viewLabels: Record<ViewKey, string> = {
   draws: "开奖数据",
   import: "数据导入",
   rules: "公式管理",
-  "formula-editor": "公式编辑器",
+  "formula-editor": "新增规则",
   backtest: "高级回测",
   "candidate-pool": "综合参考结果",
   "next-output": "单期输出",
@@ -122,6 +123,7 @@ const viewLabels: Record<ViewKey, string> = {
 };
 
 const categories: Array<{ value: RuleCategory; label: string }> = [
+  { value: "include_zodiac", label: "选生肖" },
   { value: "kill_zodiac", label: "杀一肖" },
   { value: "kill_color", label: "杀波色" },
   { value: "include_color", label: "参考波色" },
@@ -547,15 +549,52 @@ function codeValue(value: unknown) {
   return <span className="font-mono text-xs text-cyan-100">{String(value)}</span>;
 }
 
+function padNumber(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function numberWithZodiac(value: number, config: RuleQuantConfig) {
+  try {
+    const attributes = getNumberAttributes(value, config);
+    return `${padNumber(value)} ${attributes.zodiac}`;
+  } catch {
+    return padNumber(value);
+  }
+}
+
+function drawNumbersWithZodiac(draw: DrawRecord | undefined, config: RuleQuantConfig) {
+  if (!draw) return "-";
+  return [draw.n1, draw.n2, draw.n3, draw.n4, draw.n5, draw.n6, draw.special]
+    .map((number) => numberWithZodiac(number, config))
+    .join("  ");
+}
+
+function candidateNumberLabel(item: Pick<CandidateNumber, "number" | "zodiac">) {
+  return `${padNumber(item.number)} ${item.zodiac}`;
+}
+
 function sortDrawRecords(records: DrawRecord[]) {
   return [...records].sort((a, b) => a.issue.localeCompare(b.issue, "zh-CN", { numeric: true }));
 }
 
 function parsePositionPattern(value: FormDataEntryValue | null): number[] {
+  const text = String(value || "").trim();
+  if (/1234567\.1234567/.test(text)) return [1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7];
+  if (/7654321\.7654321/.test(text)) return [7, 6, 5, 4, 3, 2, 1, 7, 6, 5, 4, 3, 2, 1];
+  if (/7654321\.23456/.test(text)) return [7, 6, 5, 4, 3, 2, 1, 2, 3, 4, 5, 6];
+  if (/123456\.5432\.123456\.5432/.test(text)) return [1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1, 2, 3, 4, 5, 6, 5, 4, 3, 2];
+  if (/123456\.5432/.test(text)) return [1, 2, 3, 4, 5, 6, 5, 4, 3, 2];
+  return text
+    .split(/[,，.\s]+/)
+    .filter(Boolean)
+    .flatMap((part) => (/^[1-7]+$/.test(part) ? [...part].map(Number) : [Number(part)]))
+    .filter((item) => Number.isFinite(item) && item >= 1 && item <= 7);
+  /*
   return String(value || "")
     .split(/[,，\s]+/)
     .filter(Boolean)
     .map(Number);
+  */
 }
 
 function buildRuleFromFormData(formData: FormData, options: { existingRule?: RuleRecord; forceNew?: boolean } = {}): RuleRecord {
@@ -578,6 +617,7 @@ function buildRuleFromFormData(formData: FormData, options: { existingRule?: Rul
     anchorPatternIndex: formData.get("anchorPatternIndex") === null || String(formData.get("anchorPatternIndex") || "") === "" ? undefined : Number(formData.get("anchorPatternIndex")),
     positionMeaning: String(formData.get("positionMeaning") || "") || undefined,
     periodSpan: Number(formData.get("periodSpan") || 1),
+    verifyOffset: Number(formData.get("verifyOffset") || formData.get("periodSpan") || 1),
     enabled: formData.get("enabled") === "on",
     manuallyConfirmed: formData.get("manuallyConfirmed") === "on",
     participatesInReference: formData.get("participatesInReference") === "on",
@@ -673,8 +713,11 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const isSeedOnly = !hasLiveDraws && draws.length === seedDraws.length && draws.every((draw, index) => draw.issue === seedDraws[index]?.issue);
   const isCloudData = Boolean(cloudStateMeta?.enabled && cloudStateMeta.recordCount);
   const hasSharedDraws = hasLiveDraws || isCloudData || websiteDraws.length > 0;
+  const cloudSyncAt = cloudStateMeta?.updatedAt ? new Date(cloudStateMeta.updatedAt).toLocaleString("zh-CN", { hour12: false }) : "";
+  const displayLastSyncAt = lastSyncAt || cloudSyncAt;
+  const isUsingSyncedData = websiteDraws.length > 0 || isCloudData || hasLiveDraws;
   const dataSourceLabel = sourceLoading ? "同步中" : websiteDraws.length ? "网站全年数据" : isCloudData ? "云端数据库" : hasLiveDraws ? "实时网址" : isSeedOnly ? "示例数据" : "本地库";
-  const latestNumbersLabel = latestRawDraw ? [latestRawDraw.n1, latestRawDraw.n2, latestRawDraw.n3, latestRawDraw.n4, latestRawDraw.n5, latestRawDraw.n6, latestRawDraw.special].map((number) => String(number).padStart(2, "0")).join(" ") : "-";
+  const latestNumbersLabel = drawNumbersWithZodiac(latestRawDraw, config);
   const shouldBuildBacktest = activeView === "dashboard" || activeView === "rules" || activeView === "formula-detail" || activeView === "sample-check" || activeView === "candidate-pool" || activeView === "formula-discovery" || activeView === "backtest" || activeView === "reports";
   const backtest = useMemo(() => {
     if (!shouldBuildBacktest) return EMPTY_BACKTEST;
@@ -818,9 +861,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const drawColumns: ColumnDef<ReturnType<typeof normalizeDraw>>[] = [
     { accessorKey: "issue", header: "期号" },
     { accessorKey: "date", header: "日期", cell: ({ row }) => row.original.date ?? "-" },
-    { header: "L序", cell: ({ row }) => codeValue(row.original.lOrder.map((n) => String(n).padStart(2, "0")).join(" ")) },
-    { header: "D序", cell: ({ row }) => codeValue(row.original.dOrder.map((n) => String(n).padStart(2, "0")).join(" ")) },
-    { header: "特码", cell: ({ row }) => <Badge tone="cyan">{String(row.original.special).padStart(2, "0")}</Badge> },
+    { header: "L序", cell: ({ row }) => codeValue(row.original.lOrder.map((n) => numberWithZodiac(n, config)).join(" ")) },
+    { header: "D序", cell: ({ row }) => codeValue(row.original.dOrder.map((n) => numberWithZodiac(n, config)).join(" ")) },
+    { header: "特码", cell: ({ row }) => <Badge tone="cyan">{numberWithZodiac(row.original.special, config)}</Badge> },
     { header: "特码属性", cell: ({ row }) => `${row.original.specialAttributes.zodiac} / ${row.original.specialAttributes.color} / ${row.original.specialAttributes.element}` },
     { header: "总数", cell: ({ row }) => codeValue(row.original.total) },
   ];
@@ -850,6 +893,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       const data = (await response.json()) as UrlImportResponse;
       if (!response.ok) throw new Error(data.errors?.[0] ?? "网址数据抓取失败");
       const fetchedRecords = data.records ?? [];
+      if (!fetchedRecords.length) {
+        throw new Error("网站本次没有返回有效开奖记录，已保留现有开奖库");
+      }
       const fetchedSorted = sortDrawRecords(fetchedRecords);
       const latestFetched = fetchedSorted.at(-1);
       const syncedAt = new Date().toLocaleString("zh-CN", { hour12: false });
@@ -955,6 +1001,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   }
 
   async function replaceLocalDrawsWithSourceRecords() {
+    if (!sourceRecords.length) {
+      setSourceStatus("暂无可替换的网站开奖记录，已保留现有开奖库");
+      return;
+    }
     await store.replaceDraws(sourceRecords);
     const syncedAt = new Date().toLocaleString("zh-CN", { hour12: false });
     setLastSyncAt(syncedAt);
@@ -1160,16 +1210,17 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     </div>
                     <div className="mt-5 flex flex-wrap gap-2">
                       {latestRawDraw ? [latestRawDraw.n1, latestRawDraw.n2, latestRawDraw.n3, latestRawDraw.n4, latestRawDraw.n5, latestRawDraw.n6, latestRawDraw.special].map((number, index) => (
-                        <span key={`${number}-${index}`} className={cn("flex h-12 w-12 items-center justify-center rounded-md border font-mono text-base", index === 6 ? "border-cyan-300/40 bg-cyan-300/15 text-cyan-50" : "border-white/10 bg-white/[0.06] text-white")}>
-                          {String(number).padStart(2, "0")}
+                        <span key={`${number}-${index}`} className={cn("flex h-14 w-14 flex-col items-center justify-center rounded-md border text-center", index === 6 ? "border-cyan-300/40 bg-cyan-300/15 text-cyan-50" : "border-white/10 bg-white/[0.06] text-white")}>
+                          <span className="font-mono text-base leading-none">{padNumber(number)}</span>
+                          <span className="mt-1 text-[11px] leading-none text-slate-300">{numberWithZodiac(number, config).split(" ")[1] ?? ""}</span>
                         </span>
                       )) : <span className="text-slate-500">暂无开奖数据</span>}
                     </div>
                     <div className="mt-5 grid grid-cols-2 gap-3 text-sm text-slate-300">
                       <p>最新期号：{latestRawDraw?.issue ?? "-"}</p>
                       <p>已同步期数：{sourceRecords.length || activeDraws.length}</p>
-                      <p>最后同步：{lastSyncAt || "未同步"}</p>
-                      <p>是否使用最新同步数据：{websiteDraws.length ? "是" : "否"}</p>
+                      <p>最后同步：{displayLastSyncAt || "未同步"}</p>
+                      <p>是否使用最新同步数据：{isUsingSyncedData ? "是" : "否"}</p>
                     </div>
                     <Button className="mt-5" variant="primary" disabled={sourceLoading} onClick={() => void fetchSourceDraws(true, "replace")}>
                       <RefreshCw className="h-4 w-4" />{sourceLoading ? "同步中" : "同步最新开奖数据"}
@@ -1213,7 +1264,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       <p className="mb-2 text-xs text-slate-500">参考号码 Top 18</p>
                       <div className="grid grid-cols-9 gap-2">
                         {candidateReport.topNumbers18.length ? candidateReport.topNumbers18.map((item) => (
-                          <span key={item.number} className="flex h-9 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.04] font-mono text-sm text-white">{String(item.number).padStart(2, "0")}</span>
+                          <span key={item.number} className="flex h-10 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.04] px-1 font-mono text-xs text-white">{candidateNumberLabel(item)}</span>
                         )) : <span className="col-span-9 text-sm text-slate-500">暂无可用证据，请检查公式是否已启用、可计算且未被手动排除。</span>}
                       </div>
                     </div>
@@ -1248,7 +1299,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       </Select>
                       <div className="mt-4 text-sm text-slate-400">
                         <p>当前期号：{selectedOneClickDraw.issue}</p>
-                        <p>开奖号码：{[selectedOneClickDraw.n1, selectedOneClickDraw.n2, selectedOneClickDraw.n3, selectedOneClickDraw.n4, selectedOneClickDraw.n5, selectedOneClickDraw.n6, selectedOneClickDraw.special].map((number) => String(number).padStart(2, "0")).join(" ")}</p>
+                        <p>开奖号码：{drawNumbersWithZodiac(selectedOneClickDraw, config)}</p>
                         <p>上次计算：{lastCalculationAt || "未计算"}</p>
                       </div>
                     </div>
@@ -1420,7 +1471,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   <Badge tone={hasSharedDraws ? "green" : "slate"}>{dataSourceLabel}</Badge>
                   <span>最新期：{latestDraw?.issue ?? "-"}</span>
                   <span>已同步记录：{activeDraws.length} 条</span>
-                  <span>最后同步：{lastSyncAt || "未同步"}</span>
+                  <span>最后同步：{displayLastSyncAt || "未同步"}</span>
                   {sourceStatus && <span>{sourceStatus}</span>}
                 </div>
                 <DataTable data={[...normalizedDraws].reverse()} columns={drawColumns} dense />
@@ -1509,7 +1560,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     </div>
                     <div className="flex items-center gap-2">
                       <Link href="/formula-editor?mode=new" className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-cyan-200/45 bg-cyan-300/18 px-4 text-sm font-medium text-cyan-50 shadow-[0_0_30px_rgba(34,211,238,0.14)] hover:bg-cyan-300/28">
-                        <Plus className="h-4 w-4" />新增公式
+                        <Plus className="h-4 w-4" />新增规则
                       </Link>
                       <Button onClick={() => selectedRule && void store.duplicateRule(selectedRule.id)}>复制已有公式</Button>
                       <Link href="/one-click" className="inline-flex h-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.07] px-4 text-sm text-white hover:bg-white/[0.11]">试算公式</Link>
@@ -1596,51 +1647,35 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
             )}
 
             {activeView === "formula-editor" && (
-              <div className="grid grid-cols-[360px_1fr_320px] gap-4">
-                <RuleForm
-                  key={editorRule?.id ?? "new-rule-compact"}
-                  selectedRule={editorRule}
+              editorRule ? (
+                <div className="grid grid-cols-[360px_1fr_320px] gap-4">
+                  <RuleForm
+                    key={editorRule.id}
+                    selectedRule={editorRule}
+                    onSave={saveRuleFromForm}
+                    compact
+                    draw={latestDraw ?? normalizedDraws[0]}
+                    config={config}
+                    periodIndex={latestDraw ? latestPeriodIndex : 0}
+                  />
+                  <FormulaWorkbench rule={editorRule} draw={latestDraw ?? normalizedDraws[0]} config={config} periodIndex={latestDraw ? latestPeriodIndex : 0} />
+                  <Panel className="p-5">
+                    <h3 className="font-semibold text-white">编辑旧规则</h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">当前是编辑模式，只会保存修改到这条规则。新增请从公式管理点击“新增规则”。</p>
+                    <div className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.03] p-3 text-sm text-slate-300">
+                      <p>试算期：{latestDraw?.issue ?? "-"}</p>
+                      <p className="mt-2 font-mono text-cyan-100">{latestNumbersLabel}</p>
+                    </div>
+                  </Panel>
+                </div>
+              ) : (
+                <NewRuleBuilder
                   onSave={saveRuleFromForm}
-                  compact
                   draw={latestDraw ?? normalizedDraws[0]}
                   config={config}
                   periodIndex={latestDraw ? latestPeriodIndex : 0}
                 />
-                {editorRule ? (
-                  <FormulaWorkbench rule={editorRule} draw={latestDraw ?? normalizedDraws[0]} config={config} periodIndex={latestDraw ? latestPeriodIndex : 0} />
-                ) : (
-                  <Panel className="p-5">
-                    <h2 className="font-semibold text-white">新增公式</h2>
-                    <p className="mt-2 text-sm leading-6 text-slate-400">当前是空白新增模式。保存会生成新的公式 ID，不会覆盖已有公式。</p>
-                    <div className="mt-5 grid grid-cols-2 gap-3">
-                      <Panel className="p-4">
-                        <p className="text-xs text-slate-500">试算期号</p>
-                        <p className="mt-2 font-mono text-[28px] font-semibold text-white">{latestDraw?.issue ?? "-"}</p>
-                      </Panel>
-                      <Panel className="p-4">
-                        <p className="text-xs text-slate-500">当前开奖</p>
-                        <p className="mt-2 font-mono text-lg font-semibold text-cyan-100">{latestNumbersLabel}</p>
-                      </Panel>
-                    </div>
-                    <div className="mt-4 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.06] p-4">
-                      <h3 className="text-sm font-medium text-white">草稿试算标准</h3>
-                      <p className="mt-2 text-sm leading-6 text-slate-300">左侧输入框里的内容就是试算对象；不用先保存。变量无法识别、公式不能计算或结果不能归一化时，会直接标红提示。</p>
-                    </div>
-                    <div className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.03] p-4">
-                      <h3 className="text-sm font-medium text-white">新增保存标准</h3>
-                      <p className="mt-2 text-sm leading-6 text-slate-400">保存前会先用当前最新开奖做一次计算检查。通过后才写入公式库，并默认作为人工新增公式。</p>
-                    </div>
-                  </Panel>
-                )}
-                <Panel className="p-5">
-                  <h3 className="font-semibold text-white">变量字典</h3>
-                  <div className="mt-4 space-y-3 text-sm text-slate-300">
-                    {["平1-平7：按 L序或 D序取值", "落1-落7：始终按 L序取值", "特码/特号/特：special", "头/尾/合/合尾/段/波/行：属性函数", "总数/总数尾/总数合", "期数/期尾/期合/期合尾"].map((text) => (
-                      <div key={text} className="rounded-md border border-white/[0.06] bg-white/[0.03] p-3">{text}</div>
-                    ))}
-                  </div>
-                </Panel>
-              </div>
+              )
             )}
 
             {activeView === "backtest" && (
@@ -1722,7 +1757,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   <Metric label="样例已核对" value={checkedSampleRuleCount} hint={`未核对 ${uncheckedSampleRuleCount}`} tone="yellow" />
                   <Metric label="本次生成证据" value={candidateReport.signalCount} hint="支持/排除" />
                   <Metric label="结果生成时间" value={(referenceGeneratedAt || candidateReport.generatedAt) ? new Date(referenceGeneratedAt || candidateReport.generatedAt).toLocaleString("zh-CN", { hour12: false }) : "-"} hint="当前页面" />
-                  <Metric label="是否使用最新同步数据" value={websiteDraws.length ? "是" : "否"} hint={lastSyncAt || "未同步"} tone={websiteDraws.length ? "green" : "yellow"} />
+                  <Metric label="是否使用最新同步数据" value={isUsingSyncedData ? "是" : "否"} hint={displayLastSyncAt || "未同步"} tone={isUsingSyncedData ? "green" : "yellow"} />
                 </div>
                 {!websiteDraws.length && (
                   <Panel className="border-amber-300/25 bg-amber-300/[0.07] p-4">
@@ -2065,6 +2100,371 @@ function FormulaLedgerRow({ entry }: { entry: FormulaLedgerEntry }) {
           <p className="text-slate-300">{entry.compactLine}</p>
         </div>
       </details>
+    </div>
+  );
+}
+
+type BuilderMode = "paste" | "template" | "advanced";
+type BuilderIntent = "include_zodiac" | "kill_zodiac" | "seven_tail" | "eight_zodiac" | "nine_zodiac" | "kill_tail" | "kill_sum";
+type BuilderValueKind = "number" | "head" | "tail" | "sum" | "sumTail" | "segment" | "element" | "color" | "parity" | "size";
+
+const builderIntentOptions: Array<{ value: BuilderIntent; label: string; hint: string }> = [
+  { value: "include_zodiac", label: "选生肖", hint: "公式算出一个生肖，作为支持信号" },
+  { value: "kill_zodiac", label: "杀生肖", hint: "公式算出一个生肖，作为排除信号" },
+  { value: "seven_tail", label: "七尾", hint: "按定位尾数做 0-9 闭环偏移" },
+  { value: "eight_zodiac", label: "八肖起点", hint: "从定位生肖扩展成八肖候选" },
+  { value: "nine_zodiac", label: "九肖自用", hint: "按 +1234567911 这类取值扩展九肖" },
+  { value: "kill_tail", label: "杀尾", hint: "公式算出一个尾数，作为排除信号" },
+  { value: "kill_sum", label: "杀合", hint: "公式算出一个合数，作为排除信号" },
+];
+
+const builderValueOptions: Array<{ value: BuilderValueKind; label: string }> = [
+  { value: "number", label: "号码本身" },
+  { value: "head", label: "头" },
+  { value: "tail", label: "尾" },
+  { value: "sum", label: "合" },
+  { value: "sumTail", label: "合尾" },
+  { value: "segment", label: "段" },
+  { value: "element", label: "五行值" },
+  { value: "color", label: "波色值" },
+  { value: "parity", label: "单双" },
+  { value: "size", label: "大小" },
+];
+
+function positionLabel(position: number) {
+  return position === 7 ? "特码" : `第${position}位`;
+}
+
+function positionVariable(position: number) {
+  return position === 7 ? "特码" : `平${position}`;
+}
+
+function valueVariable(position: number, kind: BuilderValueKind) {
+  const base = positionVariable(position);
+  switch (kind) {
+    case "head":
+      return `${base}头`;
+    case "tail":
+      return `${base}尾`;
+    case "sum":
+      return `${base}合`;
+    case "sumTail":
+      return `${base}合尾`;
+    case "segment":
+      return `${base}段`;
+    case "element":
+      return `${base}五行值`;
+    case "color":
+      return `${base}波色值`;
+    case "parity":
+      return `${base}单双`;
+    case "size":
+      return `${base}大小`;
+    default:
+      return base;
+  }
+}
+
+function buildFormulaText(position: number, kind: BuilderValueKind, offset: number) {
+  const base = valueVariable(position, kind);
+  if (!offset) return base;
+  return `${base} ${offset > 0 ? "+" : "-"} ${Math.abs(offset)}`;
+}
+
+function normalizeTailOffsetText(text: string) {
+  const cleaned = text.replace(/[，、\s]+/g, ",").replace(/^\+/, "");
+  return cleaned || "-3,-2,-1,0,1,2,4";
+}
+
+function normalizerForBuilder(intent: BuilderIntent, tailMode: string, customTailOffsets: string, zodiacOffsets: string) {
+  if (intent === "seven_tail") {
+    if (tailMode === "left2right4") return "tail_window:left=2,right=4";
+    if (tailMode === "custom") return `tail_offsets:${normalizeTailOffsetText(customTailOffsets)}`;
+    return "tail_window:left=3,right=3";
+  }
+  if (intent === "nine_zodiac") return `zodiac_offsets:${zodiacOffsets || "+1234567911"}`;
+  return "auto";
+}
+
+function targetForBuilder(intent: BuilderIntent) {
+  if (intent === "kill_tail" || intent === "seven_tail") return "special_tail";
+  if (intent === "kill_sum") return "special_sum";
+  return "special_zodiac";
+}
+
+function builderName(intent: BuilderIntent, position: number, valueKind: BuilderValueKind) {
+  const intentLabel = builderIntentOptions.find((item) => item.value === intent)?.label ?? "新增规则";
+  const valueLabel = builderValueOptions.find((item) => item.value === valueKind)?.label ?? "号码本身";
+  return `${positionLabel(position)}${valueLabel}${intentLabel}`;
+}
+
+function inferRuleText(rawText: string, currentIssue?: string) {
+  const text = rawText.trim();
+  const positionMatch = text.match(/(?:平(?:码)?|第)\s*([1-7])|特码|特号|特/);
+  const position = positionMatch?.[1] ? Number(positionMatch[1]) : /特码|特号|特/.test(text) ? 7 : 1;
+  const compactOffsets = text.match(/取值\s*([+-]?\d+)/);
+  const isZodiacOffsetText = /九肖/.test(text) || Boolean(compactOffsets && compactOffsets[1].replace(/\D/g, "").length >= 2);
+  const offsetMatch = text.match(/([+-])\s*(\d+)/);
+  const offset = isZodiacOffsetText ? 0 : offsetMatch ? Number(`${offsetMatch[1]}${offsetMatch[2]}`) : 0;
+  const leftRight = text.match(/左\s*(\d+)\s*右\s*(\d+)/);
+  const bothSide = text.match(/左右各\s*(\d+)/);
+  const issueNumbers = [...text.matchAll(/(?:20)?(\d{3})/g)].map((match) => Number(match[1]));
+  const currentSuffix = currentIssue ? Number(currentIssue.replace(/\D/g, "").slice(-3)) : undefined;
+  const verifyOffset = issueNumbers.length >= 2 ? Math.max(1, issueNumbers[1] - issueNumbers[0]) : issueNumbers.length === 1 && currentSuffix ? Math.max(1, issueNumbers[0] - currentSuffix) : 1;
+  const intent: BuilderIntent = /七尾|尾数|左右/.test(text)
+    ? "seven_tail"
+    : isZodiacOffsetText
+      ? "nine_zodiac"
+      : /八肖/.test(text)
+        ? "eight_zodiac"
+        : /杀.*尾/.test(text)
+          ? "kill_tail"
+          : /杀.*合/.test(text)
+            ? "kill_sum"
+            : /杀/.test(text)
+              ? "kill_zodiac"
+              : "include_zodiac";
+  const leftRightOffsets = leftRight
+    ? Array.from({ length: Number(leftRight[1]) + Number(leftRight[2]) + 1 }, (_, index) => index - Number(leftRight[1])).join(",")
+    : undefined;
+  return {
+    position,
+    offset,
+    intent,
+    verifyOffset,
+    tailMode: leftRight ? "left2right4" : bothSide ? "window3" : /七尾|尾数|左右/.test(text) ? "custom" : "window3",
+    customTailOffsets: leftRightOffsets ?? (bothSide ? Array.from({ length: Number(bothSide[1]) * 2 + 1 }, (_, index) => index - Number(bothSide[1])).join(",") : "-3,-2,-1,0,1,2,4"),
+    zodiacOffsets: isZodiacOffsetText && compactOffsets?.[1] ? (compactOffsets[1].startsWith("+") || compactOffsets[1].startsWith("-") ? compactOffsets[1] : `+${compactOffsets[1]}`) : "+1234567911",
+  };
+}
+
+function NewRuleBuilder({
+  onSave,
+  draw,
+  config,
+  periodIndex,
+}: {
+  onSave: (formData: FormData) => Promise<void>;
+  draw?: ReturnType<typeof normalizeDraw>;
+  config: RuleQuantConfig;
+  periodIndex?: number;
+}) {
+  const [mode, setMode] = useState<BuilderMode>("paste");
+  const [rawText, setRawText] = useState("平码3虎05取值+1234567911");
+  const [intent, setIntent] = useState<BuilderIntent>("nine_zodiac");
+  const [position, setPosition] = useState(3);
+  const [valueKind, setValueKind] = useState<BuilderValueKind>("number");
+  const [offset, setOffset] = useState(0);
+  const [tailMode, setTailMode] = useState("window3");
+  const [customTailOffsets, setCustomTailOffsets] = useState("-3,-2,-1,0,1,2,4");
+  const [zodiacOffsets, setZodiacOffsets] = useState("+1234567911");
+  const [verifyOffset, setVerifyOffset] = useState(1);
+  const [positionPattern, setPositionPattern] = useState("");
+  const [ruleName, setRuleName] = useState("");
+  const [saveStatus, setSaveStatus] = useState("");
+
+  function applyRawText() {
+    const inferred = inferRuleText(rawText, draw?.issue);
+    setIntent(inferred.intent);
+    setPosition(inferred.position);
+    setOffset(inferred.offset);
+    setTailMode(inferred.tailMode);
+    setCustomTailOffsets(inferred.customTailOffsets);
+    setZodiacOffsets(inferred.zodiacOffsets);
+    setVerifyOffset(inferred.verifyOffset);
+    if (!ruleName) setRuleName(builderName(inferred.intent, inferred.position, valueKind));
+  }
+
+  const formula = buildFormulaText(position, valueKind, offset);
+  const normalizer = normalizerForBuilder(intent, tailMode, customTailOffsets, zodiacOffsets);
+  const target = targetForBuilder(intent);
+  const resolvedName = ruleName.trim() || builderName(intent, position, valueKind);
+
+  const formData = useMemo(() => {
+    const data = new FormData();
+    data.set("name", resolvedName);
+    data.set("category", intent);
+    data.set("orderMode", "L");
+    data.set("formula", formula);
+    data.set("normalizer", normalizer);
+    data.set("target", target);
+    data.set("periodSpan", String(Math.max(1, verifyOffset)));
+    data.set("verifyOffset", String(Math.max(1, verifyOffset)));
+    data.set("positionPattern", positionPattern);
+    data.set("sourceType", "manual");
+    data.set("sourceFile", mode === "paste" ? "粘贴原文识别" : "常用模板添加");
+    data.set("description", rawText ? `原文：${rawText}` : "通过新增规则页面生成");
+    data.set("tags", "新增规则");
+    data.set("enabled", "on");
+    data.set("manuallyConfirmed", "on");
+    data.set("participatesInReference", "on");
+    return data;
+  }, [resolvedName, intent, formula, normalizer, target, verifyOffset, positionPattern, mode, rawText]);
+
+  const trial = useMemo(() => {
+    if (!draw) return { error: "暂无可试算开奖数据" } as const;
+    try {
+      const rule = buildRuleFromFormData(formData, { forceNew: true });
+      const calculation = calculateRule(rule, draw, config, { periodIndex });
+      return { rule, calculation } as const;
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) } as const;
+    }
+  }, [formData, draw, config, periodIndex]);
+
+  async function save() {
+    if ("error" in trial) {
+      setSaveStatus(`暂不能保存：${trial.error}`);
+      return;
+    }
+    await onSave(formData);
+    setSaveStatus("已保存到规则库，可以在公式管理、一键算公式和综合参考结果里使用。");
+  }
+
+  if (mode === "advanced") {
+    return (
+      <div className="grid grid-cols-[260px_1fr] gap-4">
+        <Panel className="p-5">
+          <h2 className="font-semibold text-white">新增规则</h2>
+          <div className="mt-4 grid gap-2">
+            {(["paste", "template", "advanced"] as BuilderMode[]).map((item) => (
+              <button key={item} type="button" onClick={() => setMode(item)} className={cn("rounded-lg border px-3 py-3 text-left text-sm", mode === item ? "border-cyan-300/35 bg-cyan-300/10 text-cyan-50" : "border-white/[0.08] bg-white/[0.03] text-slate-300")}>
+                {item === "paste" ? "粘贴原文识别" : item === "template" ? "常用模板添加" : "高级编辑"}
+              </button>
+            ))}
+          </div>
+          <p className="mt-4 text-sm leading-6 text-slate-500">高级编辑保留旧公式输入方式，普通新增规则建议用前两个入口。</p>
+        </Panel>
+        <RuleForm selectedRule={undefined} onSave={onSave} compact draw={draw} config={config} periodIndex={periodIndex} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-[260px_minmax(0,1fr)_360px] gap-4">
+      <Panel className="p-5">
+        <h2 className="font-semibold text-white">新增规则</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-500">不用懂代码，先粘贴原文或选模板，系统会生成可计算规则。</p>
+        <div className="mt-4 grid gap-2">
+          {(["paste", "template", "advanced"] as BuilderMode[]).map((item) => (
+            <button key={item} type="button" onClick={() => setMode(item)} className={cn("rounded-lg border px-3 py-3 text-left text-sm", mode === item ? "border-cyan-300/35 bg-cyan-300/10 text-cyan-50" : "border-white/[0.08] bg-white/[0.03] text-slate-300")}>
+              <span className="font-medium">{item === "paste" ? "粘贴原文识别" : item === "template" ? "常用模板添加" : "高级编辑"}</span>
+              <span className="mt-1 block text-xs text-slate-500">{item === "paste" ? "直接粘贴 TXT 里的句子" : item === "template" ? "按人话选位置和用途" : "保留旧公式输入"}</span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-5 rounded-lg border border-white/[0.08] bg-white/[0.03] p-3 text-xs leading-5 text-slate-400">
+          用户层只显示第1位到第6位和特码；平、落、特号这些同义词由系统内部处理。
+        </div>
+      </Panel>
+
+      <Panel className="p-5">
+        {mode === "paste" ? (
+          <div>
+            <h3 className="font-semibold text-white">粘贴原文识别</h3>
+            <p className="mt-1 text-sm text-slate-500">例如：平码3虎05取值+1234567911，或 176特码10 预测178尾数左右各3。</p>
+            <Textarea value={rawText} onChange={(event) => setRawText(event.target.value)} className="mt-4 min-h-32" />
+            <Button className="mt-4" type="button" onClick={applyRawText}><Search className="h-4 w-4" />开始理解</Button>
+          </div>
+        ) : (
+          <div>
+            <h3 className="font-semibold text-white">常用模板添加</h3>
+            <p className="mt-1 text-sm text-slate-500">选择规则用途、位置和取值方式，系统自动生成内部公式。</p>
+          </div>
+        )}
+
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <div>
+            <Label>规则名称</Label>
+            <Input value={ruleName} onChange={(event) => setRuleName(event.target.value)} placeholder={resolvedName} />
+          </div>
+          <div>
+            <Label>规则用途</Label>
+            <Select value={intent} onChange={(event) => setIntent(event.target.value as BuilderIntent)}>
+              {builderIntentOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </Select>
+          </div>
+          <div>
+            <Label>取哪个位置</Label>
+            <Select value={String(position)} onChange={(event) => setPosition(Number(event.target.value))}>
+              {[1, 2, 3, 4, 5, 6, 7].map((item) => <option key={item} value={item}>{positionLabel(item)}</option>)}
+            </Select>
+          </div>
+          <div>
+            <Label>取什么值</Label>
+            <Select value={valueKind} onChange={(event) => setValueKind(event.target.value as BuilderValueKind)}>
+              {builderValueOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </Select>
+          </div>
+          <div>
+            <Label>加减计算</Label>
+            <Input type="number" value={offset} onChange={(event) => setOffset(Number(event.target.value || 0))} />
+          </div>
+          <div>
+            <Label>验证间隔</Label>
+            <Input type="number" min={1} max={8} value={verifyOffset} onChange={(event) => setVerifyOffset(Number(event.target.value || 1))} />
+          </div>
+        </div>
+
+        {intent === "seven_tail" && (
+          <div className="mt-4 grid grid-cols-[220px_1fr] gap-3">
+            <div>
+              <Label>七尾闭环方式</Label>
+              <Select value={tailMode} onChange={(event) => setTailMode(event.target.value)}>
+                <option value="window3">以尾数为中心左右各3</option>
+                <option value="left2right4">左2右4</option>
+                <option value="custom">自定义偏移</option>
+              </Select>
+            </div>
+            <div>
+              <Label>自定义偏移</Label>
+              <Input value={customTailOffsets} onChange={(event) => setCustomTailOffsets(event.target.value)} placeholder="-3,-2,-1,0,1,2,4" />
+            </div>
+          </div>
+        )}
+
+        {intent === "nine_zodiac" && (
+          <div className="mt-4">
+            <Label>九肖取值</Label>
+            <Input value={zodiacOffsets} onChange={(event) => setZodiacOffsets(event.target.value)} placeholder="+1234567911" />
+          </div>
+        )}
+
+        <div className="mt-4">
+          <Label>取位循环（可选）</Label>
+          <Input value={positionPattern} onChange={(event) => setPositionPattern(event.target.value)} placeholder="例如 平1234567.1234567. 或 平7654321.7654321." />
+        </div>
+      </Panel>
+
+      <Panel className="p-5">
+        <h3 className="font-semibold text-white">机器理解与试算</h3>
+        <div className="mt-4 space-y-3 text-sm text-slate-300">
+          <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
+            <p className="text-slate-500">我理解为</p>
+            <p className="mt-2">取 {positionLabel(position)} 的 {builderValueOptions.find((item) => item.value === valueKind)?.label}，执行 {offset ? `${offset > 0 ? "+" : ""}${offset}` : "不加减"}，用途是 {builderIntentOptions.find((item) => item.value === intent)?.label}。</p>
+          </div>
+          <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
+            <p className="text-slate-500">内部公式</p>
+            <p className="mt-2 font-mono text-cyan-100">{formula}</p>
+            <p className="mt-1 text-xs text-slate-500">归一化：{normalizer}</p>
+          </div>
+          <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
+            <p className="text-slate-500">当前期试算</p>
+            {"error" in trial ? (
+              <p className="mt-2 text-rose-200">{trial.error}</p>
+            ) : (
+              <>
+                <p className="mt-2 text-slate-400">{draw?.issue ?? "-"}期：{drawNumbersWithZodiac(draw, config)}</p>
+                <p className="mt-2 font-mono text-cyan-100">{trial.calculation.expression} = {trial.calculation.rawResult}</p>
+                <p className="mt-2 text-white">输出：{trial.calculation.mappedResult.join("、")}</p>
+                {trial.calculation.secondaryMappedResult?.length ? <p className="mt-1 text-xs text-slate-500">对应号码：{trial.calculation.secondaryMappedResult.map((item) => typeof item === "number" ? numberWithZodiac(item, config) : item).join("、")}</p> : null}
+              </>
+            )}
+          </div>
+        </div>
+        {saveStatus && <p className={cn("mt-4 rounded-lg border p-3 text-sm", saveStatus.startsWith("暂") ? "border-rose-300/25 bg-rose-300/10 text-rose-100" : "border-emerald-300/25 bg-emerald-300/10 text-emerald-100")}>{saveStatus}</p>}
+        <Button className="mt-4 w-full" variant="primary" type="button" onClick={() => void save()}><Save className="h-4 w-4" />保存到规则库</Button>
+      </Panel>
     </div>
   );
 }
@@ -2432,7 +2832,7 @@ function CandidateNumberList({ items, focus, onFocus }: { items: CandidateNumber
               <Badge tone={item.opposeCount ? "slate" : "green"}>{item.score}</Badge>
             </div>
             <div className="mt-3 flex items-end justify-between">
-              <span className="font-mono text-[32px] font-semibold leading-none text-white">{String(item.number).padStart(2, "0")}</span>
+              <span className="font-mono text-[32px] font-semibold leading-none text-white">{padNumber(item.number)}</span>
               <span className="text-sm text-cyan-100">{item.zodiac}</span>
             </div>
             <p className="mt-3 text-xs text-slate-500">
@@ -2467,7 +2867,7 @@ function CandidateZodiacList({ items, focus, onFocus }: { items: CandidateZodiac
             </div>
             <div className="mt-3 text-[32px] font-semibold leading-none text-white">{item.zodiac}</div>
             <p className="mt-2 font-mono text-xs text-cyan-100">
-              {item.numbers.map((number) => String(number.number).padStart(2, "0")).join(" ")}
+              {item.numbers.map(candidateNumberLabel).join("  ")}
             </p>
             <p className="mt-3 text-xs text-slate-500">支持 {item.supportCount} / 反对 {item.opposeCount}</p>
             <p className="mt-2 line-clamp-2 text-xs text-slate-500">{evidenceReason(item.supportRules, item.opposeRules)}</p>
@@ -2614,8 +3014,8 @@ function ManualCombinationPanel({
           <p className="mt-3 text-xs text-slate-500">号码 Top 18</p>
           <div className="mt-2 grid grid-cols-9 gap-2">
             {report.topNumbers18.map((item) => (
-              <span key={item.number} className="flex h-8 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.05] font-mono text-xs text-white">
-                {String(item.number).padStart(2, "0")}
+              <span key={item.number} className="flex h-9 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.05] px-1 font-mono text-[11px] text-white">
+                {candidateNumberLabel(item)}
               </span>
             ))}
             {!report.topNumbers18.length && <span className="col-span-9 text-sm text-slate-500">请选择可参与的公式。</span>}
@@ -2660,10 +3060,10 @@ function CandidateEvidencePanel({ candidate }: { candidate?: CandidateNumber | C
     );
   }
 
-  const title = isCandidateNumber(candidate) ? String(candidate.number).padStart(2, "0") : candidate.zodiac;
+  const title = isCandidateNumber(candidate) ? candidateNumberLabel(candidate) : candidate.zodiac;
   const subtitle = isCandidateNumber(candidate)
     ? `${candidate.zodiac} · ${candidate.color} · ${candidate.element} · ${candidate.parity} · ${candidate.size} · 尾 ${candidate.tail}`
-    : candidate.numbers.map((number) => String(number.number).padStart(2, "0")).join("、");
+    : candidate.numbers.map(candidateNumberLabel).join("、");
 
   return (
     <Panel className="p-5">

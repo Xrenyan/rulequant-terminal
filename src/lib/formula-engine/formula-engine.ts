@@ -25,6 +25,7 @@ export type FormulaEngineCalculation = RuleCalculation & {
   variables: Record<string, number>;
   expression: string;
   trace: string[];
+  legacyProcess?: string[];
 };
 
 const calculationCache = new Map<string, FormulaEngineCalculation>();
@@ -73,6 +74,7 @@ function ruleCacheSignature(rule: RuleRecord): unknown {
     anchorIssue: rule.anchorIssue,
     anchorPatternIndex: rule.anchorPatternIndex,
     periodSpan: rule.periodSpan,
+    verifyOffset: rule.verifyOffset,
   };
 }
 
@@ -182,22 +184,80 @@ function calcKillThree(center: string, config: RuleQuantConfig): string[] {
   return unique([center, next, config.zodiacClash[next]]);
 }
 
+function closedTail(baseTail: number, offset: number): number {
+  return ((baseTail + offset) % 10 + 10) % 10;
+}
+
+function closedZodiacNumber(base: number, offset: number): number {
+  let value = Math.round(base) + offset;
+  while (value < 1) value += 12;
+  while (value > 49) value -= 12;
+  return value;
+}
+
+function parseSignedOffsets(value: string): number[] {
+  const explicit = [...value.matchAll(/[+-]?\d+/g)].map((match) => Number(match[0])).filter(Number.isFinite);
+  return explicit;
+}
+
+function parseCompactZodiacOffsets(value: string): number[] {
+  const compact = value.replace(/[^\d]/g, "");
+  if (compact === "1234567911") return [1, 2, 3, 4, 5, 6, 7, 9, 11];
+  if (!compact) return [];
+  const offsets: number[] = [];
+  let index = 0;
+  while (index < compact.length) {
+    const two = compact.slice(index, index + 2);
+    if ((two === "10" || two === "11" || two === "12") && index > 0) {
+      offsets.push(Number(two));
+      index += 2;
+    } else {
+      offsets.push(Number(compact[index]));
+      index += 1;
+    }
+  }
+  return offsets.filter(Number.isFinite);
+}
+
+function tailOffsetsForRule(rule: RuleRecord, config: RuleQuantConfig): number[] {
+  const normalizer = rule.normalizer ?? "";
+  const leftRight = normalizer.match(/left\s*=?\s*(\d+).*right\s*=?\s*(\d+)/i) ?? normalizer.match(/left(\d+).*right(\d+)/i);
+  if (leftRight) {
+    const left = Number(leftRight[1]);
+    const right = Number(leftRight[2]);
+    return Array.from({ length: left + right + 1 }, (_, index) => index - left);
+  }
+  if (/tail_(?:window|offsets)\s*:/i.test(normalizer)) {
+    const [, value = ""] = normalizer.split(/tail_(?:window|offsets)\s*:/i);
+    const offsets = parseSignedOffsets(value);
+    if (offsets.length) return offsets;
+  }
+  return config.sevenTailOffsets;
+}
+
+function zodiacOffsetsForRule(rule: RuleRecord): number[] {
+  const normalizer = rule.normalizer ?? "";
+  const match = normalizer.match(/zodiac_offsets\s*:?\s*([+\-\d,\s.]+)/i);
+  if (!match) return [];
+  const source = match[1].trim();
+  if (/^[+]?\d+$/.test(source)) return parseCompactZodiacOffsets(source);
+  return parseSignedOffsets(source);
+}
+
+function calcZodiacOffsetSet(baseNumber: number, offsets: number[], config: RuleQuantConfig): { numbers: number[]; zodiacs: string[]; lines: string[] } {
+  const base = normalizeZodiacNumber(Math.round(baseNumber)).value;
+  const numbers = unique(offsets.map((offset) => closedZodiacNumber(base, offset)));
+  const zodiacs = unique(numbers.map((number) => getNumberAttributes(number, config).zodiac));
+  const lines = offsets.map((offset) => {
+    const wrapped = closedZodiacNumber(base, offset);
+    const sign = offset >= 0 ? `+${offset}` : String(offset);
+    return `${String(base).padStart(2, "0")} ${getNumberAttributes(base, config).zodiac} ${sign} -> ${String(wrapped).padStart(2, "0")} ${getNumberAttributes(wrapped, config).zodiac}`;
+  });
+  return { numbers, zodiacs, lines };
+}
+
 function shouldApplyPositionPattern(rule: RuleRecord): boolean {
-  return (
-    rule.positionPattern.length > 0 &&
-    [
-      "eight_zodiac",
-      "eight_zodiac_two_period",
-      "nine_zodiac",
-      "kill_three_as_nine",
-      "include_parity",
-      "kill_parity",
-      "include_color",
-      "kill_color",
-      "include_size",
-      "kill_size",
-    ].includes(rule.category)
-  );
+  return rule.positionPattern.length > 0;
 }
 
 function issueSuffix(issue: string): number | undefined {
@@ -279,6 +339,20 @@ function calculateRuleUncached(
         finalResult: normalized.value,
         mappedResult: [zodiac],
         process: [...trace, ...reductionProcess(normalized.steps, 48), `${normalized.value} = ${zodiac}`],
+        variables: formula.variables,
+        expression: formula.expression,
+        trace,
+      };
+    }
+    case "include_zodiac": {
+      const normalized = normalizeZodiacNumber(rawResult);
+      const zodiac = getNumberAttributes(normalized.value, config).zodiac;
+      return {
+        rawResult,
+        normalizerSteps: normalized.steps,
+        finalResult: normalized.value,
+        mappedResult: [zodiac],
+        process: [...trace, ...reductionProcess(normalized.steps, 48), `${normalized.value} = ${zodiac}`, `参考生肖 ${zodiac}`],
         variables: formula.variables,
         expression: formula.expression,
         trace,
@@ -406,13 +480,21 @@ function calculateRuleUncached(
     }
     case "seven_tail": {
       const baseTail = normalizeTail(rawResult).value;
-      const tails = config.sevenTailOffsets.map((offset) => (baseTail + offset + 10) % 10);
+      const offsets = tailOffsetsForRule(rule, config);
+      const tails = offsets.map((offset) => closedTail(baseTail, offset));
+      const tailProcess = [
+        ...trace,
+        `七尾闭环基准尾 ${baseTail}`,
+        `0-9 闭环偏移 ${offsets.map((offset) => `${offset >= 0 ? "+" : ""}${offset}`).join(", ")} -> ${tails.join(", ")}`,
+        ...offsets.map((offset) => `${baseTail} ${offset >= 0 ? "+" : ""}${offset} -> ${closedTail(baseTail, offset)}`),
+      ];
       return {
         rawResult,
         normalizerSteps: [rawResult, baseTail],
         finalResult: tails,
         mappedResult: tails,
-        process: [
+        process: tailProcess,
+        legacyProcess: [
           ...trace,
           `定位尾 = ${rawResult} % 10 = ${baseTail}`,
           `七尾偏移 ${config.sevenTailOffsets.join(", ")} -> ${tails.join(", ")}`,
@@ -438,6 +520,21 @@ function calculateRuleUncached(
       };
     }
     case "nine_zodiac": {
+      const offsets = zodiacOffsetsForRule(rule);
+      if (offsets.length) {
+        const set = calcZodiacOffsetSet(rawResult, offsets, config);
+        return {
+          rawResult,
+          normalizerSteps: [rawResult, normalizeZodiacNumber(Math.round(rawResult)).value],
+          finalResult: set.zodiacs,
+          mappedResult: set.zodiacs,
+          secondaryMappedResult: set.numbers,
+          process: [...trace, `生肖闭环取值 ${offsets.map((offset) => `${offset >= 0 ? "+" : ""}${offset}`).join(", ")}`, ...set.lines, `九肖 = ${set.zodiacs.join(", ")}`],
+          variables: formula.variables,
+          expression: formula.expression,
+          trace,
+        };
+      }
       const startNumber = incrementNumber(rawResult, 1);
       const start = getNumberAttributes(startNumber, config).zodiac;
       const set = calcNineZodiac(start, config);
@@ -516,6 +613,8 @@ export function checkRuleSuccess(rule: RuleRecord, calculation: RuleCalculation,
   switch (rule.category) {
     case "kill_zodiac":
       return !resultSet.includes(special.zodiac);
+    case "include_zodiac":
+      return resultSet.includes(special.zodiac);
     case "kill_color":
       return !resultSet.includes(special.color);
     case "include_color":
@@ -573,13 +672,14 @@ export function calculateRuleDetail(input: {
     specialAttributes: future.specialAttributes,
     success: checkRuleSuccess(input.rule, calculation, future),
   }));
+  const verifyIndex = Math.max(input.rule.verifyOffset ?? 1, 1) - 1;
   const success =
     futureChecks.length === 0
       ? true
       : input.rule.category === "eight_zodiac_two_period"
         ? futureChecks.every((item) => item.success)
-        : futureChecks[0].success;
-  const next = input.futureDraws[0];
+        : futureChecks[verifyIndex]?.success ?? false;
+  const next = input.futureDraws[verifyIndex] ?? input.futureDraws[0];
 
   return {
     ruleId: input.rule.id,

@@ -2,25 +2,30 @@ import { describe, expect, it } from "vitest";
 import { defaultConfig } from "@/lib/config/default-config";
 import { seedConfig, seedDraws, seedRules } from "@/lib/data/seed";
 import { buildFormulaLedger, buildOneClickFormulaResults } from "@/lib/formula-ledger/formula-ledger";
+import { getNumberAttributes } from "@/lib/engine/attributes";
 import { runBacktest } from "@/lib/backtest/run-backtest";
 import type { DrawRecord, RuleRecord } from "@/types/domain";
 
 describe("formula ledger", () => {
   it("builds per-period calculation ledger rows for a rule", () => {
-    const result = runBacktest({ draws: seedDraws, rules: [seedRules[0]], config: seedConfig });
+    const draws: DrawRecord[] = [
+      { issue: "2026151", date: "2026-05-31", n1: 13, n2: 28, n3: 7, n4: 41, n5: 2, n6: 36, special: 19 },
+      { issue: "2026152", date: "2026-06-01", n1: 1, n2: 14, n3: 22, n4: 35, n5: 40, n6: 45, special: 8 },
+    ];
+    const result = runBacktest({ draws, rules: [seedRules[0]], config: seedConfig });
     const ledger = buildFormulaLedger(result.ruleResults[0]);
-    const first = ledger.entries[0];
+    const first = ledger.entries.find((entry) => entry.currentIssue === "2026151")!;
 
     expect(ledger.summary.ruleName).toBe("L序杀一肖 - 样例核心");
     expect(first.currentIssue).toBe("2026151");
-    expect(first.currentNumbersLabel).toBe("13 28 07 41 02 36 + 19");
+    expect(first.currentNumbersLabel).toBe([13, 28, 7, 41, 2, 36].map((number) => `${String(number).padStart(2, "0")} ${getNumberAttributes(number, seedConfig).zodiac}`).join(" ") + ` + 19 ${getNumberAttributes(19, seedConfig).zodiac}`);
     expect(first.variableLine).toContain("平1=13");
     expect(first.variableLine).toContain("特码尾=9");
     expect(first.equationLine).toBe("13 + 28 + 9 + 6 + 59 = 115");
     expect(first.rawResult).toBe(115);
     expect(first.mappingLine).toContain("19 对应鼠");
     expect(first.finalOutputLabel).toBe("杀鼠");
-    expect(first.nextOpenLabel).toBe("2026152期开奖：猪08");
+    expect(first.nextOpenLabel).toBe(`2026152期开奖：08 ${getNumberAttributes(8, seedConfig).zodiac}`);
     expect(first.statusText).toBe("正确");
     expect(first.compactLine).toContain("2026151期13 + 28 + 9 + 6 + 59 = 115");
   });
@@ -57,7 +62,7 @@ describe("formula ledger", () => {
       isFailure: true,
       statusText: "错误",
       finalOutputLabel: "杀马",
-      nextOpenLabel: "002期开奖：马13",
+      nextOpenLabel: `002期开奖：13 ${getNumberAttributes(13, defaultConfig).zodiac}`,
     });
   });
 

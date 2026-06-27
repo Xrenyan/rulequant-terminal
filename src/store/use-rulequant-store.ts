@@ -114,14 +114,26 @@ function mergeRulesWithSeedRules(rules: RuleRecord[]) {
 
 async function loadCloudStateFromApi(): Promise<RuleQuantCloudState | null> {
   if (typeof window === "undefined") return null;
-  try {
-    const response = await fetch("/api/cloud/state", { cache: "no-store" });
-    if (!response.ok) return null;
-    const state = (await response.json()) as RuleQuantCloudState;
-    return state.meta?.enabled ? state : null;
-  } catch {
-    return null;
+
+  const staticBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+  const endpoints = [
+    "/api/cloud/state",
+    `${staticBasePath}/static-cloud-state.json`,
+    "/static-cloud-state.json",
+    "../static-cloud-state.json",
+  ].filter((endpoint, index, list) => endpoint && list.indexOf(endpoint) === index);
+
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, { cache: "no-store" });
+      if (!response.ok) continue;
+      const state = (await response.json()) as RuleQuantCloudState;
+      if (state.meta?.enabled) return state;
+    } catch {
+      continue;
+    }
   }
+  return null;
 }
 
 export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
@@ -207,6 +219,16 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
     await get().persist();
   },
   replaceDraws: async (records) => {
+    if (!records.length) {
+      const log = makeLog({
+        type: "sync_draws",
+        message: "忽略空开奖数据替换请求，已保留现有开奖库",
+        dataCount: get().draws.length,
+      });
+      set({ operationLogs: trimLogs([log, ...get().operationLogs]) });
+      await get().persist();
+      return;
+    }
     const nextDraws = sortDraws(records);
     const latest = nextDraws.at(-1);
     const log = makeLog({

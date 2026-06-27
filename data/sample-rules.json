@@ -11,10 +11,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["L序", "杀肖", "样例"],
+    "tags": [
+      "L序",
+      "杀肖",
+      "样例"
+    ],
     "description": "首版手工整理规则，用于验证 115 - 48 - 48 = 19 = 鼠 的杀肖链路。",
     "sourceFile": "杀一肖规，共10条.txt",
-    "examples": ["115 - 48 - 48 = 19 = 鼠"],
+    "examples": [
+      "115 - 48 - 48 = 19 = 鼠"
+    ],
     "createdAt": "2026-06-24T00:00:00.000Z",
     "updatedAt": "2026-06-24T00:00:00.000Z"
   },
@@ -30,7 +36,10 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["L序", "杀合"],
+    "tags": [
+      "L序",
+      "杀合"
+    ],
     "description": "来自 L序杀合数规则文件的首版结构化规则，使用减 13 归一。",
     "sourceFile": "一条L序杀合数规.txt",
     "examples": [],
@@ -49,7 +58,10 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["D序", "杀尾"],
+    "tags": [
+      "D序",
+      "杀尾"
+    ],
     "description": "用于跑通 D序变量、尾数归一和下一期特码尾验证。",
     "sourceFile": "D序杀规1（176错3）都是截止156期的数据。红=00蓝=01绿=0(1).txt",
     "examples": [],
@@ -68,7 +80,10 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["L序", "杀头"],
+    "tags": [
+      "L序",
+      "杀头"
+    ],
     "description": "用于验证头数变量和减 5 归一。",
     "sourceFile": "L序杀一头规.txt",
     "examples": [],
@@ -87,7 +102,10 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["L序", "五行"],
+    "tags": [
+      "L序",
+      "五行"
+    ],
     "description": "用于验证五行值同义词：行 = 五行值。",
     "sourceFile": "L序杀一行规公式.txt",
     "examples": [],
@@ -106,7 +124,10 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["澳门", "杀段"],
+    "tags": [
+      "澳门",
+      "杀段"
+    ],
     "description": "用于验证段位和杀段回测。",
     "sourceFile": "澳门杀一段规，要的拿走。.txt",
     "examples": [],
@@ -125,10 +146,15 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["七尾", "集合"],
+    "tags": [
+      "七尾",
+      "集合"
+    ],
     "description": "baseTail 使用 [-3,-2,-1,0,+1,+2,+4] 生成七尾集合。",
     "sourceFile": "澳门规：.txt",
-    "examples": ["baseTail=9 -> 6,7,8,9,0,1,3"],
+    "examples": [
+      "baseTail=9 -> 6,7,8,9,0,1,3"
+    ],
     "createdAt": "2026-06-24T00:00:00.000Z",
     "updatedAt": "2026-06-24T00:00:00.000Z"
   },
@@ -141,7 +167,12 @@
     "normalizer": "parity_4455_plus_1_or_2",
     "target": "special_parity",
     "verifyMode": "next_special",
-    "positionPattern": [4, 4, 5, 5],
+    "positionPattern": [
+      4,
+      4,
+      5,
+      5
+    ],
     "anchorIssue": "2026172",
     "anchorPatternIndex": 0,
     "positionMeaning": "取值4455循环：平4时 +1 后取单双，平5时 +2 后取单双；1=平1，2=平2，3=平3，4=平4，5=平5，6=平6，7=特码",
@@ -149,7 +180,11 @@
     "enabled": true,
     "participatesInReference": true,
     "sourceType": "user_provided",
-    "tags": ["单双", "取值4455", "用户提供"],
+    "tags": [
+      "单双",
+      "取值4455",
+      "用户提供"
+    ],
     "description": "来自“单双自用、、20260625、、取值4455(1).txt”。按期号循环取平4/平5：平4加1后看单双，平5加2后看单双，用下一期特码单双验证。",
     "sourceFile": "单双自用、、20260625、、取值4455(1).txt",
     "examples": [
@@ -169,16 +204,32 @@
     "normalizer": "eight_zodiac",
     "target": "special_zodiac",
     "verifyMode": "next_special",
-    "positionPattern": [1, 2, 3, 4, 5, 6, 5, 4, 3, 2],
+    "positionPattern": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      5,
+      4,
+      3,
+      2
+    ],
     "anchorIssue": "2026169",
     "anchorPatternIndex": 0,
     "positionMeaning": "1=平1，2=平2，3=平3，4=平4，5=平5，6=平6，7=特码",
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["八肖", "集合"],
+    "tags": [
+      "八肖",
+      "集合"
+    ],
     "description": "按平位号码 +1 取起点生肖，再生成八肖集合。",
     "sourceFile": "八肖自用、、(2个括号内的肖都是括号前的肖的对冲+123456。取值123.txt",
-    "examples": ["13马 +1 = 14蛇 -> 蛇、龙、兔、鸡、虎、牛、羊、鼠"],
+    "examples": [
+      "13马 +1 = 14蛇 -> 蛇、龙、兔、鸡、虎、牛、羊、鼠"
+    ],
     "createdAt": "2026-06-24T00:00:00.000Z",
     "updatedAt": "2026-06-24T00:00:00.000Z"
   },
@@ -194,10 +245,15 @@
     "positionPattern": [],
     "periodSpan": 2,
     "enabled": true,
-    "tags": ["八肖", "管两期"],
+    "tags": [
+      "八肖",
+      "管两期"
+    ],
     "description": "取平6生肖，前3、本肖、后3、对冲，验证后两期。",
     "sourceFile": "八肖管理两期(此规管2期的。).txt",
-    "examples": ["狗 -> 牛、鼠、猪、狗、鸡、猴、羊、龙"],
+    "examples": [
+      "狗 -> 牛、鼠、猪、狗、鸡、猴、羊、龙"
+    ],
     "createdAt": "2026-06-24T00:00:00.000Z",
     "updatedAt": "2026-06-24T00:00:00.000Z"
   },
@@ -210,13 +266,29 @@
     "normalizer": "kill_three_as_nine",
     "target": "special_zodiac",
     "verifyMode": "next_special",
-    "positionPattern": [7, 6, 5, 4, 3, 2, 1, 2, 3, 4, 5, 6],
+    "positionPattern": [
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "anchorIssue": "2026167",
     "anchorPatternIndex": 0,
     "positionMeaning": "1=平1，2=平2，3=平3，4=平4，5=平5，6=平6，7=特码",
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["杀三肖", "九肖"],
+    "tags": [
+      "杀三肖",
+      "九肖"
+    ],
     "description": "取指定平位生肖 A，杀 A、A 下一个、下一个的对冲；九肖为其余生肖。",
     "sourceFile": "杀三肖可以当做九肖用、、20260606、、(取值平7654321.23456.7654321.23456.).txt",
     "examples": [],
@@ -235,10 +307,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["D序", "杀肖", "原始公式"],
+    "tags": [
+      "D序",
+      "杀肖",
+      "原始公式"
+    ],
     "description": "从 D序杀一肖原始文件整理，直接按今年网站全年开奖逐期回测。",
     "sourceFile": "D序，杀一肖（截止163期，327错8）.txt",
-    "examples": ["平5合尾+平4头+平6合+平4+平6+9"],
+    "examples": [
+      "平5合尾+平4头+平6合+平4+平6+9"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -254,10 +332,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["D序", "杀肖", "原始公式"],
+    "tags": [
+      "D序",
+      "杀肖",
+      "原始公式"
+    ],
     "description": "从 D序杀规1 原文整理，支持原文变量后缀写法。",
     "sourceFile": "D序杀规1（176错3）都是截止156期的数据。红=00蓝=01绿=0(1).txt",
-    "examples": ["平2头+平3波+平4波+特行值"],
+    "examples": [
+      "平2头+平3波+平4波+特行值"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -273,10 +357,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["L序", "杀肖", "原始公式"],
+    "tags": [
+      "L序",
+      "杀肖",
+      "原始公式"
+    ],
     "description": "同一公式按 L序口径回测，便于和 D序对照。",
     "sourceFile": "D序杀规1（176错3）都是截止156期的数据。红=00蓝=01绿=0(1).txt",
-    "examples": ["平2头+平3波+平4波+特行值"],
+    "examples": [
+      "平2头+平3波+平4波+特行值"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -292,10 +382,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["L序", "杀肖", "原始公式"],
+    "tags": [
+      "L序",
+      "杀肖",
+      "原始公式"
+    ],
     "description": "从 L序杀规5 原文整理。",
     "sourceFile": "D序杀规1（176错3）都是截止156期的数据。红=00蓝=01绿=0(1).txt",
-    "examples": ["6+平1合+平2段+平4合+平6波"],
+    "examples": [
+      "6+平1合+平2段+平4合+平6波"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -311,10 +407,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["L序", "杀肖", "原始公式"],
+    "tags": [
+      "L序",
+      "杀肖",
+      "原始公式"
+    ],
     "description": "从 L序杀规10 原文整理，总数尾为七个开奖号总和尾数。",
     "sourceFile": "D序杀规1（176错3）都是截止156期的数据。红=00蓝=01绿=0(1).txt",
-    "examples": ["4+平1段+平3波+平3行+平6合+平6波+特码波+总数尾"],
+    "examples": [
+      "4+平1段+平3波+平3行+平6合+平6波+特码波+总数尾"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -330,10 +432,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["L序", "杀肖", "原始公式"],
+    "tags": [
+      "L序",
+      "杀肖",
+      "原始公式"
+    ],
     "description": "从 L序杀规4 原文整理。",
     "sourceFile": "D序杀规1（176错3）都是截止156期的数据。红=00蓝=01绿=0(1).txt",
-    "examples": ["9+平1合+平3头+平5头"],
+    "examples": [
+      "9+平1合+平3头+平5头"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -349,10 +457,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["L序", "杀肖", "原始公式"],
+    "tags": [
+      "L序",
+      "杀肖",
+      "原始公式"
+    ],
     "description": "从 L序杀肖一肖规7 原文整理。",
     "sourceFile": "L序杀肖一肖规7(1).txt",
-    "examples": ["5+平2合+平3行+平5头+特合"],
+    "examples": [
+      "5+平2合+平3行+平5头+特合"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -368,10 +482,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["L序", "杀肖", "原始公式"],
+    "tags": [
+      "L序",
+      "杀肖",
+      "原始公式"
+    ],
     "description": "从 L序杀肖一肖规8 原文整理。",
     "sourceFile": "L序杀肖一肖规8.txt",
-    "examples": ["7+平2合+平3行+平5头+特合"],
+    "examples": [
+      "7+平2合+平3行+平5头+特合"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -387,10 +507,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["L序", "杀头", "原始公式"],
+    "tags": [
+      "L序",
+      "杀头",
+      "原始公式"
+    ],
     "description": "从 L序杀一头规原文整理。",
     "sourceFile": "L序杀一头规.txt",
-    "examples": ["平3波+平4行+平5波+平5合+特码行+特码+总数合"],
+    "examples": [
+      "平3波+平4行+平5波+平5合+特码行+特码+总数合"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -406,10 +532,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["L序", "五行", "原始公式"],
+    "tags": [
+      "L序",
+      "五行",
+      "原始公式"
+    ],
     "description": "从 L序杀一行规公式原文整理。",
     "sourceFile": "L序杀一行规公式.txt",
-    "examples": ["平1尾+平1段+平4尾+平5合+平5五行值+总数合"],
+    "examples": [
+      "平1尾+平1段+平4尾+平5合+平5五行值+总数合"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -425,10 +557,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["L序", "杀合", "原始公式"],
+    "tags": [
+      "L序",
+      "杀合",
+      "原始公式"
+    ],
     "description": "从 L序杀合数规原文整理。",
     "sourceFile": "一条L序杀合数规.txt",
-    "examples": ["8+平1合+平4码"],
+    "examples": [
+      "8+平1合+平4码"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -444,10 +582,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["澳门", "杀合", "原始公式"],
+    "tags": [
+      "澳门",
+      "杀合",
+      "原始公式"
+    ],
     "description": "从澳门规原文整理。",
     "sourceFile": "澳门规：.txt",
-    "examples": ["7+平1段+平2段+平6头"],
+    "examples": [
+      "7+平1段+平2段+平6头"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -463,10 +607,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["澳门", "杀合", "原始公式"],
+    "tags": [
+      "澳门",
+      "杀合",
+      "原始公式"
+    ],
     "description": "从澳门规原文整理。",
     "sourceFile": "澳门规：.txt",
-    "examples": ["8+平2五行值+平4头+平4五行值+平6合"],
+    "examples": [
+      "8+平2五行值+平4头+平4五行值+平6合"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -482,10 +632,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["澳门", "杀合", "原始公式"],
+    "tags": [
+      "澳门",
+      "杀合",
+      "原始公式"
+    ],
     "description": "从澳门规原文整理。",
     "sourceFile": "澳门规：.txt",
-    "examples": ["12+平2头+平2波色值"],
+    "examples": [
+      "12+平2头+平2波色值"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -501,10 +657,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["澳门", "杀尾", "原始公式"],
+    "tags": [
+      "澳门",
+      "杀尾",
+      "原始公式"
+    ],
     "description": "从澳门规原文整理。",
     "sourceFile": "澳门规：.txt",
-    "examples": ["6+平3头+平3波色值+平4五行值+平6尾+期数尾"],
+    "examples": [
+      "6+平3头+平3波色值+平4五行值+平6尾+期数尾"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -520,10 +682,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["澳门", "杀尾", "原始公式"],
+    "tags": [
+      "澳门",
+      "杀尾",
+      "原始公式"
+    ],
     "description": "从澳门规原文整理，总数尾为七个落球相加总和尾数。",
     "sourceFile": "澳门规：.txt",
-    "examples": ["4+平3五行值+平4头+特码段+总数尾+期数尾"],
+    "examples": [
+      "4+平3五行值+平4头+特码段+总数尾+期数尾"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -539,10 +707,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["澳门", "杀肖", "原始公式"],
+    "tags": [
+      "澳门",
+      "杀肖",
+      "原始公式"
+    ],
     "description": "从澳门规原文整理。",
     "sourceFile": "澳门规：.txt",
-    "examples": ["4+平3尾+平5五行值+平6头+平6段+特码+特码波色值"],
+    "examples": [
+      "4+平3尾+平5五行值+平6头+平6段+特码+特码波色值"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -558,10 +732,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["澳门", "杀肖", "原始公式"],
+    "tags": [
+      "澳门",
+      "杀肖",
+      "原始公式"
+    ],
     "description": "从澳门规原文整理，L序口径。",
     "sourceFile": "澳门规：.txt",
-    "examples": ["5+平4五行值+平6尾+平6波色值"],
+    "examples": [
+      "5+平4五行值+平6尾+平6波色值"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -577,10 +757,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["澳门", "杀肖", "原始公式"],
+    "tags": [
+      "澳门",
+      "杀肖",
+      "原始公式"
+    ],
     "description": "从澳门规原文整理，D序口径。",
     "sourceFile": "澳门规：.txt",
-    "examples": ["5+平4五行值+平6尾+平6波色值"],
+    "examples": [
+      "5+平4五行值+平6尾+平6波色值"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -596,10 +782,17 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["澳门", "杀肖", "图片重点", "原始公式"],
+    "tags": [
+      "澳门",
+      "杀肖",
+      "图片重点",
+      "原始公式"
+    ],
     "description": "从图片和澳门规中重点公式整理，用于生成 172期2+1+42+10+7+0=62蛇 这种逐期流水账。",
     "sourceFile": "澳门规：.txt",
-    "examples": ["2+平2五行值+平3+平4合+平5段+平6波色值"],
+    "examples": [
+      "2+平2五行值+平3+平4合+平5段+平6波色值"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -615,10 +808,16 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["七尾", "澳门", "原始公式"],
+    "tags": [
+      "七尾",
+      "澳门",
+      "原始公式"
+    ],
     "description": "从澳门规七尾示例整理，使用系统七尾偏移数组生成尾数组合。",
     "sourceFile": "澳门规：.txt",
-    "examples": ["平1尾+平2段+平2五行值+平5合"],
+    "examples": [
+      "平1尾+平2段+平2五行值+平5合"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -634,10 +833,17 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["澳门", "杀肖", "10条", "原始公式"],
+    "tags": [
+      "澳门",
+      "杀肖",
+      "10条",
+      "原始公式"
+    ],
     "description": "从澳门杀一肖规10条中规6整理。",
     "sourceFile": "澳门杀一肖规，共10条.txt",
-    "examples": ["平1尾+平4合+期合+平1合尾+平3合尾+8"],
+    "examples": [
+      "平1尾+平4合+期合+平1合尾+平3合尾+8"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -653,10 +859,17 @@
     "positionPattern": [],
     "periodSpan": 1,
     "enabled": true,
-    "tags": ["澳门", "杀肖", "10条", "原始公式"],
+    "tags": [
+      "澳门",
+      "杀肖",
+      "10条",
+      "原始公式"
+    ],
     "description": "从澳门杀一肖规10条中规7整理。",
     "sourceFile": "澳门杀一肖规，共10条.txt",
-    "examples": ["落6行+落2波+特尾+特号+特合尾+1"],
+    "examples": [
+      "落6行+落2波+特尾+特号+特合尾+1"
+    ],
     "createdAt": "2026-06-25T00:00:00.000Z",
     "updatedAt": "2026-06-25T00:00:00.000Z"
   },
@@ -674,10 +887,16 @@
     "enabled": true,
     "participatesInReference": true,
     "sourceType": "user_provided",
-    "tags": ["七尾", "澳门", "用户提供"],
+    "tags": [
+      "七尾",
+      "澳门",
+      "用户提供"
+    ],
     "description": "来自“澳门七尾规公式2：.txt”。计算定位尾后按 -3、-2、-1、+0、+1、+2、+4 闭环生成七尾。",
     "sourceFile": "澳门七尾规公式2：.txt",
-    "examples": ["172期8+5+1+9=23，0123457尾，173开蛇26错"],
+    "examples": [
+      "172期8+5+1+9=23，0123457尾，173开蛇26错"
+    ],
     "createdAt": "2026-06-27T00:00:00.000Z",
     "updatedAt": "2026-06-27T00:00:00.000Z"
   },
@@ -690,7 +909,28 @@
     "normalizer": "nine_zodiac_plus_1_three_clash",
     "target": "special_zodiac",
     "verifyMode": "next_special",
-    "positionPattern": [1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1, 2, 3, 4, 5, 6, 5, 4, 3, 2],
+    "positionPattern": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      5,
+      4,
+      3,
+      2
+    ],
     "anchorIssue": "2026139",
     "anchorPatternIndex": 0,
     "positionMeaning": "取值123456.5432.123456.5432；先取平位号码 +1 得起点生肖，九肖=起点、起点对冲、+1、+2、+2对冲、+3、+4、+4对冲、+5。",
@@ -698,10 +938,16 @@
     "enabled": true,
     "participatesInReference": true,
     "sourceType": "user_provided",
-    "tags": ["九肖", "用户提供", "取位循环"],
+    "tags": [
+      "九肖",
+      "用户提供",
+      "取位循环"
+    ],
     "description": "来自“九肖自用、、(3个括号内的肖都是括号前的肖的对冲+123456。取值123.txt”。括号内三肖分别为起点、+2、+4 的对冲肖。",
     "sourceFile": "九肖自用、、(3个括号内的肖都是括号前的肖的对冲+123456。取值123.txt",
-    "examples": ["175平5兔28+1=29虎(猴)牛鼠(马)猪狗(龙)鸡"],
+    "examples": [
+      "175平5兔28+1=29虎(猴)牛鼠(马)猪狗(龙)鸡"
+    ],
     "createdAt": "2026-06-27T00:00:00.000Z",
     "updatedAt": "2026-06-27T00:00:00.000Z"
   }
