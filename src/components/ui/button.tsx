@@ -14,16 +14,16 @@ const variants = {
 };
 
 const sizes = {
-  sm: "h-8 px-3 text-[12px]",
-  md: "h-10 px-4 text-sm",
-  icon: "h-9 w-9 p-0",
+  sm: "h-8 min-h-8 px-3 text-[12px]",
+  md: "h-10 min-h-10 px-4 text-sm",
+  icon: "h-9 w-9 min-w-9 p-0",
 };
 
 export function Button({ className, variant = "secondary", size = "md", ...props }: ButtonProps) {
   return (
     <button
       className={cn(
-        "inline-flex shrink-0 items-center justify-center gap-2 rounded-md border font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex shrink-0 touch-manipulation items-center justify-center gap-2 whitespace-nowrap rounded-lg border font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50",
         variants[variant],
         sizes[size],
         className,
