@@ -81,18 +81,25 @@ try {
     throw "build failed with code $LASTEXITCODE"
   }
 
-  & (Join-Path $ProjectRoot "scripts\publish-production.ps1") -ProjectRoot $ProjectRoot
-  if ($LASTEXITCODE -ne 0) {
-    throw "publish failed with code $LASTEXITCODE"
-  }
-
   & (Join-Path $ProjectRoot "scripts\publish-github-pages.ps1") -ProjectRoot $ProjectRoot
   if ($LASTEXITCODE -ne 0) {
     throw "GitHub Pages publish failed with code $LASTEXITCODE"
   }
 
+  $vercelStatus = "Vercel publish not attempted"
+  try {
+    & (Join-Path $ProjectRoot "scripts\publish-production.ps1") -ProjectRoot $ProjectRoot
+    if ($LASTEXITCODE -ne 0) {
+      throw "publish failed with code $LASTEXITCODE"
+    }
+    $vercelStatus = "Vercel production deployed"
+  } catch {
+    $vercelStatus = "Vercel production deploy failed: $($_.Exception.Message)"
+    Write-Warning $vercelStatus
+  }
+
   Set-Content -LiteralPath $markerFile -Value $latestSha -Encoding ASCII
-  Write-Output "Auto deployed RuleQuant at $latestSha"
+  Write-Output "Auto deployed RuleQuant GitHub Pages at $latestSha. $vercelStatus"
 } finally {
   Pop-Location
 }

@@ -38,9 +38,22 @@ foreach ($artifact in $artifacts) {
 
 Push-Location $target
 try {
-  pnpm dlx vercel@latest deploy --prod --yes --force --archive=tgz --logs --no-color
-  if ($LASTEXITCODE -ne 0) {
-    throw "Vercel deploy failed with code $LASTEXITCODE"
+  $deployed = $false
+  for ($attempt = 1; $attempt -le 3; $attempt++) {
+    pnpm dlx vercel@latest deploy --prod --yes --force --archive=tgz --logs --no-color
+    if ($LASTEXITCODE -eq 0) {
+      $deployed = $true
+      break
+    }
+
+    if ($attempt -lt 3) {
+      Write-Warning "Vercel deploy attempt $attempt failed with code $LASTEXITCODE. Retrying..."
+      Start-Sleep -Seconds 15
+    }
+  }
+
+  if (-not $deployed) {
+    throw "Vercel deploy failed after 3 attempts"
   }
 } finally {
   Pop-Location
