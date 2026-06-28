@@ -41,6 +41,7 @@ type RuleQuantState = {
   resetRules: () => Promise<void>;
   importDraws: (records: DrawRecord[]) => Promise<void>;
   replaceDraws: (records: DrawRecord[]) => Promise<void>;
+  deleteDraw: (issue: string) => Promise<void>;
   importRules: (records: RuleRecord[]) => Promise<void>;
   addRuleToLibrary: (draft: RuleLibraryDraft, reason?: string) => Promise<AddRuleToLibraryResult>;
   addRulesToLibrary: (drafts: RuleLibraryDraft[], reason?: string) => Promise<AddRulesToLibraryResult>;
@@ -351,6 +352,22 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
       message: `替换开奖数据 ${nextDraws.length} 条`,
       issue: latest?.issue,
       dataCount: nextDraws.length,
+    });
+    set({ draws: nextDraws, operationLogs: trimLogs([log, ...get().operationLogs]) });
+    await get().persist();
+  },
+  deleteDraw: async (issue) => {
+    const deleted = get().draws.find((draw) => draw.issue === issue);
+    const nextDraws = get().draws.filter((draw) => draw.issue !== issue);
+    const log = makeLog({
+      type: "sync_draws",
+      message: `删除开奖数据：${issue}${deleted && isManualDraw(deleted) ? "（人工录入）" : ""}`,
+      issue,
+      dataCount: nextDraws.length,
+      details: {
+        sourceType: deleted ? deleted.rawAttributes?.sourceType ?? deleted.sourceUrl ?? "unknown" : "unknown",
+        numbers: deleted ? [deleted.n1, deleted.n2, deleted.n3, deleted.n4, deleted.n5, deleted.n6, deleted.special] : [],
+      },
     });
     set({ draws: nextDraws, operationLogs: trimLogs([log, ...get().operationLogs]) });
     await get().persist();

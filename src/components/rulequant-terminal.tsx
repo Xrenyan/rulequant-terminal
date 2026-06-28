@@ -698,6 +698,16 @@ function sortDrawRecords(records: DrawRecord[]) {
   });
 }
 
+function isManualDrawRecord(record: Pick<DrawRecord, "sourceUrl" | "rawAttributes">) {
+  return record.sourceUrl === "manual://user-input" || record.rawAttributes?.sourceType === "manual";
+}
+
+function mergeDrawRecords(primary: DrawRecord[], extra: DrawRecord[]) {
+  const merged = new Map(primary.map((record) => [record.issue, record]));
+  extra.forEach((record) => merged.set(record.issue, record));
+  return sortDrawRecords([...merged.values()]);
+}
+
 function parsePositionPattern(value: FormDataEntryValue | null): number[] {
   const text = String(value || "").trim();
   if (/1234567\.1234567/.test(text)) return [1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7];
@@ -830,7 +840,11 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         : selectedRule;
   const ledgerVisibleCount = ledgerVisibleState.ruleId === selectedRuleId ? ledgerVisibleState.count : 20;
   const websiteDraws = useMemo(() => sortDrawRecords(sourceRecords), [sourceRecords]);
-  const activeDraws = websiteDraws.length ? websiteDraws : draws;
+  const manualLocalDraws = useMemo(() => sortDrawRecords(draws.filter(isManualDrawRecord)), [draws]);
+  const activeDraws = useMemo(
+    () => websiteDraws.length ? mergeDrawRecords(websiteDraws, manualLocalDraws) : sortDrawRecords(draws),
+    [draws, manualLocalDraws, websiteDraws],
+  );
   const normalizedDraws = useMemo(() => activeDraws.map((draw) => normalizeDraw(draw, config)), [activeDraws, config]);
   const latestDraw = normalizedDraws.at(-1);
   const latestRawDraw = activeDraws.at(-1);
@@ -839,10 +853,11 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     if (referenceArchiveIssue) return;
     if (latestRawDraw?.issue) setReferenceArchiveIssue(latestRawDraw.issue);
   }, [latestRawDraw?.issue, referenceArchiveIssue]);
-  const hasLiveDraws = activeDraws.some((draw) => Boolean(draw.sourceUrl));
+  const hasManualDraws = manualLocalDraws.length > 0;
+  const hasLiveDraws = activeDraws.some((draw) => Boolean(draw.sourceUrl) && !isManualDrawRecord(draw));
   const isSeedOnly = !hasLiveDraws && draws.length === seedDraws.length && draws.every((draw, index) => draw.issue === seedDraws[index]?.issue);
   const isCloudData = Boolean(cloudStateMeta?.enabled && cloudStateMeta.recordCount);
-  const hasSharedDraws = hasLiveDraws || isCloudData || websiteDraws.length > 0;
+  const hasSharedDraws = hasLiveDraws || isCloudData || websiteDraws.length > 0 || hasManualDraws;
   const isStaticShareHost = typeof window !== "undefined" && window.location.hostname.endsWith("github.io");
   const hasCloudAdminToken = typeof window !== "undefined" && Boolean(window.localStorage.getItem("rulequant:adminToken") || process.env.NEXT_PUBLIC_RULEQUANT_ADMIN_TOKEN);
   const showCloudPublishControls = hasCloudAdminToken || !isStaticShareHost;
@@ -850,10 +865,26 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const staticSnapshotAt = isStaticShareHost && hasSharedDraws ? (cloudSyncAt || latestRawDraw?.date || "静态快照") : "";
   const displayLastSyncAt = lastSyncAt || cloudSyncAt || staticSnapshotAt;
   const isUsingSyncedData = websiteDraws.length > 0 || isCloudData || hasLiveDraws;
-  const dataSourceLabel = sourceLoading ? "同步中" : websiteDraws.length ? "网站全年数据" : isCloudData ? "云端数据库" : hasLiveDraws ? "实时网址" : isSeedOnly ? "示例数据" : "本地库";
+  const dataSourceLabel = sourceLoading
+    ? "同步中"
+    : websiteDraws.length && hasManualDraws
+      ? "网站全年数据 + 人工录入"
+    : websiteDraws.length
+        ? "网站全年数据"
+        : isCloudData && hasManualDraws
+          ? "云端数据库 + 人工录入"
+          : isCloudData
+            ? "云端数据库"
+            : hasLiveDraws
+              ? "实时网址"
+              : hasManualDraws
+                ? "本地库 + 人工录入"
+              : isSeedOnly
+                ? "示例数据"
+                : "本地库";
   const sourceRecordBadgeTone = sourceRecords.length || (isStaticShareHost && hasSharedDraws) ? "green" : "slate";
   const sourceRecordBadgeLabel = sourceRecords.length
-    ? `${sourceRecords.length} 条网址记录`
+    ? `${sourceRecords.length} 条网址记录${hasManualDraws ? ` + ${manualLocalDraws.length} 条人工` : ""}`
     : isStaticShareHost && hasSharedDraws
       ? `${activeDraws.length} 条静态记录`
       : "未同步";
@@ -1280,19 +1311,13 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
 
     await store.importDraws([record]);
     setManualDraw(record);
-    setSourceRecords((current) => {
-      if (!current.length) return current;
-      const merged = new Map(current.map((item) => [item.issue, item]));
-      merged.set(record.issue, record);
-      return sortDrawRecords([...merged.values()]);
-    });
     clearCandidatePoolCache();
     setReferenceRunId((current) => current + 1);
     const savedAt = new Date().toLocaleString("zh-CN", { hour12: false });
     setLastSyncAt(savedAt);
     localStorage.setItem("rulequant:lastSyncAt", savedAt);
-    setSourceStatus(`已保存人工录入开奖：${record.issue}，${drawNumbersWithZodiac(record, config)}。`);
-    setOneClickStatus(`已保存人工录入开奖 ${record.issue}，后续计算会标记为人工数据。`);
+    setSourceStatus(`已保存人工录入开奖：${record.issue}，${drawNumbersWithZodiac(record, config)}。开奖数据页顶部会单独显示。`);
+    setOneClickStatus(`已保存人工录入开奖 ${record.issue}，后续计算会标记为人工数据；可在“开奖数据”页顶部查看。`);
     await store.addOperationLog({
       type: "sync_draws",
       message: `人工录入开奖：${record.issue}`,
@@ -1303,6 +1328,16 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         numbers,
       },
     });
+  }
+
+  async function deleteManualDraw(issue: string) {
+    if (!window.confirm(`确认删除人工录入开奖「${issue}」吗？删除后不再参与计算。`)) return;
+    await store.deleteDraw(issue);
+    setSourceRecords((current) => current.filter((record) => record.issue !== issue));
+    clearCandidatePoolCache();
+    setReferenceRunId((current) => current + 1);
+    setSourceStatus(`已删除人工录入开奖：${issue}。`);
+    setOneClickStatus(`已删除人工录入开奖 ${issue}，后续计算不会再使用这条人工数据。`);
   }
 
   function handleOneClickCalculate() {
@@ -1925,10 +1960,44 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                 <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-400">
                   <Badge tone={hasSharedDraws ? "green" : "slate"}>{dataSourceLabel}</Badge>
                   <span>最新期：{latestDraw?.issue ?? "-"}</span>
-                  <span>已同步记录：{activeDraws.length} 条</span>
+                  <span>计算使用：网站 {websiteDraws.length || Math.max(0, activeDraws.length - manualLocalDraws.length)} 条 + 人工 {manualLocalDraws.length} 条 = {activeDraws.length} 条</span>
                   <span>最后同步：{displayLastSyncAt || "未同步"}</span>
                   {sourceStatus && <span>{sourceStatus}</span>}
                 </div>
+                {manualLocalDraws.length > 0 && (
+                  <div className="mb-4 rounded-md border border-cyan-300/20 bg-cyan-300/[0.055] p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-cyan-50">人工录入开奖</h3>
+                        <p className="mt-1 text-xs leading-5 text-slate-400">
+                          这些记录保存在本机开奖库，并已合并进当前计算数据。期号相同会覆盖旧记录；要保留多条请填写不同期号。
+                        </p>
+                      </div>
+                      <Badge tone="cyan">{manualLocalDraws.length} 条</Badge>
+                    </div>
+                    <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                      {[...manualLocalDraws].reverse().slice(0, 8).map((draw) => (
+                        <div key={draw.issue} className="rounded-md border border-white/[0.075] bg-black/20 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="font-mono text-sm font-semibold text-white">{draw.issue}期</p>
+                            <div className="flex items-center gap-2">
+                              <Badge tone="cyan">人工录入</Badge>
+                              <Button size="sm" variant="danger" onClick={() => void deleteManualDraw(draw.issue)}>删除</Button>
+                            </div>
+                          </div>
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            {[draw.n1, draw.n2, draw.n3, draw.n4, draw.n5, draw.n6].map((number, index) => (
+                              <NumberTile key={`${draw.issue}-${index}-${number}`} number={number} config={config} />
+                            ))}
+                            <span className="px-1 font-mono text-lg text-cyan-100">+</span>
+                            <NumberTile number={draw.special} special config={config} />
+                          </div>
+                          <p className="mt-2 text-xs text-slate-500">保存时间：{String(draw.rawAttributes?.savedAt ?? "-")}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <DataTable data={[...normalizedDraws].reverse()} columns={drawColumns} dense />
               </Panel>
             )}
