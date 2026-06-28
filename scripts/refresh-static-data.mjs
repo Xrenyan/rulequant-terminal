@@ -38,19 +38,6 @@ function mergeByKey(localItems, remoteItems, getKey) {
 }
 
 async function main() {
-  const response = await fetch(`${endpoint}${endpoint.includes("?") ? "&" : "?"}t=${Date.now()}`, {
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to refresh static data: ${response.status} ${response.statusText}`);
-  }
-
-  const state = await response.json();
-  if (!Array.isArray(state.draws) || !Array.isArray(state.rules)) {
-    throw new Error("Cloud state response does not include draws/rules arrays.");
-  }
-
   const staticStatePath = path.join(root, "public", "static-cloud-state.json");
   const localState = readJsonIfExists(staticStatePath, {});
   const localDraws = Array.isArray(localState.draws)
@@ -59,6 +46,32 @@ async function main() {
   const localRules = Array.isArray(localState.rules)
     ? localState.rules
     : readJsonIfExists(path.join(root, "data", "sample-rules.json"), []);
+  let state = localState;
+  try {
+    const response = await fetch(`${endpoint}${endpoint.includes("?") ? "&" : "?"}t=${Date.now()}`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to refresh static data: ${response.status} ${response.statusText}`);
+    }
+
+    const cloudState = await response.json();
+    if (!Array.isArray(cloudState.draws) || !Array.isArray(cloudState.rules)) {
+      throw new Error("Cloud state response does not include draws/rules arrays.");
+    }
+    state = cloudState;
+  } catch (error) {
+    if (!Array.isArray(localDraws) || !Array.isArray(localRules) || localDraws.length === 0 || localRules.length === 0) {
+      throw error;
+    }
+    console.warn(`Cloud state refresh skipped; using local static data: ${error instanceof Error ? error.message : String(error)}`);
+    state = {
+      ...localState,
+      draws: localDraws,
+      rules: localRules,
+    };
+  }
   const cloudDraws = Array.isArray(state.draws) ? state.draws : [];
 
   let sourceDraws = [];
