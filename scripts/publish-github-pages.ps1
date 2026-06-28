@@ -44,6 +44,10 @@ if (Test-Path -LiteralPath $buildRootFull) {
   }
   $linkedNodeModules = Join-Path $resolvedBuildRoot "node_modules"
   if (Test-Path -LiteralPath $linkedNodeModules) {
+    $linkItem = Get-Item -LiteralPath $linkedNodeModules -Force
+    if (-not ($linkItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+      throw "Refusing to remove non-junction node_modules at $linkedNodeModules"
+    }
     cmd /c "rmdir `"$linkedNodeModules`"" | Out-Null
   }
   Remove-Item -LiteralPath $resolvedBuildRoot -Recurse -Force
@@ -61,7 +65,22 @@ robocopy @robocopyArgs | Out-Null
 if ($LASTEXITCODE -gt 7) {
   throw "static build workspace copy failed with code $LASTEXITCODE"
 }
-cmd /c "mklink /J `"$buildRootFull\node_modules`" `"$project\node_modules`"" | Out-Null
+New-Item -ItemType Junction -Path (Join-Path $buildRootFull "node_modules") -Target (Join-Path $project "node_modules") | Out-Null
+
+$buildFavicon = Join-Path $buildRootFull "src\app\favicon.ico"
+if (-not (Test-Path -LiteralPath $buildFavicon)) {
+  $sourceFavicon = Join-Path $project "src\app\favicon.ico"
+  $faviconDir = Split-Path -Parent $buildFavicon
+  New-Item -ItemType Directory -Path $faviconDir -Force | Out-Null
+  Copy-Item -LiteralPath $sourceFavicon -Destination $buildFavicon -Force
+}
+
+if (-not (Test-Path -LiteralPath (Join-Path $buildRootFull "scripts\build-static-pages.mjs"))) {
+  throw "static build workspace is incomplete: scripts\build-static-pages.mjs was not copied"
+}
+if (-not (Test-Path -LiteralPath $buildFavicon)) {
+  throw "static build workspace is incomplete: src\app\favicon.ico was not copied"
+}
 
 Push-Location $buildRootFull
 try {
