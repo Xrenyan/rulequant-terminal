@@ -777,6 +777,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const isCloudData = Boolean(cloudStateMeta?.enabled && cloudStateMeta.recordCount);
   const hasSharedDraws = hasLiveDraws || isCloudData || websiteDraws.length > 0;
   const isStaticShareHost = typeof window !== "undefined" && window.location.hostname.endsWith("github.io");
+  const hasCloudAdminToken = typeof window !== "undefined" && Boolean(window.localStorage.getItem("rulequant:adminToken") || process.env.NEXT_PUBLIC_RULEQUANT_ADMIN_TOKEN);
+  const showCloudPublishControls = hasCloudAdminToken || !isStaticShareHost;
   const cloudSyncAt = cloudStateMeta?.updatedAt ? new Date(cloudStateMeta.updatedAt).toLocaleString("zh-CN", { hour12: false }) : "";
   const staticSnapshotAt = isStaticShareHost && hasSharedDraws ? (cloudSyncAt || latestRawDraw?.date || "静态快照") : "";
   const displayLastSyncAt = lastSyncAt || cloudSyncAt || staticSnapshotAt;
@@ -1098,9 +1100,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   }
 
   async function handlePublishCloudState() {
-    if (typeof window !== "undefined" && !window.localStorage.getItem("rulequant:adminToken") && cloudPublishStatus === "local_only") {
+    if (typeof window !== "undefined" && !window.localStorage.getItem("rulequant:adminToken") && !process.env.NEXT_PUBLIC_RULEQUANT_ADMIN_TOKEN) {
       const token = window.prompt("云端设置了管理员密钥。请输入管理员发布密钥；如果没有，直接取消，本机数据仍会保留。");
-      if (token) window.localStorage.setItem("rulequant:adminToken", token.trim());
+      if (!token?.trim()) return;
+      window.localStorage.setItem("rulequant:adminToken", token.trim());
     }
     await store.publishCloudState("manual");
   }
@@ -1458,9 +1461,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                 <Badge tone={hasSharedDraws ? "green" : "slate"}>{dataSourceLabel}</Badge>
                 <span>最新期：{latestRawDraw?.issue ?? "-"}</span>
-                {cloudPublishMessage && <Badge tone={cloudPublishStatus === "published" ? "green" : cloudPublishStatus === "failed" ? "rose" : "yellow"}>{cloudPublishMessage}</Badge>}
-                <Button size="sm" loading={cloudPublishStatus === "publishing"} onClick={() => void handlePublishCloudState()}>发布云端</Button>
-                {lastCloudPublishAt && <span>云端：{new Date(lastCloudPublishAt).toLocaleString("zh-CN", { hour12: false })}</span>}
+                {showCloudPublishControls && cloudPublishMessage && <Badge tone={cloudPublishStatus === "published" ? "green" : cloudPublishStatus === "failed" ? "rose" : "yellow"}>{cloudPublishMessage}</Badge>}
+                {showCloudPublishControls && <Button size="sm" loading={cloudPublishStatus === "publishing"} onClick={() => void handlePublishCloudState()}>发布云端</Button>}
+                {showCloudPublishControls && lastCloudPublishAt && <span>云端：{new Date(lastCloudPublishAt).toLocaleString("zh-CN", { hour12: false })}</span>}
               </div>
             </div>
           </header>

@@ -238,7 +238,10 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
       backups: state.ruleBackups,
       referenceHistory: state.referenceHistory,
     });
-    void get().publishCloudState("auto");
+    if (typeof window !== "undefined") {
+      const token = window.localStorage.getItem("rulequant:adminToken") || process.env.NEXT_PUBLIC_RULEQUANT_ADMIN_TOKEN || "";
+      if (token) void get().publishCloudState("auto");
+    }
   },
   publishCloudState: async (reason = "manual") => {
     if (typeof window === "undefined") return;
