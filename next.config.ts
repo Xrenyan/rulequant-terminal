@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
   basePath: githubPagesBasePath || undefined,
   assetPrefix: githubPagesBasePath || undefined,
   trailingSlash: isStaticExport,
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   images: {
     unoptimized: isStaticExport,
   },

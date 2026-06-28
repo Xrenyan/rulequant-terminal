@@ -27,6 +27,33 @@ if (-not $pages.StartsWith("D:\RuleQuant\rulequant-terminal-pages")) {
   throw "Unexpected GitHub Pages target: $pages"
 }
 
+function Remove-PathWithRetry {
+  param(
+    [string]$Path,
+    [switch]$Recurse
+  )
+
+  for ($attempt = 1; $attempt -le 6; $attempt++) {
+    try {
+      if (-not (Test-Path -LiteralPath $Path)) {
+        return
+      }
+
+      if ($Recurse) {
+        Remove-Item -LiteralPath $Path -Recurse -Force
+      } else {
+        Remove-Item -LiteralPath $Path -Force
+      }
+      return
+    } catch {
+      if ($attempt -eq 6) {
+        throw
+      }
+      Start-Sleep -Seconds 2
+    }
+  }
+}
+
 Push-Location $project
 try {
   pnpm refresh:static-data
@@ -50,7 +77,7 @@ if (Test-Path -LiteralPath $buildRootFull) {
     }
     cmd /c "rmdir `"$linkedNodeModules`"" | Out-Null
   }
-  Remove-Item -LiteralPath $resolvedBuildRoot -Recurse -Force
+  Remove-PathWithRetry -Path $resolvedBuildRoot -Recurse
 }
 
 New-Item -ItemType Directory -Path $buildRootFull -Force | Out-Null
