@@ -667,6 +667,16 @@ function padNumber(value: number) {
   return String(value).padStart(2, "0");
 }
 
+function isValidDrawNumber(value: unknown): value is number {
+  return Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 49;
+}
+
+function normalizeManualDrawNumber(value: unknown) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 1;
+  return Math.min(49, Math.max(1, Math.round(number)));
+}
+
 function numberWithZodiac(value: number, config: RuleQuantConfig) {
   try {
     const attributes = getNumberAttributes(value, config);
@@ -679,7 +689,7 @@ function numberWithZodiac(value: number, config: RuleQuantConfig) {
 function drawNumbersWithZodiac(draw: DrawRecord | undefined, config: RuleQuantConfig) {
   if (!draw) return "-";
   return [draw.n1, draw.n2, draw.n3, draw.n4, draw.n5, draw.n6, draw.special]
-    .map((number) => numberWithZodiac(number, config))
+    .map((number) => isValidDrawNumber(number) ? numberWithZodiac(number, config) : `${String(number || "-")} 待修正`)
     .join("  ");
 }
 
@@ -816,7 +826,16 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const [lastSyncAt, setLastSyncAt] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("rulequant:lastSyncAt") ?? ""));
   const [ledgerVisibleState, setLedgerVisibleState] = useState({ ruleId: "", count: 20 });
   const [oneClickMode, setOneClickMode] = useState<"latest" | "manual">("latest");
-  const [manualDraw, setManualDraw] = useState<DrawRecord>({ issue: "manual", n1: 1, n2: 2, n3: 3, n4: 4, n5: 5, n6: 6, special: 7 });
+  const [manualDraw, setManualDraw] = useState<DrawRecord>(() => ({
+    issue: `manual-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "")}`,
+    n1: 1,
+    n2: 2,
+    n3: 3,
+    n4: 4,
+    n5: 5,
+    n6: 6,
+    special: 7,
+  }));
   const [ruleFilter, setRuleFilter] = useState<RuleCategory | "all">("all");
   const [ruleLibraryFilter, setRuleLibraryFilter] = useState<RuleLibraryFilter>("all");
   const [ruleSort, setRuleSort] = useState<RuleSortKey>("smart");
@@ -1052,9 +1071,6 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     const duplicatedValues = [...seen.entries()].filter(([, keys]) => keys.length > 1).map(([value]) => value);
     if (duplicatedValues.length) errors.push(`重复号码：${duplicatedValues.map((value) => padNumber(value)).join("、")}`);
 
-    const issue = String(manualDraw.issue ?? "").trim();
-    if (!issue) errors.push("请填写期号，方便后续查找和同步保留");
-
     return { errors, invalidKeys, duplicatedValues, valid: errors.length === 0 };
   }, [manualDraw]);
   const selectedOneClickDraw = oneClickMode === "manual" ? manualDraw : (latestRawDraw ?? manualDraw);
@@ -1064,8 +1080,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   }, [activeDraws, latestPeriodIndex, selectedOneClickDraw.issue]);
   const oneClickResults = useMemo(() => {
     if (activeView !== "one-click") return [];
+    if (oneClickMode === "manual" && !manualDrawValidation.valid) return [];
     return buildOneClickFormulaResults({ draw: selectedOneClickDraw, rules, config, periodIndex: selectedOneClickPeriodIndex });
-  }, [activeView, selectedOneClickDraw, selectedOneClickPeriodIndex, rules, config]);
+  }, [activeView, config, manualDrawValidation.valid, oneClickMode, rules, selectedOneClickDraw, selectedOneClickPeriodIndex]);
   const selectedRuleLedger = useMemo(() => {
     if (activeView !== "formula-detail" || !selectedRuleResult) return undefined;
     return buildFormulaLedger(selectedRuleResult, { draws: activeDraws, config });
@@ -1094,6 +1111,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
 
   const drawColumns: ColumnDef<ReturnType<typeof normalizeDraw>>[] = [
     { accessorKey: "issue", header: "期号" },
+    { header: "来源", cell: ({ row }) => isManualDrawRecord(row.original) ? <Badge tone="cyan">人工录入</Badge> : <Badge tone={row.original.sourceUrl ? "green" : "slate"}>{row.original.sourceUrl ? "网站/云端" : "本地"}</Badge> },
     { accessorKey: "date", header: "日期", cell: ({ row }) => row.original.date ?? "-" },
     { header: "L序", cell: ({ row }) => codeValue(row.original.lOrder.map((n) => numberWithZodiac(n, config)).join(" ")) },
     { header: "D序", cell: ({ row }) => codeValue(row.original.dOrder.map((n) => numberWithZodiac(n, config)).join(" ")) },
@@ -1279,7 +1297,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
 
   function buildManualDrawRecord(): DrawRecord {
     const now = new Date();
-    const issue = String(manualDraw.issue || "").trim() || `manual-${now.getTime()}`;
+    const issueInput = String(manualDraw.issue || "").trim();
+    const issue = !issueInput || issueInput.toLowerCase() === "manual" ? `manual-${now.toISOString().slice(0, 19).replace(/[-:T]/g, "")}` : issueInput;
     return {
       ...manualDraw,
       issue,
@@ -1333,7 +1352,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   async function deleteManualDraw(issue: string) {
     if (!window.confirm(`确认删除人工录入开奖「${issue}」吗？删除后不再参与计算。`)) return;
     await store.deleteDraw(issue);
-    setSourceRecords((current) => current.filter((record) => record.issue !== issue));
+    setSourceRecords((current) => current.filter((record) => !(record.issue === issue && isManualDrawRecord(record))));
     clearCandidatePoolCache();
     setReferenceRunId((current) => current + 1);
     setSourceStatus(`已删除人工录入开奖：${issue}。`);
@@ -1475,6 +1494,21 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     setManualDraw((current) => ({
       ...current,
       [key]: key === "issue" || key === "date" || key === "sourceUrl" ? value : Number(value || 0),
+    }));
+  }
+
+  function repairManualDrawNumber(key: ManualDrawKey) {
+    setManualDraw((current) => ({
+      ...current,
+      [key]: normalizeManualDrawNumber(current[key]),
+    }));
+  }
+
+  function stepManualDrawNumber(key: ManualDrawKey, step: number) {
+    setOneClickMode("manual");
+    setManualDraw((current) => ({
+      ...current,
+      [key]: normalizeManualDrawNumber(Number(current[key]) + step),
     }));
   }
 
@@ -1754,9 +1788,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     {oneClickMode === "manual" ? (
                       <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
-                          <div className="rounded-md border border-white/[0.08] bg-white/[0.03] p-3">
+                          <div className="min-h-[118px] rounded-md border border-white/[0.08] bg-white/[0.03] p-3">
                             <Label>期号</Label>
                             <Input className={!String(manualDraw.issue ?? "").trim() ? "border-amber-300/40" : ""} value={manualDraw.issue} onChange={(event) => updateManualDraw("issue", event.target.value)} />
+                            <p className="mt-2 text-[11px] leading-4 text-slate-500">不填或填 manual 会自动生成唯一期号</p>
                           </div>
                           {MANUAL_DRAW_KEYS.map((key, index) => {
                             const invalid = manualDrawValidation.invalidKeys.has(key);
@@ -1766,30 +1801,45 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                               <div
                                 key={key}
                                 className={cn(
-                                  "rounded-md border p-3",
+                                  "min-h-[118px] rounded-md border p-3",
                                   isSpecial ? "border-cyan-300/28 bg-cyan-300/[0.07]" : "border-white/[0.08] bg-white/[0.03]",
-                                  (invalid || duplicated) && "border-rose-300/45 bg-rose-300/[0.08]",
+                                  invalid && "border-amber-300/45 bg-amber-300/[0.07]",
+                                  duplicated && "border-rose-300/45 bg-rose-300/[0.08]",
                                 )}
                               >
                                 <Label>{isSpecial ? "特码" : `第${index + 1}位`}</Label>
-                                <Input type="number" min={1} max={49} className="text-center font-mono text-[18px]" value={manualDraw[key]} onChange={(event) => updateManualDraw(key, event.target.value)} />
+                                <div className="mt-1 grid grid-cols-[32px_1fr_32px] gap-1">
+                                  <Button type="button" size="icon" className="h-10 min-w-8" onClick={() => stepManualDrawNumber(key, -1)}>-</Button>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    max={49}
+                                    inputMode="numeric"
+                                    className={cn("text-center font-mono text-[18px]", invalid && "border-amber-300/50", duplicated && "border-rose-300/50")}
+                                    value={manualDraw[key]}
+                                    onChange={(event) => updateManualDraw(key, event.target.value)}
+                                    onBlur={() => repairManualDrawNumber(key)}
+                                    onWheel={(event) => event.currentTarget.blur()}
+                                  />
+                                  <Button type="button" size="icon" className="h-10 min-w-8" onClick={() => stepManualDrawNumber(key, 1)}>+</Button>
+                                </div>
                                 <p className={cn("mt-1 text-center text-[11px]", invalid || duplicated ? "text-rose-100" : isSpecial ? "text-cyan-100/70" : "text-slate-500")}>
-                                  {Number(manualDraw[key]) >= 1 && Number(manualDraw[key]) <= 49 ? numberWithZodiac(Number(manualDraw[key]), config) : "待填"}
+                                  {invalid ? "离开输入框会自动修正" : duplicated ? "重复号码，请改一个" : numberWithZodiac(Number(manualDraw[key]), config)}
                                 </p>
                               </div>
                             );
                           })}
                         </div>
                         {manualDrawValidation.errors.length > 0 && (
-                          <div className="rounded-md border border-rose-300/25 bg-rose-300/[0.08] p-3 text-sm text-rose-100">
-                            {manualDrawValidation.errors.join("；")}
+                          <div className="rounded-md border border-amber-300/25 bg-amber-300/[0.08] p-3 text-sm text-amber-50">
+                            请修正后再计算：{manualDrawValidation.errors.join("；")}。超出范围的号码离开输入框会自动调整到 1-49。
                           </div>
                         )}
                         <div className="flex flex-wrap gap-2">
                           <Button type="button" disabled={!manualDrawValidation.valid} onClick={() => void saveManualDraw()}><Save className="h-4 w-4" />保存人工开奖</Button>
                           <Button type="button" variant="primary" disabled={oneClickCalculating || !manualDrawValidation.valid} onClick={handleOneClickCalculate}><Play className="h-4 w-4" />计算当前手动开奖</Button>
                         </div>
-                        <p className="rounded-lg border border-cyan-300/15 bg-cyan-300/[0.06] p-3 text-xs leading-5 text-cyan-50/85">手动输入会保存为“人工录入”数据，后续可在本机继续计算和排查。</p>
+                        <p className="rounded-lg border border-cyan-300/15 bg-cyan-300/[0.06] p-3 text-xs leading-5 text-cyan-50/85">手动输入会保存为“人工录入”数据，开奖数据页会单独显示，公式计算仍会合并使用。</p>
                       </div>
                     ) : (
                       <div className="rounded-lg border border-white/[0.08] bg-black/20 p-4">
@@ -1812,13 +1862,21 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       <h3 className="font-semibold text-white">全部公式本期计算结果</h3>
                       <p className="text-xs text-slate-500">每条公式一行，点“查看明细”进入逐期计算流水账。</p>
                     </div>
-                    <Badge tone="green">{oneClickResults.length} 条启用公式</Badge>
+                    <Badge tone={oneClickMode === "manual" && !manualDrawValidation.valid ? "yellow" : "green"}>
+                      {oneClickMode === "manual" && !manualDrawValidation.valid ? "等待修正" : `${oneClickResults.length} 条启用公式`}
+                    </Badge>
                   </div>
-                  <div className="space-y-3">
-                    {oneClickResults.map((item) => (
-                      <OneClickResultCard key={item.ruleId} item={item} categoryLabel={categoryLabel(item.category)} onOpen={() => store.setSelectedRule(item.ruleId)} />
-                    ))}
-                  </div>
+                  {oneClickMode === "manual" && !manualDrawValidation.valid ? (
+                    <div className="rounded-lg border border-amber-300/20 bg-amber-300/[0.07] p-4 text-sm leading-6 text-amber-50">
+                      当前手动开奖还没填完整，系统已暂停公式计算，避免生成错误结果。把号码修正到 1-49 且不重复后，结果会自动恢复。
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {oneClickResults.map((item) => (
+                        <OneClickResultCard key={item.ruleId} item={item} categoryLabel={categoryLabel(item.category)} onOpen={() => store.setSelectedRule(item.ruleId)} />
+                      ))}
+                    </div>
+                  )}
                 </Panel>
               </div>
             )}
@@ -1975,8 +2033,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       </div>
                       <Badge tone="cyan">{manualLocalDraws.length} 条</Badge>
                     </div>
-                    <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-                      {[...manualLocalDraws].reverse().slice(0, 8).map((draw) => (
+                    <div className="mt-3 grid max-h-[420px] grid-cols-1 gap-3 overflow-y-auto pr-1 lg:grid-cols-2">
+                      {[...manualLocalDraws].reverse().map((draw) => (
                         <div key={draw.issue} className="rounded-md border border-white/[0.075] bg-black/20 p-3">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="font-mono text-sm font-semibold text-white">{draw.issue}期</p>

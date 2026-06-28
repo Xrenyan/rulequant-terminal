@@ -1,5 +1,5 @@
 import type { OperationLog, RuleQuantConfig } from "@/types/domain";
-import { EMPTY_CLOUD_STATE, summarizeDraws, type RuleQuantCloudState } from "@/lib/cloud/cloud-state";
+import { EMPTY_CLOUD_STATE, mergeManualCloudDraws, summarizeDraws, type RuleQuantCloudState } from "@/lib/cloud/cloud-state";
 
 type PostgresModule = typeof import("postgres");
 type SqlClient = ReturnType<PostgresModule>;
@@ -120,7 +120,17 @@ export async function loadCloudState(): Promise<RuleQuantCloudState> {
 export async function saveCloudStatePatch(patch: Partial<Omit<RuleQuantCloudState, "meta">>) {
   if (!isCloudDatabaseConfigured()) return loadCloudState();
   const writes: Array<Promise<void>> = [];
-  if (patch.draws) writes.push(writeJson("draws", summarizeDraws(patch.draws).sorted));
+  if (patch.draws) {
+    const [currentDraws, currentLogs] = await Promise.all([
+      readJson<RuleQuantCloudState["draws"]>("draws", []),
+      readJson<RuleQuantCloudState["logs"]>("logs", []),
+    ]);
+    writes.push(writeJson("draws", mergeManualCloudDraws({
+      incomingDraws: patch.draws,
+      currentDraws,
+      logs: patch.logs ?? currentLogs,
+    })));
+  }
   if (patch.rules) writes.push(writeJson("rules", patch.rules));
   if (patch.samples) writes.push(writeJson("samples", patch.samples));
   if (patch.config) writes.push(writeJson("config", patch.config));

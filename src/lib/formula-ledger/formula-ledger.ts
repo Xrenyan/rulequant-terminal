@@ -288,7 +288,29 @@ export function buildOneClickFormulaResults(input: {
   config: RuleQuantConfig;
   periodIndex?: number;
 }): OneClickFormulaResult[] {
-  const normalized = normalizeDraw(input.draw, input.config);
+  let normalized: ReturnType<typeof normalizeDraw>;
+  try {
+    normalized = normalizeDraw(input.draw, input.config);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return input.rules
+      .filter((rule) => rule.enabled)
+      .map((rule) => ({
+        ruleId: rule.id,
+        ruleName: rule.name,
+        category: rule.category,
+        orderMode: rule.orderMode,
+        formula: rule.formula,
+        variableLine: "-",
+        equationLine: "-",
+        rawResult: 0,
+        mappingLine: "-",
+        finalOutputLabel: "开奖数据异常",
+        outputDescription: "开奖数据异常",
+        process: [],
+        error: message,
+      }));
+  }
   return input.rules
     .filter((rule) => rule.enabled)
     .map((rule) => {

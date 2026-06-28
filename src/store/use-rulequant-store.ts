@@ -103,6 +103,12 @@ function isManualDraw(record: Pick<DrawRecord, "sourceUrl" | "rawAttributes">) {
   return record.sourceUrl === "manual://user-input" || record.rawAttributes?.sourceType === "manual";
 }
 
+function mergeManualDraws(baseDraws: DrawRecord[], localDraws: DrawRecord[]) {
+  const merged = new Map(baseDraws.map((draw) => [draw.issue, draw]));
+  localDraws.filter(isManualDraw).forEach((draw) => merged.set(draw.issue, draw));
+  return [...merged.values()];
+}
+
 function normalizeRuleForLibrary(rule: RuleRecord, fallback?: RuleRecord): RuleRecord {
   const normalized = {
     ...fallback,
@@ -208,7 +214,8 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
     const cloudLogs = cloud?.logs ?? [];
     const cloudBackups = cloud?.backups ?? [];
     const cloudReferenceHistory = cloud?.referenceHistory ?? [];
-    const nextDraws = cloudDraws.length ? cloudDraws : persisted.draws.length ? persisted.draws : seedDraws;
+    const baseDraws = cloudDraws.length ? cloudDraws : persisted.draws.length ? persisted.draws : seedDraws;
+    const nextDraws = mergeManualDraws(baseDraws, persisted.draws ?? []);
     const nextRules = cloudRules.length ? mergeRulesWithSeedRules(cloudRules) : persisted.rules.length ? mergeRulesWithSeedRules(persisted.rules) : mergeRulesWithSeedRules(seedRules);
     const nextSamples = cloudSamples.length ? cloudSamples : persisted.samples.length ? persisted.samples : seedSampleCases;
     const nextConfig = normalizeConfigForCurrentRules(cloud?.config ?? persisted.config ?? seedConfig);
