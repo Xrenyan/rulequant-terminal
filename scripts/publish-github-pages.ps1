@@ -42,7 +42,12 @@ function Remove-PathWithRetry {
       if ($Recurse) {
         Remove-Item -LiteralPath $Path -Recurse -Force
       } else {
-        Remove-Item -LiteralPath $Path -Force
+        $item = Get-Item -LiteralPath $Path -Force
+        if (($item.PSIsContainer) -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+          [System.IO.Directory]::Delete($item.FullName)
+        } else {
+          Remove-Item -LiteralPath $Path -Force
+        }
       }
       return
     } catch {
