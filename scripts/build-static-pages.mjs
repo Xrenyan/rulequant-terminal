@@ -4,7 +4,7 @@ import path from "node:path";
 
 const root = process.cwd();
 const apiDir = path.join(root, "src", "app", "api");
-const disabledApiDir = path.join(root, "src", "app", "_api_static_disabled");
+const disabledApiDir = path.join(root, "src", "_api_static_disabled");
 const nextBin = path.join(root, "node_modules", "next", "dist", "bin", "next");
 const githubPagesBasePath = process.env.GITHUB_PAGES_BASE_PATH || "/rulequant-terminal-pages";
 
@@ -45,6 +45,7 @@ try {
       NEXT_PUBLIC_BASE_PATH: githubPagesBasePath,
       NEXT_SKIP_NEXT_TYPECHECK: "true",
       NEXT_PRIVATE_BUILD_WORKER: "0",
+      RULEQUANT_DISABLE_MINIFY: "true",
     },
   });
 

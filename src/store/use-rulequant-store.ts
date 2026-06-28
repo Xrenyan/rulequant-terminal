@@ -156,18 +156,33 @@ async function loadCloudStateFromApi(): Promise<RuleQuantCloudState | null> {
         ]
   ).filter((endpoint, index, list) => endpoint && list.indexOf(endpoint) === index);
 
+  let bestState: RuleQuantCloudState | null = null;
+  let bestIssue = 0;
+
   for (const endpoint of endpoints) {
     try {
       const url = endpoint.includes("?") ? `${endpoint}&t=${Date.now()}` : `${endpoint}?t=${Date.now()}`;
       const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) continue;
       const state = (await response.json()) as RuleQuantCloudState;
-      if (state.meta?.enabled) return state;
+      if (!state.meta?.enabled) continue;
+      const metaIssue = state.meta.latestIssue && /^\d+$/.test(state.meta.latestIssue) ? Number(state.meta.latestIssue) : 0;
+      const drawIssue = Math.max(
+        0,
+        ...((state.draws ?? [])
+          .map((draw) => (/^\d+$/.test(draw.issue) ? Number(draw.issue) : 0))
+          .filter(Number.isFinite)),
+      );
+      const stateIssue = Math.max(metaIssue, drawIssue);
+      if (!bestState || stateIssue > bestIssue) {
+        bestState = state;
+        bestIssue = stateIssue;
+      }
     } catch {
       continue;
     }
   }
-  return null;
+  return bestState;
 }
 
 export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({

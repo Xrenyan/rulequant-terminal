@@ -9,10 +9,21 @@ const nextConfig: NextConfig = {
   assetPrefix: githubPagesBasePath || undefined,
   trailingSlash: isStaticExport,
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: process.env.NEXT_SKIP_NEXT_TYPECHECK === "true",
+  },
+  experimental: {
+    cpus: 2,
+    staticGenerationMaxConcurrency: 2,
+    staticGenerationMinPagesPerWorker: 20,
   },
   images: {
     unoptimized: isStaticExport,
+  },
+  webpack: (config, { dev }) => {
+    if (!dev && process.env.RULEQUANT_DISABLE_MINIFY === "true") {
+      config.optimization.minimize = false;
+    }
+    return config;
   },
 };
 
