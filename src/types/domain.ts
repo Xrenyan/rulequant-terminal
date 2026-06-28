@@ -295,6 +295,24 @@ export type CandidateEvidence = {
   sourceType?: RuleSourceType;
 };
 
+export type ReferenceHistoryEvidence = {
+  ruleId: string;
+  ruleName: string;
+  category: RuleCategory;
+  action: RuleSignalAction;
+  targetType: RuleSignalTargetType;
+  targets: Array<number | string>;
+  weight: number;
+  scoreDelta: number;
+  successRate: number;
+  recentRate: number;
+  currentStreak: number;
+  wrongStreak?: number;
+  formula: string;
+  process: string[];
+  sourceType?: RuleSourceType;
+};
+
 export type CandidateNumber = NumberAttributes & {
   score: number;
   supportCount: number;
@@ -331,6 +349,109 @@ export type CandidatePoolReport = {
   topZodiacs8: CandidateZodiac[];
   topZodiacs9: CandidateZodiac[];
   riskNotice: string;
+};
+
+export type ReferenceHistoryNumber = {
+  rank: number;
+  number: number;
+  zodiac: string;
+  score: number;
+  supportCount: number;
+  opposeCount: number;
+  inTop8: boolean;
+  inTop12: boolean;
+  inTop16?: boolean;
+  inTop18: boolean;
+  hit?: boolean;
+  supportRuleNames: string[];
+  opposeRuleNames: string[];
+  color?: string;
+  element?: string;
+  tail?: number;
+  sum?: number;
+  segment?: number;
+  supportEvidence?: ReferenceHistoryEvidence[];
+  opposeEvidence?: ReferenceHistoryEvidence[];
+};
+
+export type ReferenceHistoryZodiac = {
+  rank: number;
+  zodiac: string;
+  score: number;
+  numbers: Array<{ number: number; zodiac: string }>;
+  supportCount: number;
+  opposeCount: number;
+  inTop7: boolean;
+  inTop8?: boolean;
+  inTop9: boolean;
+  hit?: boolean;
+  supportRuleNames: string[];
+  opposeRuleNames: string[];
+  supportEvidence?: ReferenceHistoryEvidence[];
+  opposeEvidence?: ReferenceHistoryEvidence[];
+};
+
+export type ReferenceHistoryOutcome = {
+  nextIssue?: string;
+  special?: number;
+  zodiac?: string;
+  hitTop8?: boolean;
+  hitTop12?: boolean;
+  hitTop18?: boolean;
+  hitZodiac7?: boolean;
+  hitZodiac9?: boolean;
+  hitNumberRank?: number;
+  hitBand?: "top8" | "top9_12" | "top13_18" | "outside";
+  resolvedAt?: string;
+};
+
+export type ReferenceHistoryEvidenceSummary = {
+  ruleId: string;
+  ruleName: string;
+  category?: RuleCategory;
+  action: RuleSignalAction;
+  targetType: RuleSignalTargetType;
+  targets: Array<number | string>;
+  weight?: number;
+  scoreDelta: number;
+  successRate: number;
+  recentRate: number;
+  currentStreak?: number;
+  wrongStreak?: number;
+  formula?: string;
+  process?: string[];
+  sourceType?: RuleSourceType;
+};
+
+export type ReferenceHistoryItem = {
+  schemaVersion: 2;
+  id: string;
+  signature: string;
+  generatedAt: string;
+  savedAt: string;
+  saveType: "auto" | "manual";
+  baseIssue?: string;
+  targetIssue?: string;
+  latestDate?: string;
+  latestNumbers: number[];
+  dataSourceLabel?: string;
+  recordCount: number;
+  ruleCount: number;
+  signalCount: number;
+  supportSignalCount: number;
+  opposeSignalCount: number;
+  topNumbers8: ReferenceHistoryNumber[];
+  topNumbers12: ReferenceHistoryNumber[];
+  topNumbers16: ReferenceHistoryNumber[];
+  topNumbers18: ReferenceHistoryNumber[];
+  topZodiacs7: ReferenceHistoryZodiac[];
+  topZodiacs8: ReferenceHistoryZodiac[];
+  topZodiacs9: ReferenceHistoryZodiac[];
+  allNumbers: ReferenceHistoryNumber[];
+  allZodiacs: ReferenceHistoryZodiac[];
+  evidenceSummary: ReferenceHistoryEvidenceSummary[];
+  outcome?: ReferenceHistoryOutcome;
+  note?: string;
 };
 
 export type ReferenceObservationItem = {

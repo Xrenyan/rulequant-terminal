@@ -5,7 +5,7 @@ import path from "node:path";
 const root = process.cwd();
 const apiDir = path.join(root, "src", "app", "api");
 const disabledApiDir = path.join(root, "src", "app", "_api_static_disabled");
-const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const nextBin = path.join(root, "node_modules", "next", "dist", "bin", "next");
 const githubPagesBasePath = process.env.GITHUB_PAGES_BASE_PATH || "/rulequant-terminal-pages";
 
 function restoreApiDir() {
@@ -25,10 +25,9 @@ try {
 
   fs.rmSync(path.join(root, ".next"), { recursive: true, force: true });
 
-  const result = spawnSync(pnpm, ["build"], {
+  const result = spawnSync(process.execPath, [nextBin, "build", "--webpack"], {
     cwd: root,
     stdio: "inherit",
-    shell: process.platform === "win32",
     env: {
       ...process.env,
       NEXT_OUTPUT: "export",

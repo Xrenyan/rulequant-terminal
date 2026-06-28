@@ -1,5 +1,6 @@
 param(
   [string]$ProjectRoot = "D:\RuleQuant\rulequant-terminal",
+  [string]$BuildRoot = "D:\RuleQuant\rulequant-terminal-static-build",
   [string]$PagesRoot = "D:\RuleQuant\rulequant-terminal-pages",
   [string]$PagesRepo = "https://github.com/Xrenyan/rulequant-terminal-pages.git",
   [string]$PublicUrl = "https://xrenyan.github.io/rulequant-terminal-pages/dashboard/"
@@ -13,6 +14,7 @@ $env:PATH = "$nodePath;$binPath;$env:PATH"
 $env:GITHUB_PAGES_BASE_PATH = "/rulequant-terminal-pages"
 
 $project = (Resolve-Path -LiteralPath $ProjectRoot).Path
+$buildRootFull = $BuildRoot
 if (-not (Test-Path -LiteralPath $PagesRoot)) {
   git clone $PagesRepo $PagesRoot
   if ($LASTEXITCODE -ne 0) {
@@ -31,8 +33,39 @@ try {
   if ($LASTEXITCODE -ne 0) {
     throw "static data refresh failed with code $LASTEXITCODE"
   }
+} finally {
+  Pop-Location
+}
 
-  pnpm build:static-pages
+if (Test-Path -LiteralPath $buildRootFull) {
+  $resolvedBuildRoot = (Resolve-Path -LiteralPath $buildRootFull).Path
+  if (-not $resolvedBuildRoot.StartsWith("D:\RuleQuant\rulequant-terminal-static-build")) {
+    throw "Unexpected static build target: $resolvedBuildRoot"
+  }
+  $linkedNodeModules = Join-Path $resolvedBuildRoot "node_modules"
+  if (Test-Path -LiteralPath $linkedNodeModules) {
+    cmd /c "rmdir `"$linkedNodeModules`"" | Out-Null
+  }
+  Remove-Item -LiteralPath $resolvedBuildRoot -Recurse -Force
+}
+
+New-Item -ItemType Directory -Path $buildRootFull -Force | Out-Null
+$robocopyArgs = @(
+  $project,
+  $buildRootFull,
+  "/MIR",
+  "/XD", ".git", ".next", "out", "output", "node_modules",
+  "/XF", "*.log", "*.pid"
+)
+robocopy @robocopyArgs | Out-Null
+if ($LASTEXITCODE -gt 7) {
+  throw "static build workspace copy failed with code $LASTEXITCODE"
+}
+cmd /c "mklink /J `"$buildRootFull\node_modules`" `"$project\node_modules`"" | Out-Null
+
+Push-Location $buildRootFull
+try {
+  node scripts/build-static-pages.mjs
   if ($LASTEXITCODE -ne 0) {
     throw "static pages build failed with code $LASTEXITCODE"
   }
@@ -40,7 +73,7 @@ try {
   Pop-Location
 }
 
-$out = (Resolve-Path -LiteralPath (Join-Path $project "out")).Path
+$out = (Resolve-Path -LiteralPath (Join-Path $buildRootFull "out")).Path
 
 Push-Location $pages
 try {

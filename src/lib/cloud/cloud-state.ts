@@ -1,4 +1,4 @@
-import type { DrawRecord, OperationLog, RuleLibraryBackup, RuleQuantConfig, RuleRecord, SampleCase } from "@/types/domain";
+import type { DrawRecord, OperationLog, ReferenceHistoryItem, RuleLibraryBackup, RuleQuantConfig, RuleRecord, SampleCase } from "@/types/domain";
 
 export type RuleQuantCloudState = {
   draws: DrawRecord[];
@@ -7,6 +7,7 @@ export type RuleQuantCloudState = {
   config?: RuleQuantConfig;
   logs: OperationLog[];
   backups: RuleLibraryBackup[];
+  referenceHistory: ReferenceHistoryItem[];
   meta: {
     enabled: boolean;
     source: "postgres" | "github" | "disabled";
@@ -23,6 +24,7 @@ export const EMPTY_CLOUD_STATE: RuleQuantCloudState = {
   samples: [],
   logs: [],
   backups: [],
+  referenceHistory: [],
   meta: {
     enabled: false,
     source: "disabled",

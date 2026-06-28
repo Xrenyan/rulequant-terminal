@@ -2,7 +2,7 @@ import { aggregateZodiacCandidates, buildNumberCandidates } from "@/lib/scoring/
 import { buildRuleSignals } from "@/lib/signal-system/signal-system";
 import { getNumberAttributes } from "@/lib/engine/attributes";
 import { runBacktest } from "@/lib/backtest/run-backtest";
-import type { BacktestResult, CandidateNumber, CandidatePoolReport, DrawRecord, ReferenceObservationReport, RuleQuantConfig, RuleRecord } from "@/types/domain";
+import type { BacktestDetail, BacktestResult, CandidateNumber, CandidatePoolReport, DrawRecord, ReferenceObservationReport, RuleBacktestResult, RuleQuantConfig, RuleRecord } from "@/types/domain";
 import type { RuleValidationSummary } from "@/lib/rules/rule-validation";
 
 type GenerateCandidatePoolInput = {
@@ -17,7 +17,14 @@ const RISK_NOTICE = "综合参考结果仅用于历史数据研究、规则公�
 const candidatePoolCache = new Map<string, CandidatePoolReport>();
 
 function sortDraws(draws: DrawRecord[]): DrawRecord[] {
-  return [...draws].sort((a, b) => a.issue.localeCompare(b.issue, "zh-CN", { numeric: true }));
+  return [...draws].sort((a, b) => {
+    const aNumber = /^\d+$/.test(a.issue) ? Number(a.issue) : undefined;
+    const bNumber = /^\d+$/.test(b.issue) ? Number(b.issue) : undefined;
+    if (aNumber !== undefined && bNumber !== undefined) return aNumber - bNumber;
+    if (aNumber !== undefined) return 1;
+    if (bNumber !== undefined) return -1;
+    return a.issue.localeCompare(b.issue, "zh-CN", { numeric: true });
+  });
 }
 
 function candidateCacheKey(input: GenerateCandidatePoolInput): string {
@@ -130,22 +137,78 @@ function rate(hits: number, total: number): number {
   return total ? Number(((hits / total) * 100).toFixed(2)) : 0;
 }
 
+function detailKnownByIssue(detail: BacktestDetail, knownIssue: string): boolean {
+  if (detail.futureChecks.length) {
+    return detail.futureChecks.every((check) => check.issue.localeCompare(knownIssue, "zh-CN", { numeric: true }) <= 0);
+  }
+  if (detail.nextIssue) return detail.nextIssue.localeCompare(knownIssue, "zh-CN", { numeric: true }) <= 0;
+  return detail.currentIssue.localeCompare(knownIssue, "zh-CN", { numeric: true }) < 0;
+}
+
+function streak(values: boolean[]): { current: number; max: number } {
+  let max = 0;
+  let running = 0;
+  for (const value of values) {
+    if (value) {
+      running += 1;
+      max = Math.max(max, running);
+    } else {
+      running = 0;
+    }
+  }
+
+  let current = 0;
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    if (!values[index]) break;
+    current += 1;
+  }
+
+  return { current, max };
+}
+
+function summarizeRuleBacktest(ruleResult: RuleBacktestResult, knownIssue: string): RuleBacktestResult {
+  const details = ruleResult.details.filter((detail) => detailKnownByIssue(detail, knownIssue));
+  const values = details.map((detail) => detail.success);
+  const success = values.filter(Boolean).length;
+  const streaks = streak(values);
+
+  return {
+    ...ruleResult,
+    total: details.length,
+    success,
+    failed: details.length - success,
+    successRate: details.length ? Number(((success / details.length) * 100).toFixed(2)) : 0,
+    currentStreak: streaks.current,
+    maxStreak: streaks.max,
+    last10: values.slice(-10),
+    failedIssues: details.filter((detail) => !detail.success).map((detail) => detail.currentIssue),
+    details,
+  };
+}
+
+function backtestKnownByIssue(backtest: BacktestResult, knownIssue: string): BacktestResult {
+  return {
+    generatedAt: backtest.generatedAt,
+    ruleResults: backtest.ruleResults.map((ruleResult) => summarizeRuleBacktest(ruleResult, knownIssue)),
+  };
+}
+
 export function buildReferenceObservation(input: GenerateCandidatePoolInput & { window?: number }): ReferenceObservationReport {
   const sortedDraws = sortDraws(input.draws);
   const windowSize = input.window ?? 10;
   const startIndex = Math.max(1, sortedDraws.length - windowSize);
+  const fullBacktest = input.backtest ?? runBacktest({ draws: sortedDraws, rules: input.rules, config: input.config });
   const items = sortedDraws.slice(startIndex).flatMap((targetDraw, offset) => {
     const targetIndex = startIndex + offset;
     const previousDraw = sortedDraws[targetIndex - 1];
     const priorDraws = sortedDraws.slice(0, targetIndex);
     if (!previousDraw || priorDraws.length < 2) return [];
 
-    const priorBacktest = runBacktest({ draws: priorDraws, rules: input.rules, config: input.config });
     const report = generateCandidatePool({
       draws: priorDraws,
       rules: input.rules,
       config: input.config,
-      backtest: priorBacktest,
+      backtest: backtestKnownByIssue(fullBacktest, previousDraw.issue),
       validationSummaries: input.validationSummaries,
     });
     const attributes = getNumberAttributes(targetDraw.special, input.config);

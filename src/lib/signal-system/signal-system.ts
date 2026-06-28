@@ -21,7 +21,14 @@ export type BuildRuleSignalsInput = {
 };
 
 function sortDraws(draws: DrawRecord[]): DrawRecord[] {
-  return [...draws].sort((a, b) => a.issue.localeCompare(b.issue, "zh-CN", { numeric: true }));
+  return [...draws].sort((a, b) => {
+    const aNumber = /^\d+$/.test(a.issue) ? Number(a.issue) : undefined;
+    const bNumber = /^\d+$/.test(b.issue) ? Number(b.issue) : undefined;
+    if (aNumber !== undefined && bNumber !== undefined) return aNumber - bNumber;
+    if (aNumber !== undefined) return 1;
+    if (bNumber !== undefined) return -1;
+    return a.issue.localeCompare(b.issue, "zh-CN", { numeric: true });
+  });
 }
 
 function recentRate(result?: RuleBacktestResult): number {

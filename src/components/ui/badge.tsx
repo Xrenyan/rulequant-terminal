@@ -15,5 +15,5 @@ const tones = {
 };
 
 export function Badge({ className, tone = "slate", ...props }: BadgeProps) {
-  return <span className={cn("inline-flex min-h-6 items-center rounded-md border px-2 py-0.5 text-[11px] font-medium leading-none shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]", tones[tone], className)} {...props} />;
+  return <span className={cn("inline-flex min-h-6 max-w-full items-center rounded-md border px-2 py-0.5 text-[11px] font-medium leading-none shadow-[inset_0_1px_0_rgba(255,255,255,0.055)]", tones[tone], className)} {...props} />;
 }

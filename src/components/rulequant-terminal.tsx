@@ -30,7 +30,7 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { runBacktest } from "@/lib/backtest/run-backtest";
-import { calculateRule } from "@/lib/formula-engine/formula-engine";
+import { runRuleCalculation, type RuleCalculation } from "@/lib/rule-engine/rule-engine";
 import { buildReferenceObservation, clearCandidatePoolCache, generateCandidatePool } from "@/lib/candidate-pool/candidate-pool";
 import { discoverFormulaCandidates, type FormulaDiscoveryCandidate } from "@/lib/formula-discovery/formula-discovery";
 import { buildFormulaLedger, buildOneClickFormulaResults, type FormulaLedgerEntry, type OneClickFormulaResult } from "@/lib/formula-ledger/formula-ledger";
@@ -41,6 +41,9 @@ import {
   exportDrawsCsv,
   exportHtmlReport,
   exportJson,
+  exportReferenceHistoryExcel,
+  exportReferenceHistoryText,
+  exportReferenceHistoryWord,
   exportSampleReport,
   exportWorkbook,
 } from "@/lib/export/exporters";
@@ -52,6 +55,12 @@ import { seedDraws } from "@/lib/data/seed";
 import { buildRuleReconciliation, type RuleReconciliationRow } from "@/lib/rules/rule-reconciliation";
 import { buildRuleValidationSummaries, canRuleParticipateInReference, type RuleValidationSummary } from "@/lib/rules/rule-validation";
 import { buildRuleSignature } from "@/lib/rules/rule-library";
+import {
+  buildReferenceHistoryItem,
+  referenceHistorySignature,
+  resolveReferenceHistoryOutcomes,
+  type ResolvedReferenceHistoryItem,
+} from "@/lib/reference-history/reference-history";
 import { useRuleQuantStore } from "@/store/use-rulequant-store";
 import type {
   BacktestDetail,
@@ -62,6 +71,9 @@ import type {
   CandidateZodiac,
   DrawRecord,
   OperationLog,
+  ReferenceHistoryItem,
+  ReferenceHistoryNumber,
+  ReferenceHistoryZodiac,
   ReferenceObservationReport,
   RuleCategory,
   RuleBacktestResult,
@@ -107,6 +119,10 @@ const navItems: Array<{ key: ViewKey; href: string; label: string; icon: typeof 
 
 const mobileNavKeys: ViewKey[] = ["dashboard", "one-click", "candidate-pool", "rules"];
 const mobileNavItems = navItems.filter((item) => mobileNavKeys.includes(item.key));
+const REMOTE_DRAW_IMPORT_ENDPOINT = "https://rulequant-terminal.vercel.app/api/import-draws-from-url";
+const AUTO_SYNC_INTERVAL_MS = 10 * 60 * 1000;
+const MANUAL_DRAW_KEYS = ["n1", "n2", "n3", "n4", "n5", "n6", "special"] as const;
+type ManualDrawKey = typeof MANUAL_DRAW_KEYS[number];
 
 const viewLabels: Record<ViewKey, string> = {
   dashboard: "首页",
@@ -209,8 +225,12 @@ const rawRuleFiles = [
 ];
 
 type NextOutputItem =
-  | { rule: RuleRecord; calculation: ReturnType<typeof calculateRule>; error?: never }
+  | { rule: RuleRecord; calculation: RuleCalculation; error?: never }
   | { rule: RuleRecord; error: string; calculation?: never };
+
+type RuleSaveResult =
+  | { ok: true; rule: RuleRecord; message: string }
+  | { ok: false; message: string; duplicate?: RuleRecord };
 
 type UrlImportSummary = {
   year: number;
@@ -285,7 +305,7 @@ const WEBSITE_FIRST_VIEWS = new Set<ViewKey>([
   "reports",
 ]);
 
-function hasCalculation(item: NextOutputItem): item is { rule: RuleRecord; calculation: ReturnType<typeof calculateRule>; error?: never } {
+function hasCalculation(item: NextOutputItem): item is { rule: RuleRecord; calculation: RuleCalculation; error?: never } {
   return Boolean(item.calculation);
 }
 
@@ -555,15 +575,26 @@ function OperationLogPanel({ logs }: { logs: OperationLog[] }) {
 
 function Metric({ label, value, hint, tone = "cyan" }: { label: string; value: string | number; hint?: string; tone?: "cyan" | "violet" | "green" | "yellow" | "rose" }) {
   return (
-    <Panel className="p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-[12px] leading-5 text-slate-500">{label}</p>
-          <p className="mt-2 break-words font-mono text-[28px] font-semibold leading-none text-white">{value}</p>
-        </div>
+    <div className="min-w-0 rounded-md border border-white/[0.065] bg-black/15 p-3">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <p className="truncate text-[12px] leading-5 text-slate-500">{label}</p>
         <Badge tone={tone}>{hint ?? "实时"}</Badge>
       </div>
-    </Panel>
+      <p className="mt-2 truncate font-mono text-[24px] font-semibold leading-none text-white">{value}</p>
+    </div>
+  );
+}
+
+function NumberTile({ number, special = false, config }: { number: number; special?: boolean; config: RuleQuantConfig }) {
+  const label = numberWithZodiac(number, config).split(" ");
+  return (
+    <span className={cn(
+      "flex h-12 w-12 flex-col items-center justify-center rounded-md border text-center",
+      special ? "border-cyan-300/35 bg-cyan-300/12 text-cyan-50" : "border-white/[0.075] bg-white/[0.04] text-white",
+    )}>
+      <span className="font-mono text-[15px] leading-none">{padNumber(number)}</span>
+      <span className="mt-1 text-[11px] leading-none text-slate-300">{label[1] ?? ""}</span>
+    </span>
   );
 }
 
@@ -596,7 +627,14 @@ function candidateNumberLabel(item: Pick<CandidateNumber, "number" | "zodiac">) 
 }
 
 function sortDrawRecords(records: DrawRecord[]) {
-  return [...records].sort((a, b) => a.issue.localeCompare(b.issue, "zh-CN", { numeric: true }));
+  return [...records].sort((a, b) => {
+    const aNumber = /^\d+$/.test(a.issue) ? Number(a.issue) : undefined;
+    const bNumber = /^\d+$/.test(b.issue) ? Number(b.issue) : undefined;
+    if (aNumber !== undefined && bNumber !== undefined) return aNumber - bNumber;
+    if (aNumber !== undefined) return 1;
+    if (bNumber !== undefined) return -1;
+    return a.issue.localeCompare(b.issue, "zh-CN", { numeric: true });
+  });
 }
 
 function parsePositionPattern(value: FormDataEntryValue | null): number[] {
@@ -680,7 +718,7 @@ export function RuleQuantTerminal({ activeView }: { activeView: ViewKey }) {
 function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const searchParams = useSearchParams();
   const store = useRuleQuantStore();
-  const { draws, rules, samples, operationLogs, ruleBackups, config, selectedRuleId, cloudStateMeta } = store;
+  const { draws, rules, samples, operationLogs, ruleBackups, referenceHistory, config, selectedRuleId, cloudStateMeta, cloudPublishStatus, cloudPublishMessage, lastCloudPublishAt } = store;
   const hydrate = store.hydrate;
   const [importText, setImportText] = useState("issue,n1,n2,n3,n4,n5,n6,special\n2026166,8,13,19,27,35,44,6");
   const [importErrors, setImportErrors] = useState<string[]>([]);
@@ -692,13 +730,16 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const [sourceSummaries, setSourceSummaries] = useState<UrlImportSummary[]>([]);
   const [sourceStatus, setSourceStatus] = useState("");
   const [sourceLoading, setSourceLoading] = useState(false);
-  const sourceAutoFetchedDate = useRef<string | null>(null);
+  const sourceAutoFetchedAt = useRef(0);
+  const referenceAutoSavedSignature = useRef("");
   const [candidateTab, setCandidateTab] = useState<"numbers8" | "numbers12" | "numbers18" | "numbers16" | "zodiacs9" | "zodiacs8" | "zodiacs7">("numbers8");
   const [candidateFocus, setCandidateFocus] = useState<CandidateFocus>(null);
   const [referenceGeneratedAt, setReferenceGeneratedAt] = useState("");
   const [referenceRunId, setReferenceRunId] = useState(0);
   const [referenceCalculating, setReferenceCalculating] = useState(false);
   const [referenceStatus, setReferenceStatus] = useState("");
+  const [oneClickCalculating, setOneClickCalculating] = useState(false);
+  const [oneClickStatus, setOneClickStatus] = useState("");
   const [discoveryFocusId, setDiscoveryFocusId] = useState("");
   const [lastCalculationAt, setLastCalculationAt] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("rulequant:lastCalculationAt") ?? ""));
   const [lastSyncAt, setLastSyncAt] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("rulequant:lastSyncAt") ?? ""));
@@ -771,7 +812,12 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const passedRuleCount = useMemo(() => ruleValidationSummaries.filter((summary) => summary.status === "checked").length, [ruleValidationSummaries]);
   const checkedSampleRuleCount = useMemo(() => ruleValidationSummaries.filter((summary) => summary.sampleCount > 0).length, [ruleValidationSummaries]);
   const uncheckedSampleRuleCount = useMemo(() => ruleValidationSummaries.filter((summary) => summary.status === "unchecked").length, [ruleValidationSummaries]);
-  const calculableRuleCount = useMemo(() => backtest.ruleResults.filter((result) => result.rule.enabled && !result.error && result.total > 0).length, [backtest.ruleResults]);
+  const calculableRuleCount = useMemo(() => {
+    if (!shouldBuildBacktest) {
+      return rules.filter((rule) => canRuleParticipateInReference(rule)).length;
+    }
+    return backtest.ruleResults.filter((result) => result.rule.enabled && !result.error && result.total > 0).length;
+  }, [backtest.ruleResults, rules, shouldBuildBacktest]);
   const referenceRuleCount = useMemo(() => rules.filter((rule) => canRuleParticipateInReference(rule, ruleValidationById.get(rule.id))).length, [rules, ruleValidationById]);
   const pendingRuleCount = useMemo(() => ruleValidationSummaries.filter((summary) => summary.status === "unchecked").length, [ruleValidationSummaries]);
   const excludedRuleCount = Math.max(enabledRuleCount - referenceRuleCount, 0);
@@ -784,6 +830,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     .filter(({ rule, summary }) => rule.enabled && !canRuleParticipateInReference(rule, summary)),
   [ruleValidationSummaries, rules]);
   const ruleHealthRows = useMemo(() => {
+    if (activeView === "dashboard") return [];
     const resultMap = new Map(backtest.ruleResults.map((result) => [result.rule.id, result]));
     return rules
       .filter((rule) => rule.enabled)
@@ -792,7 +839,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         const order = { reserve: 0, manual_reserve: 1, watch: 2, keep: 3 } as const;
         return order[a.status] - order[b.status] || b.wrongStreak - a.wrongStreak || (b.result?.successRate ?? 0) - (a.result?.successRate ?? 0);
       });
-  }, [backtest.ruleResults, rules]);
+  }, [activeView, backtest.ruleResults, rules]);
   const ruleResultMap = useMemo(() => new Map(backtest.ruleResults.map((result) => [result.rule.id, result])), [backtest.ruleResults]);
   const visibleRules = useMemo(() => {
     const filtered = rules.filter((rule) => {
@@ -831,7 +878,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       .filter((rule) => rule.enabled)
       .map((rule) => {
         try {
-          return { rule, calculation: calculateRule(rule, latestDraw, config, { periodIndex: latestPeriodIndex }) };
+          return { rule, calculation: runRuleCalculation(rule, latestDraw, config, { periodIndex: latestPeriodIndex }) };
         } catch (error) {
           return { rule, error: error instanceof Error ? error.message : String(error) };
         }
@@ -839,17 +886,39 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   }, [activeView, rules, latestDraw, latestPeriodIndex, config]);
   const researchDraws = activeDraws;
   const shouldBuildCandidateReport = activeView === "dashboard" || activeView === "candidate-pool" || activeView === "reports";
-  const candidateBacktest = useMemo(() => {
-    return backtest;
-  }, [backtest]);
+  const candidateBacktest = backtest;
   const candidateReport = useMemo(() => {
     if (!shouldBuildCandidateReport) return EMPTY_CANDIDATE_REPORT;
-    return generateCandidatePool({ draws: researchDraws, rules, config, backtest: candidateBacktest, validationSummaries: ruleValidationSummaries });
+    return generateCandidatePool({
+      draws: researchDraws,
+      rules,
+      config,
+      backtest: candidateBacktest,
+      validationSummaries: ruleValidationSummaries,
+    });
   }, [shouldBuildCandidateReport, researchDraws, rules, config, candidateBacktest, ruleValidationSummaries, referenceRunId]);
+  useEffect(() => {
+    if (activeView !== "candidate-pool") return;
+    if (!candidateReport.signalCount || !candidateReport.ruleCount) return;
+    const signature = referenceHistorySignature(candidateReport);
+    if (referenceAutoSavedSignature.current === signature) return;
+    referenceAutoSavedSignature.current = signature;
+    if (referenceHistory.some((record) => record.signature === signature)) return;
+    void store.saveReferenceHistory(buildReferenceHistoryItem({
+      report: candidateReport,
+      saveType: "auto",
+      dataSourceLabel,
+      recordCount: activeDraws.length,
+      note: "打开综合参考页自动保存",
+    }));
+  }, [activeDraws.length, activeView, candidateReport, dataSourceLabel, referenceHistory, store]);
   const referenceObservation = useMemo(() => {
     if (activeView !== "candidate-pool") return EMPTY_REFERENCE_OBSERVATION;
     return buildReferenceObservation({ draws: researchDraws, rules, config, validationSummaries: ruleValidationSummaries, window: 10 });
   }, [activeView, researchDraws, rules, config, ruleValidationSummaries, referenceRunId]);
+  const resolvedReferenceHistory = useMemo<ResolvedReferenceHistoryItem[]>(() => {
+    return resolveReferenceHistoryOutcomes(referenceHistory, activeDraws, config);
+  }, [activeDraws, config, referenceHistory]);
   const manualComboRules = useMemo(() => {
     const selected = rules.filter((rule) => selectedComboRuleIds.includes(rule.id));
     return selected.length ? selected : rules.filter((rule) => canRuleParticipateInReference(rule, ruleValidationById.get(rule.id))).slice(0, 6);
@@ -858,6 +927,31 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     if (activeView !== "candidate-pool") return EMPTY_CANDIDATE_REPORT;
     return generateCandidatePool({ draws: researchDraws, rules: manualComboRules, config, backtest: candidateBacktest, validationSummaries: ruleValidationSummaries });
   }, [activeView, researchDraws, manualComboRules, config, candidateBacktest, ruleValidationSummaries]);
+  const manualDrawValidation = useMemo(() => {
+    const values = MANUAL_DRAW_KEYS.map((key) => ({ key, value: Number(manualDraw[key]) }));
+    const invalidKeys = new Set<ManualDrawKey>();
+    const errors: string[] = [];
+
+    values.forEach(({ key, value }) => {
+      if (!Number.isInteger(value) || value < 1 || value > 49) {
+        invalidKeys.add(key);
+      }
+    });
+    if (invalidKeys.size) errors.push("号码必须是 1-49 的整数");
+
+    const seen = new Map<number, ManualDrawKey[]>();
+    values.forEach(({ key, value }) => {
+      if (!Number.isInteger(value) || value < 1 || value > 49) return;
+      seen.set(value, [...(seen.get(value) ?? []), key]);
+    });
+    const duplicatedValues = [...seen.entries()].filter(([, keys]) => keys.length > 1).map(([value]) => value);
+    if (duplicatedValues.length) errors.push(`重复号码：${duplicatedValues.map((value) => padNumber(value)).join("、")}`);
+
+    const issue = String(manualDraw.issue ?? "").trim();
+    if (!issue) errors.push("请填写期号，方便后续查找和同步保留");
+
+    return { errors, invalidKeys, duplicatedValues, valid: errors.length === 0 };
+  }, [manualDraw]);
   const selectedOneClickDraw = oneClickMode === "manual" ? manualDraw : (latestRawDraw ?? manualDraw);
   const selectedOneClickPeriodIndex = useMemo(() => {
     const index = activeDraws.findIndex((draw) => draw.issue === selectedOneClickDraw.issue);
@@ -912,34 +1006,46 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     { header: "结果", cell: ({ row }) => <Badge tone={row.original.success ? "green" : "rose"}>{row.original.success ? "通过" : "失败"}</Badge> },
   ];
 
-  const fetchSourceDraws = useCallback(async (syncPreview = true, saveMode: "none" | "merge" | "replace" = "none") => {
-    if (isStaticShareHost) {
-      setImportErrors([]);
-      setSourceRecords([]);
-      setSourceSummaries([]);
-      setSourceStatus(`静态分享版已内置最新开奖数据，最新期 ${latestRawDraw?.issue ?? "-"}，共 ${activeDraws.length} 条。`);
-      return;
-    }
+  const fetchSourceDraws = useCallback(async (syncPreview = true, saveMode: "none" | "merge" | "replace" = "replace") => {
     setSourceLoading(true);
-    setSourceStatus("正在抓取网址数据...");
+    setSourceStatus("正在同步配置的开奖源数据，请稍候...");
     try {
-      const response = await fetch("/api/import-draws-from-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          baseUrl: sourceUrl,
-          fromYear: Number(sourceFromYear),
-          toYear: Number(sourceToYear),
-        }),
-      });
-      const data = (await response.json()) as UrlImportResponse;
-      if (!response.ok) throw new Error(data.errors?.[0] ?? "网址数据抓取失败");
+      const endpoint = typeof window !== "undefined" && window.location.hostname.endsWith("github.io")
+        ? REMOTE_DRAW_IMPORT_ENDPOINT
+        : "/api/import-draws-from-url";
+      const fallbackEndpoint = endpoint === REMOTE_DRAW_IMPORT_ENDPOINT ? "/api/import-draws-from-url" : REMOTE_DRAW_IMPORT_ENDPOINT;
+      const payload = {
+        baseUrl: sourceUrl,
+        fromYear: Number(sourceFromYear),
+        toYear: Number(sourceToYear),
+      };
+      const request = async (url: string) => {
+        const response = await fetch(`${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        });
+        const data = (await response.json()) as UrlImportResponse;
+        if (!response.ok) throw new Error(data.errors?.[0] ?? "网址数据抓取失败");
+        return data;
+      };
+
+      let data: UrlImportResponse;
+      try {
+        data = await request(endpoint);
+      } catch (primaryError) {
+        if (fallbackEndpoint.startsWith("/")) throw primaryError;
+        data = await request(fallbackEndpoint);
+      }
+
       const fetchedRecords = data.records ?? [];
       if (!fetchedRecords.length) {
         throw new Error("网站本次没有返回有效开奖记录，已保留现有开奖库");
       }
       const fetchedSorted = sortDrawRecords(fetchedRecords);
       const latestFetched = fetchedSorted.at(-1);
+      const currentLatest = sortDrawRecords(activeDraws).at(-1);
       const syncedAt = new Date().toLocaleString("zh-CN", { hour12: false });
       setLastSyncAt(syncedAt);
       localStorage.setItem("rulequant:lastSyncAt", syncedAt);
@@ -949,49 +1055,54 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       setImportErrors(data.errors ?? []);
       if (syncPreview) setPreviewDraws(fetchedRecords);
       if (saveMode === "replace") {
-        void store.replaceDraws(fetchedRecords);
+        await store.replaceDraws(fetchedRecords);
+      } else if (saveMode === "merge") {
+        await store.importDraws(fetchedRecords);
       }
-      if (saveMode === "merge") {
-        void store.importDraws(fetchedRecords);
-      }
-      const writeStatus = saveMode === "replace" ? "，已替换本地开奖库" : saveMode === "merge" ? "，已合并写入本地库" : "";
-      setSourceStatus(`已同步网址 ${fetchedRecords.length} 条记录，最新期 ${latestFetched?.issue ?? "-"}${writeStatus}`);
+      clearCandidatePoolCache();
+      setReferenceRunId((current) => current + 1);
+      const changed = latestFetched?.issue && latestFetched.issue !== currentLatest?.issue;
+      setSourceStatus(
+        changed
+          ? `已同步到最新 ${latestFetched.issue} 期，共 ${fetchedRecords.length} 条记录，页面已重新计算。`
+          : `已检查配置的开奖源，当前仍为 ${latestFetched?.issue ?? "-"} 期，共 ${fetchedRecords.length} 条记录。`,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setSourceRecords([]);
-      setSourceSummaries([]);
       setImportErrors([message]);
-      setSourceStatus(`抓取失败：${message}`);
+      setSourceStatus(`同步失败：${message}`);
     } finally {
       setSourceLoading(false);
     }
-  }, [activeDraws.length, isStaticShareHost, latestRawDraw?.issue, sourceUrl, sourceFromYear, sourceToYear, store]);
+  }, [activeDraws, sourceUrl, sourceFromYear, sourceToYear, store]);
 
   useEffect(() => {
     if (sourceLoading || !WEBSITE_FIRST_VIEWS.has(activeView)) return;
-    if (isStaticShareHost) {
-      if (!sourceStatus && hasSharedDraws) {
-        setSourceStatus(`静态分享版已内置最新开奖数据，最新期 ${latestRawDraw?.issue ?? "-"}，共 ${activeDraws.length} 条。`);
-      }
-      return;
-    }
 
-    const syncToday = () => {
-      const today = new Date().toLocaleDateString("zh-CN");
-      if (sourceAutoFetchedDate.current === today) return;
-      sourceAutoFetchedDate.current = today;
+    const syncLatest = () => {
+      const now = Date.now();
+      if (now - sourceAutoFetchedAt.current < AUTO_SYNC_INTERVAL_MS) return;
+      sourceAutoFetchedAt.current = now;
       void fetchSourceDraws(false, "replace");
     };
 
-    queueMicrotask(syncToday);
-    const timer = window.setInterval(syncToday, 30 * 60 * 1000);
+    queueMicrotask(syncLatest);
+    const timer = window.setInterval(syncLatest, AUTO_SYNC_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [activeDraws.length, activeView, fetchSourceDraws, hasSharedDraws, isStaticShareHost, latestRawDraw?.issue, sourceLoading, sourceStatus]);
+  }, [activeView, fetchSourceDraws, sourceLoading]);
 
   async function handleParseImport() {
     const result = parseDrawText(importText);
     setPreviewDraws(result.records);
     setImportErrors(result.errors);
+  }
+
+  async function handlePublishCloudState() {
+    if (typeof window !== "undefined" && !window.localStorage.getItem("rulequant:adminToken") && cloudPublishStatus === "local_only") {
+      const token = window.prompt("云端设置了管理员密钥。请输入管理员发布密钥；如果没有，直接取消，本机数据仍会保留。");
+      if (token) window.localStorage.setItem("rulequant:adminToken", token.trim());
+    }
+    await store.publishCloudState("manual");
   }
 
   async function handleFile(file?: File) {
@@ -1060,17 +1171,102 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     setSourceStatus(`已用网址 ${sourceRecords.length} 条记录替换本地开奖库`);
   }
 
-  function handleOneClickCalculate() {
-    const now = new Date().toLocaleString("zh-CN", { hour12: false });
-    setLastCalculationAt(now);
-    localStorage.setItem("rulequant:lastCalculationAt", now);
-    void store.addOperationLog({
-      type: "one_click_calculate",
-      message: `一键计算全部公式：启用 ${enabledRuleCount} 条，可参与 ${referenceRuleCount} 条`,
-      issue: selectedOneClickDraw.issue,
-      dataCount: activeDraws.length,
-      formulaCount: referenceRuleCount,
+  function buildManualDrawRecord(): DrawRecord {
+    const now = new Date();
+    const issue = String(manualDraw.issue || "").trim() || `manual-${now.getTime()}`;
+    return {
+      ...manualDraw,
+      issue,
+      date: manualDraw.date || now.toISOString().slice(0, 10),
+      year: manualDraw.year ?? now.getFullYear(),
+      sourceUrl: "manual://user-input",
+      rawAttributes: {
+        ...(manualDraw.rawAttributes ?? {}),
+        sourceType: "manual",
+        label: "人工录入",
+        note: "一键算公式页面手动输入保存",
+        savedAt: now.toISOString(),
+      },
+    };
+  }
+
+  async function saveManualDraw() {
+    const record = buildManualDrawRecord();
+    const numbers = [record.n1, record.n2, record.n3, record.n4, record.n5, record.n6, record.special];
+    if (!manualDrawValidation.valid) {
+      setOneClickStatus(`保存失败：${manualDrawValidation.errors.join("；")}`);
+      return;
+    }
+    const hasInvalidNumber = numbers.some((value) => !Number.isInteger(value) || value < 1 || value > 49);
+    if (hasInvalidNumber) {
+      setOneClickStatus("保存失败：开奖号码必须是 1-49 的整数。");
+      return;
+    }
+
+    await store.importDraws([record]);
+    setManualDraw(record);
+    setSourceRecords((current) => {
+      if (!current.length) return current;
+      const merged = new Map(current.map((item) => [item.issue, item]));
+      merged.set(record.issue, record);
+      return sortDrawRecords([...merged.values()]);
     });
+    clearCandidatePoolCache();
+    setReferenceRunId((current) => current + 1);
+    const savedAt = new Date().toLocaleString("zh-CN", { hour12: false });
+    setLastSyncAt(savedAt);
+    localStorage.setItem("rulequant:lastSyncAt", savedAt);
+    setSourceStatus(`已保存人工录入开奖：${record.issue}，${drawNumbersWithZodiac(record, config)}。`);
+    setOneClickStatus(`已保存人工录入开奖 ${record.issue}，后续计算会标记为人工数据。`);
+    await store.addOperationLog({
+      type: "sync_draws",
+      message: `人工录入开奖：${record.issue}`,
+      issue: record.issue,
+      dataCount: activeDraws.length + 1,
+      details: {
+        sourceType: "manual",
+        numbers,
+      },
+    });
+  }
+
+  function handleOneClickCalculate() {
+    if (oneClickMode === "manual" && !manualDrawValidation.valid) {
+      setOneClickStatus(`计算失败：${manualDrawValidation.errors.join("；")}`);
+      return;
+    }
+    setOneClickCalculating(true);
+    setOneClickStatus("正在计算全部启用公式...");
+    window.setTimeout(() => {
+      const now = new Date().toLocaleString("zh-CN", { hour12: false });
+      setLastCalculationAt(now);
+      localStorage.setItem("rulequant:lastCalculationAt", now);
+      setOneClickStatus(`已计算 ${oneClickResults.length} 条公式，使用期号 ${selectedOneClickDraw.issue}。`);
+      setOneClickCalculating(false);
+      void store.addOperationLog({
+        type: "one_click_calculate",
+        message: `一键计算全部公式：启用 ${enabledRuleCount} 条，可参与 ${referenceRuleCount} 条`,
+        issue: selectedOneClickDraw.issue,
+        dataCount: activeDraws.length,
+        formulaCount: referenceRuleCount,
+      });
+    }, 0);
+  }
+
+  async function saveReferenceReport(report: CandidatePoolReport, saveType: "auto" | "manual", note?: string) {
+    if (!report.ruleCount || !report.signalCount) {
+      setReferenceStatus("当前没有可保存的综合推荐记录：公式依据为空。");
+      return;
+    }
+    const record = buildReferenceHistoryItem({
+      report,
+      saveType,
+      dataSourceLabel,
+      recordCount: activeDraws.length,
+      note,
+    });
+    await store.saveReferenceHistory(record);
+    setReferenceStatus(`已保存 ${record.baseIssue ?? "-"} 期综合推荐档案：Top8/12/16/18、全量49号码、生肖Top7/8/9、全量12生肖和证据摘要都已入库。`);
   }
 
   function handleRegenerateReference() {
@@ -1105,6 +1301,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       });
       setCandidateFocus(null);
       setReferenceStatus(`已使用 ${freshReport.latestIssue ?? "-"} 期数据，${freshReport.ruleCount} 条公式参与计算，生成 ${freshReport.signalCount} 条公式依据。`);
+      void saveReferenceReport(freshReport, "auto", "重新生成综合参考结果自动保存");
       setReferenceCalculating(false);
     }, 0);
   }
@@ -1145,24 +1342,35 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     }
   }
 
-  async function saveRuleFromForm(formData: FormData) {
+  async function saveRuleFromForm(formData: FormData): Promise<RuleSaveResult> {
     const rawId = String(formData.get("id") || "");
     const existingRule = rawId ? rules.find((rule) => rule.id === rawId) : undefined;
     const rule = buildRuleFromFormData(formData, { existingRule, forceNew: !existingRule });
     const drawForValidation = latestDraw ?? normalizedDraws[0];
     if (drawForValidation) {
       try {
-        calculateRule(rule, drawForValidation, config, { periodIndex: latestDraw ? latestPeriodIndex : 0 });
+        runRuleCalculation(rule, drawForValidation, config, { periodIndex: latestDraw ? latestPeriodIndex : 0 });
       } catch (error) {
-        window.alert(`公式暂不能保存：${error instanceof Error ? error.message : String(error)}`);
-        return;
+        return { ok: false, message: `公式暂不能保存：${error instanceof Error ? error.message : String(error)}` };
       }
     }
     const result = await store.upsertRule(rule);
     if (!result.ok) {
-      window.alert(result.duplicate ? `这条规则已存在于公式库：${result.duplicate.name}` : `保存失败：${result.reason}`);
-      return;
+      if (result.duplicate) {
+        store.setSelectedRule(result.duplicate.id);
+        setRuleFilter("all");
+        setRuleLibraryFilter("all");
+        return { ok: false, message: `这条规则已存在于公式库：${result.duplicate.name}`, duplicate: result.duplicate };
+      }
+      return { ok: false, message: `保存失败：${result.reason}` };
     }
+    store.setSelectedRule(result.rule.id);
+    setRuleFilter("all");
+    setRuleLibraryFilter("all");
+    setRuleSort("smart");
+    clearCandidatePoolCache();
+    setReferenceRunId((current) => current + 1);
+    return { ok: true, rule: result.rule, message: `${result.message}：${result.rule.name}。公式管理默认会显示全部公式。` };
   }
 
   async function saveSample() {
@@ -1186,7 +1394,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#05070d] text-slate-100">
       <div className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_15%_5%,rgba(34,211,238,0.14),transparent_28%),radial-gradient(circle_at_86%_12%,rgba(124,58,237,0.16),transparent_24%)]" />
-      <div className="relative z-10 grid min-h-screen grid-cols-1 pb-20 lg:grid-cols-[240px_1fr] lg:pb-0">
+      <div className="relative z-10 grid min-h-screen grid-cols-1 lg:grid-cols-[240px_1fr]">
         <aside className="hidden border-r border-white/[0.08] bg-black/20 p-4 backdrop-blur-xl lg:block">
           <Link href="/dashboard" className="mb-6 flex items-center gap-3 rounded-lg border border-white/[0.08] bg-white/[0.04] p-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-cyan-300/15 text-cyan-200">
@@ -1240,7 +1448,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
           </div>
         </nav>
 
-        <main className="min-w-0 max-w-full overflow-x-hidden">
+        <main className="min-w-0 max-w-full overflow-x-hidden pb-[calc(104px+env(safe-area-inset-bottom))] lg:pb-0">
           <header className="sticky top-0 z-20 border-b border-white/[0.08] bg-[#05070d]/86 px-4 py-3 backdrop-blur-xl sm:px-6 sm:py-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
@@ -1250,6 +1458,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                 <Badge tone={hasSharedDraws ? "green" : "slate"}>{dataSourceLabel}</Badge>
                 <span>最新期：{latestRawDraw?.issue ?? "-"}</span>
+                {cloudPublishMessage && <Badge tone={cloudPublishStatus === "published" ? "green" : cloudPublishStatus === "failed" ? "rose" : "yellow"}>{cloudPublishMessage}</Badge>}
+                <Button size="sm" loading={cloudPublishStatus === "publishing"} onClick={() => void handlePublishCloudState()}>发布云端</Button>
+                {lastCloudPublishAt && <span>云端：{new Date(lastCloudPublishAt).toLocaleString("zh-CN", { hour12: false })}</span>}
               </div>
             </div>
           </header>
@@ -1280,10 +1491,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     </div>
                     <div className="mt-5 flex flex-wrap gap-2">
                       {latestRawDraw ? [latestRawDraw.n1, latestRawDraw.n2, latestRawDraw.n3, latestRawDraw.n4, latestRawDraw.n5, latestRawDraw.n6, latestRawDraw.special].map((number, index) => (
-                        <span key={`${number}-${index}`} className={cn("flex h-14 w-14 flex-col items-center justify-center rounded-md border text-center", index === 6 ? "border-cyan-300/40 bg-cyan-300/15 text-cyan-50" : "border-white/10 bg-white/[0.06] text-white")}>
-                          <span className="font-mono text-base leading-none">{padNumber(number)}</span>
-                          <span className="mt-1 text-[11px] leading-none text-slate-300">{numberWithZodiac(number, config).split(" ")[1] ?? ""}</span>
-                        </span>
+                        <NumberTile key={`${number}-${index}`} number={number} special={index === 6} config={config} />
                       )) : <span className="text-slate-500">暂无开奖数据</span>}
                     </div>
                     <div className="mt-5 grid grid-cols-1 gap-3 text-sm text-slate-300 sm:grid-cols-2">
@@ -1293,7 +1501,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       <p>是否使用最新同步数据：{isUsingSyncedData ? "是" : "否"}</p>
                     </div>
                     <Button className="mt-5" variant="primary" disabled={sourceLoading} onClick={() => void fetchSourceDraws(true, "replace")}>
-                      <RefreshCw className="h-4 w-4" />{sourceLoading ? "同步中" : "同步最新开奖数据"}
+                      <RefreshCw className="h-4 w-4" />{sourceLoading ? "同步中" : "同步配置开奖源"}
                     </Button>
                   </Panel>
 
@@ -1310,7 +1518,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       <Metric label="可参与参考" value={referenceRuleCount} tone="cyan" />
                       <Metric label="未做样例核对" value={pendingRuleCount} tone="yellow" />
                     </div>
-                    <Button className="mt-5 w-full" variant="primary" onClick={handleOneClickCalculate}><Play className="h-4 w-4" />一键计算全部公式</Button>
+                    <Button className="mt-5 w-full" variant="primary" disabled={oneClickCalculating} onClick={handleOneClickCalculate}>
+                      <Play className="h-4 w-4" />{oneClickCalculating ? "正在计算..." : "一键计算全部公式"}
+                    </Button>
                     <Link href="/one-click" className="mt-3 inline-flex text-sm text-cyan-200 hover:text-cyan-100">查看每条公式本期计算结果</Link>
                   </Panel>
                 </div>
@@ -1359,7 +1569,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       <h2 className="font-semibold text-white">一键算公式</h2>
                       <p className="mt-1 text-sm text-slate-500">默认使用今年网站完整开奖数据的最新一期，也可以手动输入一期开奖。</p>
                     </div>
-                    <Button variant="primary" onClick={handleOneClickCalculate}><Play className="h-4 w-4" />一键计算全部公式</Button>
+                    <Button variant="primary" disabled={oneClickCalculating} onClick={handleOneClickCalculate}>
+                      <Play className="h-4 w-4" />{oneClickCalculating ? "正在计算..." : "一键计算全部公式"}
+                    </Button>
                   </div>
                   <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[280px_1fr]">
                     <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-4">
@@ -1370,16 +1582,50 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       </Select>
                       <div className="mt-4 text-sm text-slate-400">
                         <p>当前期号：{selectedOneClickDraw.issue}</p>
+                        {(selectedOneClickDraw.sourceUrl === "manual://user-input" || selectedOneClickDraw.rawAttributes?.sourceType === "manual") && <p className="mt-1 text-cyan-100">数据标记：人工录入</p>}
                         <p>开奖号码：{drawNumbersWithZodiac(selectedOneClickDraw, config)}</p>
                         <p>上次计算：{lastCalculationAt || "未计算"}</p>
                       </div>
                     </div>
                     {oneClickMode === "manual" ? (
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
-                        <div><Label>期号</Label><Input value={manualDraw.issue} onChange={(event) => updateManualDraw("issue", event.target.value)} /></div>
-                        {(["n1", "n2", "n3", "n4", "n5", "n6", "special"] as const).map((key, index) => (
-                          <div key={key}><Label>{index === 6 ? "特码" : `平${index + 1}`}</Label><Input type="number" min={1} max={49} value={manualDraw[key]} onChange={(event) => updateManualDraw(key, event.target.value)} /></div>
-                        ))}
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
+                          <div className="rounded-md border border-white/[0.08] bg-white/[0.03] p-3">
+                            <Label>期号</Label>
+                            <Input className={!String(manualDraw.issue ?? "").trim() ? "border-amber-300/40" : ""} value={manualDraw.issue} onChange={(event) => updateManualDraw("issue", event.target.value)} />
+                          </div>
+                          {MANUAL_DRAW_KEYS.map((key, index) => {
+                            const invalid = manualDrawValidation.invalidKeys.has(key);
+                            const duplicated = manualDrawValidation.duplicatedValues.includes(Number(manualDraw[key]));
+                            const isSpecial = key === "special";
+                            return (
+                              <div
+                                key={key}
+                                className={cn(
+                                  "rounded-md border p-3",
+                                  isSpecial ? "border-cyan-300/28 bg-cyan-300/[0.07]" : "border-white/[0.08] bg-white/[0.03]",
+                                  (invalid || duplicated) && "border-rose-300/45 bg-rose-300/[0.08]",
+                                )}
+                              >
+                                <Label>{isSpecial ? "特码" : `第${index + 1}位`}</Label>
+                                <Input type="number" min={1} max={49} className="text-center font-mono text-[18px]" value={manualDraw[key]} onChange={(event) => updateManualDraw(key, event.target.value)} />
+                                <p className={cn("mt-1 text-center text-[11px]", invalid || duplicated ? "text-rose-100" : isSpecial ? "text-cyan-100/70" : "text-slate-500")}>
+                                  {Number(manualDraw[key]) >= 1 && Number(manualDraw[key]) <= 49 ? numberWithZodiac(Number(manualDraw[key]), config) : "待填"}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {manualDrawValidation.errors.length > 0 && (
+                          <div className="rounded-md border border-rose-300/25 bg-rose-300/[0.08] p-3 text-sm text-rose-100">
+                            {manualDrawValidation.errors.join("；")}
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" disabled={!manualDrawValidation.valid} onClick={() => void saveManualDraw()}><Save className="h-4 w-4" />保存人工开奖</Button>
+                          <Button type="button" variant="primary" disabled={oneClickCalculating || !manualDrawValidation.valid} onClick={handleOneClickCalculate}><Play className="h-4 w-4" />计算当前手动开奖</Button>
+                        </div>
+                        <p className="rounded-lg border border-cyan-300/15 bg-cyan-300/[0.06] p-3 text-xs leading-5 text-cyan-50/85">手动输入会保存为“人工录入”数据，后续可在本机继续计算和排查。</p>
                       </div>
                     ) : (
                       <div className="rounded-lg border border-white/[0.08] bg-black/20 p-4">
@@ -1389,6 +1635,11 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       </div>
                     )}
                   </div>
+                  {oneClickStatus && (
+                    <div className={cn("mt-4 rounded-lg border p-3 text-sm", oneClickStatus.includes("失败") ? "border-rose-300/25 bg-rose-300/10 text-rose-100" : "border-emerald-300/25 bg-emerald-300/10 text-emerald-100")}>
+                      {oneClickStatus}
+                    </div>
+                  )}
                 </Panel>
 
                 <Panel className="p-5">
@@ -1610,36 +1861,26 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
 
             {activeView === "rules" && (
               <div className="space-y-4">
-                <RuleReconciliationPanel rows={ruleReconciliationRows} />
-                <div className="grid grid-cols-1 gap-4 xl:grid-cols-[420px_1fr]">
-                  <FormulaLibraryBackupPanel
-                    rules={rules}
-                    backups={ruleBackups}
-                    onImport={(file) => void handleRuleLibraryFile(file)}
-                    onReset={() => void store.resetRules()}
-                    onRestore={() => void store.restoreLastRuleBackup()}
-                  />
-                  <FormulaExceptionPanel items={exceptionRules} calculableCount={calculableRuleCount} />
-                </div>
-                <FormulaHealthPanel rows={ruleHealthRows} onToggleReserve={(ruleId) => void store.toggleReferenceParticipation(ruleId)} />
-                <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1fr_420px]">
                 <Panel className="p-5">
                   <div className="mb-4 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div className="min-w-0">
                       <h2 className="font-semibold text-white">公式管理</h2>
                       <p className="text-xs text-slate-500">查看公式状态、最近表现和逐期明细；样例不一致会提示核对，计算报错、变量不确定或停用公式不参与综合参考。</p>
                     </div>
-                    <div className="flex w-full flex-wrap items-stretch gap-2 xl:w-auto xl:justify-end">
-                      <Link href="/formula-editor?mode=new" className="inline-flex h-10 min-w-[112px] flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-cyan-200/45 bg-cyan-300/18 px-4 text-sm font-medium text-cyan-50 shadow-[0_0_30px_rgba(34,211,238,0.14)] hover:bg-cyan-300/28 sm:flex-none">
+                    <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap xl:w-auto xl:justify-end">
+                      <Link href="/formula-editor?mode=new" className="inline-flex h-10 min-w-[116px] items-center justify-center gap-2 whitespace-nowrap rounded-md border border-cyan-200/35 bg-cyan-300/16 px-4 text-sm font-medium text-cyan-50 hover:bg-cyan-300/24">
                         <Plus className="h-4 w-4" />新增规则
                       </Link>
-                      <Button onClick={() => selectedRule && void store.duplicateRule(selectedRule.id)}>复制已有公式</Button>
-                      <Link href="/one-click" className="inline-flex h-10 min-w-[104px] flex-1 items-center justify-center whitespace-nowrap rounded-lg border border-white/10 bg-white/[0.07] px-4 text-sm text-white hover:bg-white/[0.11] sm:flex-none">试算公式</Link>
-                    <Select value={ruleFilter} onChange={(event) => setRuleFilter(event.target.value as RuleCategory | "all")} className="min-w-[150px] flex-1 sm:w-44 sm:flex-none">
+                      <Button onClick={() => selectedRule && void store.duplicateRule(selectedRule.id)}>复制公式</Button>
+                      <Link href="/one-click" className="inline-flex h-10 min-w-[104px] items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/[0.055] px-4 text-sm text-white hover:bg-white/[0.09]">试算公式</Link>
+                    </div>
+                  </div>
+                  <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-3">
+                    <Select value={ruleFilter} onChange={(event) => setRuleFilter(event.target.value as RuleCategory | "all")}>
                       <option value="all">全部类型</option>
                       {categories.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                     </Select>
-                    <Select value={ruleLibraryFilter} onChange={(event) => setRuleLibraryFilter(event.target.value as RuleLibraryFilter)} className="min-w-[170px] flex-1 sm:w-44 sm:flex-none">
+                    <Select value={ruleLibraryFilter} onChange={(event) => setRuleLibraryFilter(event.target.value as RuleLibraryFilter)}>
                       <option value="all">筛选：全部公式</option>
                       <option value="user_provided">筛选：用户提供</option>
                       <option value="system_recommended">筛选：系统推荐</option>
@@ -1651,7 +1892,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       <option value="calculable">筛选：可计算</option>
                       <option value="error">筛选：计算异常</option>
                     </Select>
-                    <Select value={ruleSort} onChange={(event) => setRuleSort(event.target.value as RuleSortKey)} className="min-w-[200px] flex-1 sm:w-52 sm:flex-none">
+                    <Select value={ruleSort} onChange={(event) => setRuleSort(event.target.value as RuleSortKey)}>
                       <option value="smart">排序：智能学习排行</option>
                       <option value="success_desc">排序：成功率从高到低</option>
                       <option value="recent_desc">排序：最近10期从好到差</option>
@@ -1660,7 +1901,6 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       <option value="streak_desc">排序：当前连对从高到低</option>
                       <option value="name_asc">排序：公式名称</option>
                     </Select>
-                    </div>
                   </div>
                   <div className="mb-4 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.055] p-3 text-xs leading-5 text-cyan-50/85">
                     智能学习排行会根据历史成功率、最近10期表现、当前连对、连错和错期自动调权；只是帮助排序和降权，所有结果仍然来自公式计算证据。
@@ -1673,13 +1913,13 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       const canConfirm = rule.enabled && summary?.status !== "failed" && summary?.status !== "disabled";
                       const smartScore = ruleSmartScore(rule, result);
                       return (
-                        <div key={rule.id} className={cn("rounded-lg border p-4 transition hover:bg-white/[0.055]", selectedRuleId === rule.id ? "border-cyan-300/30 bg-cyan-300/10" : "border-white/[0.08] bg-white/[0.03]")}>
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <h3 className="font-medium text-white">{rule.name}</h3>
+                        <div key={rule.id} className={cn("rounded-lg border p-4 transition hover:bg-white/[0.045]", selectedRuleId === rule.id ? "border-cyan-300/28 bg-cyan-300/[0.075]" : "border-white/[0.065] bg-white/[0.025]")}>
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0 flex-1">
+                              <h3 className="truncate font-medium text-white">{rule.name}</h3>
                               <p className="mt-1 text-xs text-slate-500">{categoryLabel(rule.category)} · {rule.orderMode}序</p>
                             </div>
-                            <div className="flex flex-col items-end gap-2">
+                            <div className="flex flex-wrap gap-1.5 sm:shrink-0 sm:justify-end">
                               <Badge tone={sourceTypeTone(rule.sourceType)}>{sourceTypeLabel(rule.sourceType)}</Badge>
                               <Badge tone={result?.error || !result?.total ? "rose" : "green"}>{result?.error || !result?.total ? "计算异常" : "可计算"}</Badge>
                               <Badge tone="cyan">排行分 {smartScore > -9999 ? smartScore : "-"}</Badge>
@@ -1687,8 +1927,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                               <Badge tone={joinsReference ? "green" : "yellow"}>{joinsReference ? "参与综合参考" : "不参与综合参考"}</Badge>
                             </div>
                           </div>
-                          <p className="mt-3 font-mono text-xs text-cyan-100">{rule.formula}</p>
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-slate-400 sm:grid-cols-4">
+                          <p className="mt-3 break-words font-mono text-xs leading-5 text-cyan-100">{rule.formula}</p>
+                          <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-slate-400 sm:grid-cols-5">
                             <span>成功率 {result?.successRate ?? 0}%</span>
                             <span>连对 {result?.currentStreak ?? 0}</span>
                             <span>连错 {consecutiveWrong(result)}</span>
@@ -1696,27 +1936,64 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                             <span>近10 {recentSuccessCount(result)}/{result?.last10.length ?? 0}</span>
                           </div>
                           {summary?.reason && <p className={cn("mt-3 text-xs", summary.status === "mismatch" || summary.status === "failed" ? "text-rose-200" : "text-slate-500")}>{summary.reason}</p>}
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            <Button size="sm" onClick={() => store.setSelectedRule(rule.id)}>选中</Button>
-                            <Link href="/formula-detail" onClick={() => store.setSelectedRule(rule.id)} className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 bg-white/[0.06] px-3 text-xs text-slate-100 hover:bg-white/[0.09]">
+                          <div className="mt-4 flex flex-wrap items-center gap-2">
+                            <Link href="/formula-detail" onClick={() => store.setSelectedRule(rule.id)} className="inline-flex h-8 items-center justify-center rounded-md border border-cyan-300/24 bg-cyan-300/[0.08] px-3 text-xs text-cyan-50 hover:bg-cyan-300/[0.14]">
                               查看明细
                             </Link>
                             <Link href={`/formula-editor?ruleId=${encodeURIComponent(rule.id)}`} onClick={() => store.setSelectedRule(rule.id)} className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 bg-white/[0.06] px-3 text-xs text-slate-100 hover:bg-white/[0.09]">
                               编辑
                             </Link>
-                            <Button size="sm" disabled={!canConfirm} onClick={() => void store.confirmRule(rule.id)}>标记用户确认</Button>
-                            <Button size="sm" onClick={() => void store.toggleReferenceParticipation(rule.id)}>{rule.participatesInReference === false ? "参与参考" : "退出参考"}</Button>
-                            <Button size="sm" onClick={() => void store.toggleRule(rule.id)}>{rule.enabled ? "禁用" : "启用"}</Button>
-                            <Button size="sm" onClick={() => void store.duplicateRule(rule.id)}>复制</Button>
-                            <Button size="sm" variant="danger" onClick={() => void store.deleteRule(rule.id)}>删除</Button>
+                            <details className="relative">
+                              <summary className="inline-flex h-8 cursor-pointer list-none items-center justify-center rounded-md border border-white/10 bg-white/[0.045] px-3 text-xs text-slate-200 hover:bg-white/[0.08]">更多</summary>
+                              <div className="mt-2 grid min-w-40 gap-2 rounded-md border border-white/[0.08] bg-[#10131b] p-2 shadow-xl sm:absolute sm:right-0 sm:z-20">
+                                <Button size="sm" onClick={() => store.setSelectedRule(rule.id)}>选中</Button>
+                                <Button size="sm" disabled={!canConfirm} onClick={() => void store.confirmRule(rule.id)}>标记确认</Button>
+                                <Button size="sm" onClick={() => void store.toggleReferenceParticipation(rule.id)}>{rule.participatesInReference === false ? "参与参考" : "退出参考"}</Button>
+                                <Button
+                                  size="sm"
+                                  onClick={() => {
+                                    if (rule.enabled && !window.confirm(`确认停用「${rule.name}」吗？停用后不会参与综合参考。`)) return;
+                                    void store.toggleRule(rule.id);
+                                  }}
+                                >
+                                  {rule.enabled ? "禁用" : "启用"}
+                                </Button>
+                                <Button size="sm" onClick={() => void store.duplicateRule(rule.id)}>复制</Button>
+                                <Button
+                                  size="sm"
+                                  variant="danger"
+                                  onClick={() => {
+                                    if (!window.confirm(`确认删除「${rule.name}」吗？删除后需要从备份恢复。`)) return;
+                                    void store.deleteRule(rule.id);
+                                  }}
+                                >
+                                  删除
+                                </Button>
+                              </div>
+                            </details>
                           </div>
                         </div>
                       );
                     })}
                   </div>
                 </Panel>
-                  <RuleForm key={selectedRule?.id ?? "new-rule"} selectedRule={selectedRule} onSave={saveRuleFromForm} />
-                </div>
+                <details className="rounded-lg border border-white/[0.075] bg-white/[0.025] p-4">
+                  <summary className="cursor-pointer text-sm font-medium text-slate-200">诊断、备份与规则对账</summary>
+                  <div className="mt-4 space-y-4">
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[420px_1fr]">
+                      <FormulaLibraryBackupPanel
+                        rules={rules}
+                        backups={ruleBackups}
+                        onImport={(file) => void handleRuleLibraryFile(file)}
+                        onReset={() => void store.resetRules()}
+                        onRestore={() => void store.restoreLastRuleBackup()}
+                      />
+                      <FormulaExceptionPanel items={exceptionRules} calculableCount={calculableRuleCount} />
+                    </div>
+                    <FormulaHealthPanel rows={ruleHealthRows} onToggleReserve={(ruleId) => void store.toggleReferenceParticipation(ruleId)} />
+                    <RuleReconciliationPanel rows={ruleReconciliationRows} />
+                  </div>
+                </details>
               </div>
             )}
 
@@ -1791,11 +2068,14 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     </div>
                     <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap xl:w-auto xl:justify-end">
                       <Button disabled={sourceLoading} variant="primary" onClick={() => void fetchSourceDraws(true, "replace")}>
-                        <RefreshCw className="h-4 w-4" />{sourceLoading ? "同步中" : "同步最新开奖数据"}
+                        <RefreshCw className="h-4 w-4" />{sourceLoading ? "同步中" : "同步配置开奖源"}
                       </Button>
                       <Button disabled={!sourceRecords.length} onClick={() => void replaceLocalDrawsWithSourceRecords()}><Save className="h-4 w-4" />替换本地库</Button>
                       <Button onClick={handleRegenerateReference} disabled={referenceCalculating}>
                         <Activity className="h-4 w-4" />{referenceCalculating ? "正在计算公式信号..." : "重新生成综合参考结果"}
+                      </Button>
+                      <Button disabled={!candidateReport.signalCount} onClick={() => void saveReferenceReport(candidateReport, "manual", "用户手动保存当前综合推荐")}>
+                        <Save className="h-4 w-4" />保存本次推荐
                       </Button>
                     </div>
                   </div>
@@ -1844,6 +2124,16 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   </Panel>
                 )}
                 <ReferenceObservationPanel report={referenceObservation} />
+                <ReferenceHistoryPanel
+                  records={resolvedReferenceHistory}
+                  config={config}
+                  onDelete={(recordId) => void store.deleteReferenceHistory(recordId)}
+                  onClear={() => void store.clearReferenceHistory()}
+                  onExportJson={() => exportJson(resolvedReferenceHistory, "rulequant-reference-history.json")}
+                  onExportExcel={() => exportReferenceHistoryExcel(resolvedReferenceHistory)}
+                  onExportWord={() => exportReferenceHistoryWord(resolvedReferenceHistory)}
+                  onExportText={() => exportReferenceHistoryText(resolvedReferenceHistory)}
+                />
                 {exceptionRules.length > 0 && <FormulaExceptionPanel items={exceptionRules} calculableCount={calculableRuleCount} />}
                 <FormulaHealthPanel rows={ruleHealthRows} onToggleReserve={(ruleId) => void store.toggleReferenceParticipation(ruleId)} compact />
                 <ManualCombinationPanel
@@ -1901,7 +2191,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       <h3 className="font-semibold text-white">公式依据明细</h3>
                       <p className="text-xs text-slate-500">每条启用公式会给某些号码加分或扣分，作为参考排序依据。</p>
                     </div>
-                    <Badge tone="cyan">{candidateReport.riskNotice}</Badge>
+                  </div>
+                  <div className="mb-4 rounded-md border border-cyan-300/18 bg-cyan-300/[0.055] p-3 text-sm leading-6 text-cyan-50/85">
+                    {candidateReport.riskNotice}
                   </div>
                   {candidateReport.signals.length === 0 ? (
                     <p className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-4 text-sm text-slate-500">暂无公式依据。请检查公式是否已启用、可计算且未被手动排除。</p>
@@ -2032,6 +2324,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                 <ExportTile icon={BarChart3} title="回测 Excel" desc="导出每期计算过程、输出和验证结果" action={() => exportBacktestExcel(backtest)} />
                 <ExportTile icon={Activity} title="候选池 Excel" desc="导出 Top 号码、Top 生肖和规则信号明细" action={() => exportCandidatePoolExcel(candidateReport)} />
                 <ExportTile icon={FileDown} title="候选池 HTML" desc="生成可直接转发查看的规则共识候选池报告" action={() => exportCandidatePoolHtml(candidateReport)} />
+                <ExportTile icon={TableProperties} title="综合推荐历史 Excel" desc="分工作表导出总览、Top8、Top12、Top18 和生肖明细，便于筛选复盘" action={() => exportReferenceHistoryExcel(resolvedReferenceHistory)} />
+                <ExportTile icon={FileDown} title="综合推荐历史 Word" desc="导出排版好的 Word 兼容文档，包含字体、表格、命中标记和完整推荐记录" action={() => exportReferenceHistoryWord(resolvedReferenceHistory)} />
+                <ExportTile icon={ClipboardCheck} title="综合推荐历史 TXT" desc="导出 UTF-8 文本文档，适合直接转发或保存，不会出现中文乱码" action={() => exportReferenceHistoryText(resolvedReferenceHistory)} />
                 <ExportTile icon={ClipboardCheck} title="样例校验" desc="导出手算样例对比和差异类型" action={() => exportSampleReport(sampleResults)} />
                 <ExportTile icon={FileDown} title="HTML 报告" desc="生成可直接打开的 HTML 回测报告" action={() => exportHtmlReport(backtest, rules, config)} />
               </div>
@@ -2326,7 +2621,7 @@ function NewRuleBuilder({
   config,
   periodIndex,
 }: {
-  onSave: (formData: FormData) => Promise<void>;
+  onSave: (formData: FormData) => Promise<RuleSaveResult>;
   draw?: ReturnType<typeof normalizeDraw>;
   config: RuleQuantConfig;
   periodIndex?: number;
@@ -2387,7 +2682,7 @@ function NewRuleBuilder({
     if (!draw) return { error: "暂无可试算开奖数据" } as const;
     try {
       const rule = buildRuleFromFormData(formData, { forceNew: true });
-      const calculation = calculateRule(rule, draw, config, { periodIndex });
+      const calculation = runRuleCalculation(rule, draw, config, { periodIndex });
       return { rule, calculation } as const;
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) } as const;
@@ -2399,8 +2694,8 @@ function NewRuleBuilder({
       setSaveStatus(`暂不能保存：${trial.error}`);
       return;
     }
-    await onSave(formData);
-    setSaveStatus("已保存到规则库，可以在公式管理、一键算公式和综合参考结果里使用。");
+    const result = await onSave(formData);
+    setSaveStatus(result.message);
   }
 
   if (mode === "advanced") {
@@ -2423,99 +2718,104 @@ function NewRuleBuilder({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[260px_minmax(0,1fr)_360px]">
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <Panel className="p-5">
-        <h2 className="font-semibold text-white">新增规则</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-500">普通用户只需要粘贴原文或选模板；平/落/特码这些同义词由系统内部统一处理。</p>
-        <div className="mt-4 grid gap-2 sm:grid-cols-3 2xl:grid-cols-1">
-          {(["paste", "template", "advanced"] as BuilderMode[]).map((item) => (
-            <button key={item} type="button" onClick={() => setMode(item)} className={cn("rounded-lg border px-3 py-3 text-left text-sm", mode === item ? "border-cyan-300/35 bg-cyan-300/10 text-cyan-50" : "border-white/[0.08] bg-white/[0.03] text-slate-300")}>
-              <span className="font-medium">{item === "paste" ? "粘贴原文识别" : item === "template" ? "常用模板添加" : "高级编辑"}</span>
-              <span className="mt-1 block text-xs text-slate-500">{item === "paste" ? "直接粘贴 TXT 里的句子" : item === "template" ? "按人话选位置和用途" : "保留旧公式输入"}</span>
-            </button>
-          ))}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <h2 className="font-semibold text-white">新增规则</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500">普通用户只需要粘贴原文或选模板；平/落/特码这些同义词由系统内部统一处理。</p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 rounded-md border border-white/[0.07] bg-black/15 p-1">
+            {(["paste", "template", "advanced"] as BuilderMode[]).map((item) => (
+              <button key={item} type="button" onClick={() => setMode(item)} className={cn("h-9 rounded px-3 text-xs font-medium transition", mode === item ? "bg-cyan-300/14 text-cyan-50" : "text-slate-400 hover:bg-white/[0.05] hover:text-white")}>
+                {item === "paste" ? "原文识别" : item === "template" ? "模板添加" : "高级"}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="mt-5 break-words rounded-lg border border-cyan-300/15 bg-cyan-300/[0.06] p-3 text-xs leading-5 text-cyan-50/85">
+        <div className="mt-4 break-words rounded-md border border-cyan-300/15 bg-cyan-300/[0.05] p-3 text-xs leading-5 text-cyan-50/85">
           已简化：第1位=平1=落1，特码=平7=落7=特号；合尾=合数尾，五行值=行，波色值=波。页面只显示一种说法。
         </div>
-      </Panel>
-
-      <Panel className="p-5">
-        {mode === "paste" ? (
+        <div className="mt-5">
+          {mode === "paste" ? (
           <div>
             <h3 className="font-semibold text-white">粘贴原文识别</h3>
             <p className="mt-1 text-sm text-slate-500">例如：平码3虎05取值+1234567911，或 176特码10 预测178尾数左右各3。</p>
             <Textarea value={rawText} onChange={(event) => setRawText(event.target.value)} className="mt-4 min-h-32" />
             <Button className="mt-4" type="button" onClick={applyRawText}><Search className="h-4 w-4" />开始理解</Button>
           </div>
-        ) : (
+          ) : (
           <div>
             <h3 className="font-semibold text-white">常用模板添加</h3>
             <p className="mt-1 text-sm text-slate-500">选择规则用途、位置和取值方式，系统自动生成内部公式。</p>
           </div>
-        )}
-
-        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div>
-            <Label>规则名称</Label>
-            <Input value={ruleName} onChange={(event) => setRuleName(event.target.value)} placeholder={resolvedName} />
-          </div>
-          <div>
-            <Label>规则用途</Label>
-            <Select value={intent} onChange={(event) => setIntent(event.target.value as BuilderIntent)}>
-              {builderIntentOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-            </Select>
-          </div>
-          <div>
-            <Label>取哪个位置</Label>
-            <Select value={String(position)} onChange={(event) => setPosition(Number(event.target.value))}>
-              {[1, 2, 3, 4, 5, 6, 7].map((item) => <option key={item} value={item}>{positionLabel(item)}</option>)}
-            </Select>
-          </div>
-          <div>
-            <Label>取什么值</Label>
-            <Select value={valueKind} onChange={(event) => setValueKind(event.target.value as BuilderValueKind)}>
-              {builderValueOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-            </Select>
-          </div>
-          <div>
-            <Label>加减计算</Label>
-            <Input type="number" value={offset} onChange={(event) => setOffset(Number(event.target.value || 0))} />
-          </div>
-          <div>
-            <Label>验证间隔</Label>
-            <Input type="number" min={1} max={8} value={verifyOffset} onChange={(event) => setVerifyOffset(Number(event.target.value || 1))} />
-          </div>
+          )}
         </div>
 
-        {intent === "seven_tail" && (
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[220px_1fr]">
+        <details className="mt-5 rounded-md border border-white/[0.08] bg-white/[0.03] p-4">
+          <summary className="cursor-pointer text-sm font-medium text-cyan-100">修改识别结果</summary>
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <Label>七尾闭环方式</Label>
-              <Select value={tailMode} onChange={(event) => setTailMode(event.target.value)}>
-                <option value="window3">以尾数为中心左右各3</option>
-                <option value="left2right4">左2右4</option>
-                <option value="custom">自定义偏移</option>
+              <Label>规则名称</Label>
+              <Input value={ruleName} onChange={(event) => setRuleName(event.target.value)} placeholder={resolvedName} />
+            </div>
+            <div>
+              <Label>规则用途</Label>
+              <Select value={intent} onChange={(event) => setIntent(event.target.value as BuilderIntent)}>
+                {builderIntentOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </Select>
             </div>
             <div>
-              <Label>自定义偏移</Label>
-              <Input value={customTailOffsets} onChange={(event) => setCustomTailOffsets(event.target.value)} placeholder="-3,-2,-1,0,1,2,4" />
+              <Label>取哪个位置</Label>
+              <Select value={String(position)} onChange={(event) => setPosition(Number(event.target.value))}>
+                {[1, 2, 3, 4, 5, 6, 7].map((item) => <option key={item} value={item}>{positionLabel(item)}</option>)}
+              </Select>
+            </div>
+            <div>
+              <Label>取什么值</Label>
+              <Select value={valueKind} onChange={(event) => setValueKind(event.target.value as BuilderValueKind)}>
+                {builderValueOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              </Select>
+            </div>
+            <div>
+              <Label>加减计算</Label>
+              <Input type="number" value={offset} onChange={(event) => setOffset(Number(event.target.value || 0))} />
+            </div>
+            <div>
+              <Label>验证间隔</Label>
+              <Input type="number" min={1} max={8} value={verifyOffset} onChange={(event) => setVerifyOffset(Number(event.target.value || 1))} />
             </div>
           </div>
-        )}
 
-        {intent === "nine_zodiac" && (
+          {intent === "seven_tail" && (
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[220px_1fr]">
+              <div>
+                <Label>七尾闭环方式</Label>
+                <Select value={tailMode} onChange={(event) => setTailMode(event.target.value)}>
+                  <option value="window3">以尾数为中心左右各3</option>
+                  <option value="left2right4">左2右4</option>
+                  <option value="custom">自定义偏移</option>
+                </Select>
+              </div>
+              <div>
+                <Label>自定义偏移</Label>
+                <Input value={customTailOffsets} onChange={(event) => setCustomTailOffsets(event.target.value)} placeholder="-3,-2,-1,0,1,2,4" />
+              </div>
+            </div>
+          )}
+
+          {intent === "nine_zodiac" && (
+            <div className="mt-4">
+              <Label>九肖取值</Label>
+              <Input value={zodiacOffsets} onChange={(event) => setZodiacOffsets(event.target.value)} placeholder="+1234567911" />
+            </div>
+          )}
+
           <div className="mt-4">
-            <Label>九肖取值</Label>
-            <Input value={zodiacOffsets} onChange={(event) => setZodiacOffsets(event.target.value)} placeholder="+1234567911" />
+            <Label>取位循环（可选）</Label>
+            <Input value={positionPattern} onChange={(event) => setPositionPattern(event.target.value)} placeholder="例如 平1234567.1234567. 或 平7654321.7654321." />
           </div>
-        )}
-
-        <div className="mt-4">
-          <Label>取位循环（可选）</Label>
-          <Input value={positionPattern} onChange={(event) => setPositionPattern(event.target.value)} placeholder="例如 平1234567.1234567. 或 平7654321.7654321." />
-        </div>
+        </details>
       </Panel>
 
       <Panel className="p-5 2xl:sticky 2xl:top-28 2xl:self-start">
@@ -2544,7 +2844,12 @@ function NewRuleBuilder({
             )}
           </div>
         </div>
-        {saveStatus && <p className={cn("mt-4 rounded-lg border p-3 text-sm", saveStatus.startsWith("暂") ? "border-rose-300/25 bg-rose-300/10 text-rose-100" : "border-emerald-300/25 bg-emerald-300/10 text-emerald-100")}>{saveStatus}</p>}
+        {saveStatus && (
+          <div className={cn("mt-4 rounded-lg border p-3 text-sm", saveStatus.includes("失败") || saveStatus.includes("暂不能") || saveStatus.includes("已存在") ? "border-rose-300/25 bg-rose-300/10 text-rose-100" : "border-emerald-300/25 bg-emerald-300/10 text-emerald-100")}>
+            {saveStatus}
+            {!saveStatus.includes("失败") && !saveStatus.includes("暂不能") && !saveStatus.includes("已存在") && <Link href="/rules" className="ml-3 text-cyan-100 underline-offset-4 hover:underline">去公式管理查看</Link>}
+          </div>
+        )}
         <Button className="mt-4 w-full" variant="primary" type="button" onClick={() => void save()}><Save className="h-4 w-4" />保存到规则库</Button>
       </Panel>
     </div>
@@ -2560,7 +2865,7 @@ function RuleForm({
   periodIndex,
 }: {
   selectedRule?: RuleRecord;
-  onSave: (formData: FormData) => Promise<void>;
+  onSave: (formData: FormData) => Promise<RuleSaveResult>;
   compact?: boolean;
   draw?: ReturnType<typeof normalizeDraw>;
   config?: ReturnType<typeof useRuleQuantStore.getState>["config"];
@@ -2568,12 +2873,13 @@ function RuleForm({
 }) {
   const [formulaText, setFormulaText] = useState(selectedRule?.formula ?? "平1 + 特码尾");
   const [trialResult, setTrialResult] = useState<
-    | { rule: RuleRecord; calculation: ReturnType<typeof calculateRule>; error?: never }
+    | { rule: RuleRecord; calculation: RuleCalculation; error?: never }
     | { error: string; rule?: never; calculation?: never }
     | null
   >(null);
   const formRef = useRef<HTMLFormElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [saveStatus, setSaveStatus] = useState("");
   const variableGroups: Array<{ title: string; items: Array<{ label: string; value: string }> }> = [
     {
       title: "位置",
@@ -2658,7 +2964,7 @@ function RuleForm({
     if (!formData) return;
     try {
       const rule = buildRuleFromFormData(formData, { existingRule: selectedRule, forceNew: !selectedRule });
-      const calculation = calculateRule(rule, draw, config, { periodIndex });
+      const calculation = runRuleCalculation(rule, draw, config, { periodIndex });
       setTrialResult({ rule, calculation });
     } catch (error) {
       setTrialResult({ error: error instanceof Error ? error.message : String(error) });
@@ -2672,13 +2978,19 @@ function RuleForm({
     if (draw && config) {
       try {
         const rule = buildRuleFromFormData(formData, { existingRule: selectedRule, forceNew: !selectedRule });
-        calculateRule(rule, draw, config, { periodIndex });
+        runRuleCalculation(rule, draw, config, { periodIndex });
       } catch (error) {
-        setTrialResult({ error: `保存前检查失败：${error instanceof Error ? error.message : String(error)}` });
+        const message = `保存前检查失败：${error instanceof Error ? error.message : String(error)}`;
+        setTrialResult({ error: message });
+        setSaveStatus(message);
         return;
       }
     }
-    await onSave(formData);
+    const result = await onSave(formData);
+    setSaveStatus(result.message);
+    if (!result.ok) {
+      setTrialResult({ error: result.message });
+    }
   }
 
   return (
@@ -2713,6 +3025,12 @@ function RuleForm({
           {trialResult?.error && (
             <div className="mt-3 rounded-lg border border-rose-300/25 bg-rose-300/10 p-3 text-sm text-rose-100">
               {trialResult.error}
+            </div>
+          )}
+          {saveStatus && (
+            <div className={cn("mt-3 rounded-lg border p-3 text-sm", saveStatus.includes("失败") || saveStatus.includes("暂不能") || saveStatus.includes("已存在") ? "border-rose-300/25 bg-rose-300/10 text-rose-100" : "border-emerald-300/25 bg-emerald-300/10 text-emerald-100")}>
+              {saveStatus}
+              {!saveStatus.includes("失败") && !saveStatus.includes("暂不能") && !saveStatus.includes("已存在") && <Link href="/rules" className="ml-3 text-cyan-100 underline-offset-4 hover:underline">去公式管理查看</Link>}
             </div>
           )}
           {trialResult?.calculation && (
@@ -2832,10 +3150,10 @@ function RuleForm({
 }
 
 function FormulaWorkbench({ rule, draw, config, periodIndex }: { rule: RuleRecord; draw?: ReturnType<typeof normalizeDraw>; config: ReturnType<typeof useRuleQuantStore.getState>["config"]; periodIndex?: number }) {
-  const result = useMemo<{ calculation: ReturnType<typeof calculateRule>; error?: never } | { error: string; calculation?: never } | null>(() => {
+  const result = useMemo<{ calculation: RuleCalculation; error?: never } | { error: string; calculation?: never } | null>(() => {
     if (!draw) return null;
     try {
-      return { calculation: calculateRule(rule, draw, config, { periodIndex }) };
+      return { calculation: runRuleCalculation(rule, draw, config, { periodIndex }) };
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) };
     }
@@ -2972,6 +3290,28 @@ function isCandidateNumber(candidate: CandidateNumber | CandidateZodiac): candid
 }
 
 function EvidenceList({ title, items, tone }: { title: string; items: CandidateEvidence[]; tone: "green" | "rose" }) {
+  const primaryItems = items.slice(0, 3);
+  const restItems = items.slice(3);
+  const renderEvidence = (item: CandidateEvidence, index: number) => (
+    <div key={`${item.ruleId}-${item.action}-${index}`} className="rounded-md border border-white/[0.06] bg-white/[0.03] p-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="truncate text-sm text-slate-200">{item.ruleName}</p>
+        <span className="font-mono text-xs text-cyan-100">{item.scoreDelta > 0 ? "+" : ""}{item.scoreDelta}</span>
+      </div>
+      <p className="mt-1 font-mono text-xs text-cyan-100">{item.formula}</p>
+      <p className="mt-1 text-xs text-slate-500">对象：{item.targets.join("、")} · 历史表现 {item.successRate}% · 近10期 {item.recentRate}%</p>
+      <p className="mt-1 text-xs text-slate-500">来源：{sourceTypeLabel(item.sourceType)} · 用户提供：{(item.sourceType ?? "user_provided") === "user_provided" ? "是" : "否"} · 当前连对 {item.currentStreak} · 连错 {item.wrongStreak ?? 0}</p>
+      <details className="mt-2">
+        <summary className="cursor-pointer text-xs text-slate-400">查看公式过程</summary>
+        <div className="mt-2 space-y-1">
+          {item.process.slice(0, 6).map((line) => (
+            <p key={line} className="font-mono text-xs text-slate-500">{line}</p>
+          ))}
+        </div>
+      </details>
+    </div>
+  );
+
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
@@ -2980,25 +3320,15 @@ function EvidenceList({ title, items, tone }: { title: string; items: CandidateE
       </div>
       <div className="space-y-2">
         {items.length === 0 && <p className="rounded-md border border-white/[0.06] bg-white/[0.03] p-3 text-sm text-slate-500">暂无对应证据</p>}
-        {items.slice(0, 12).map((item, index) => (
-          <div key={`${item.ruleId}-${item.action}-${index}`} className="rounded-md border border-white/[0.06] bg-white/[0.03] p-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="truncate text-sm text-slate-200">{item.ruleName}</p>
-              <span className="font-mono text-xs text-cyan-100">{item.scoreDelta > 0 ? "+" : ""}{item.scoreDelta}</span>
+        {primaryItems.map(renderEvidence)}
+        {restItems.length > 0 && (
+          <details className="rounded-md border border-white/[0.06] bg-black/15 p-3">
+            <summary className="cursor-pointer text-sm text-slate-300">查看全部 {items.length} 条证据</summary>
+            <div className="mt-3 space-y-2">
+              {restItems.map((item, index) => renderEvidence(item, index + 3))}
             </div>
-            <p className="mt-1 font-mono text-xs text-cyan-100">{item.formula}</p>
-            <p className="mt-1 text-xs text-slate-500">对象：{item.targets.join("、")} · 历史表现 {item.successRate}% · 近10期 {item.recentRate}%</p>
-            <p className="mt-1 text-xs text-slate-500">来源：{sourceTypeLabel(item.sourceType)} · 用户提供：{(item.sourceType ?? "user_provided") === "user_provided" ? "是" : "否"} · 当前连对 {item.currentStreak} · 连错 {item.wrongStreak ?? 0}</p>
-            <details className="mt-2">
-              <summary className="cursor-pointer text-xs text-slate-400">查看公式过程</summary>
-              <div className="mt-2 space-y-1">
-                {item.process.slice(0, 6).map((line) => (
-                  <p key={line} className="font-mono text-xs text-slate-500">{line}</p>
-                ))}
-              </div>
-            </details>
-          </div>
-        ))}
+          </details>
+        )}
       </div>
     </div>
   );
@@ -3155,6 +3485,28 @@ function HitBadge({ hit, label }: { hit: boolean; label: string }) {
   return <Badge tone={hit ? "green" : "rose"}>{label}{hit ? "中" : "未中"}</Badge>;
 }
 
+function HistoryHitBadge({ hit, label }: { hit?: boolean; label: string }) {
+  if (hit === undefined) return <Badge tone="slate">{label}待开奖</Badge>;
+  return <Badge tone={hit ? "green" : "rose"}>{label}{hit ? "中" : "未中"}</Badge>;
+}
+
+function formatHistoryTime(value?: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("zh-CN", { hour12: false });
+}
+
+function historyNumberLine(items: ReferenceHistoryNumber[], limit = items.length) {
+  const visible = items.slice(0, limit);
+  return visible.map((item) => `${padNumber(item.number)} ${item.zodiac}`).join("、") || "-";
+}
+
+function historyZodiacLine(items: ReferenceHistoryZodiac[], limit = items.length) {
+  const visible = items.slice(0, limit);
+  return visible.map((item) => `${item.zodiac}(${item.numbers.map(candidateNumberLabel).join("、")})`).join("、") || "-";
+}
+
 function ReferenceObservationPanel({ report }: { report: ReferenceObservationReport }) {
   const rows = [...report.items].reverse();
   return (
@@ -3195,11 +3547,250 @@ function ReferenceObservationPanel({ report }: { report: ReferenceObservationRep
                     <HitBadge hit={item.hitZodiac9} label="肖9" />
                   </div>
                 </div>
-                <p className="mt-2 font-mono text-xs text-cyan-100">Top8：{item.top8Numbers.map(padNumber).join("、") || "-"}</p>
+                <div className="mt-3 grid grid-cols-1 gap-2 text-xs lg:grid-cols-2">
+                  <p className="font-mono text-cyan-100">Top8：{item.top8Numbers.map(padNumber).join("、") || "-"}</p>
+                  <p className="font-mono text-cyan-100">Top12：{item.top12Numbers.map(padNumber).join("、") || "-"}</p>
+                  <p className="font-mono text-cyan-100 lg:col-span-2">Top18：{item.top18Numbers.map(padNumber).join("、") || "-"}</p>
+                  <p className="font-mono text-amber-100">生肖Top7：{item.top7Zodiacs.join("、") || "-"}</p>
+                  <p className="font-mono text-amber-100">生肖Top9：{item.top9Zodiacs.join("、") || "-"}</p>
+                </div>
               </div>
             ))}
           </div>
         </>
+      )}
+    </Panel>
+  );
+}
+
+function ReferenceHistoryNumberList({ items, config, limit }: { items: ReferenceHistoryNumber[]; config: RuleQuantConfig; limit?: number }) {
+  const displayItems = limit ? items.slice(0, limit) : items;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {displayItems.map((item, index) => (
+        <span
+          key={`${item.number}-${index}`}
+          className={cn(
+            "rounded-md border px-2 py-1 font-mono text-xs",
+            item.hit ? "border-emerald-300/45 bg-emerald-300/14 text-emerald-50" : "border-white/[0.08] bg-white/[0.04] text-cyan-50",
+          )}
+          title={`${padNumber(item.number)} ${item.zodiac}，排名 ${item.rank}，支持 ${item.supportCount}，反对 ${item.opposeCount}`}
+        >
+          {item.rank ? `${item.rank}. ` : ""}{numberWithZodiac(item.number, config)}{item.hit ? " 命中" : ""}
+        </span>
+      ))}
+      {limit && items.length > limit ? <span className="text-xs text-slate-500">+{items.length - limit}</span> : null}
+      {!displayItems.length ? <span className="text-xs text-slate-500">暂无</span> : null}
+    </div>
+  );
+}
+
+function ReferenceHistoryZodiacList({ items }: { items: ReferenceHistoryZodiac[] }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {items.map((item, index) => (
+        <span
+          key={`${item.zodiac}-${index}`}
+          className={cn(
+            "rounded-md border px-2 py-1 text-xs",
+            item.hit ? "border-emerald-300/45 bg-emerald-300/14 text-emerald-50" : "border-violet-300/15 bg-violet-300/[0.07] text-violet-50",
+          )}
+          title={`${item.zodiac}，排名 ${item.rank}，支持 ${item.supportCount}，反对 ${item.opposeCount}`}
+        >
+          {item.rank ? `${item.rank}. ` : ""}{item.zodiac}{item.hit ? " 命中" : ""}
+        </span>
+      ))}
+      {!items.length ? <span className="text-xs text-slate-500">暂无</span> : null}
+    </div>
+  );
+}
+
+function ReferenceHistoryHitSummary({ record }: { record: ResolvedReferenceHistoryItem }) {
+  if (!record.actualSpecial) {
+    return <Badge tone="yellow">等待下一期开奖</Badge>;
+  }
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Badge tone={record.hitTop8 ? "green" : "rose"}>Top8{record.hitTop8 ? "中" : "未中"}</Badge>
+      <Badge tone={record.hitTop12 ? "green" : "rose"}>Top12{record.hitTop12 ? "中" : "未中"}</Badge>
+      <Badge tone={record.hitTop18 ? "green" : "rose"}>Top18{record.hitTop18 ? "中" : "未中"}</Badge>
+      <Badge tone={record.hitZodiac7 ? "green" : "rose"}>肖7{record.hitZodiac7 ? "中" : "未中"}</Badge>
+      <Badge tone={record.hitZodiac9 ? "green" : "rose"}>肖9{record.hitZodiac9 ? "中" : "未中"}</Badge>
+    </div>
+  );
+}
+
+function ReferenceHistoryPanel({
+  records,
+  config,
+  onDelete,
+  onClear,
+  onExportJson,
+  onExportExcel,
+  onExportWord,
+  onExportText,
+}: {
+  records: ResolvedReferenceHistoryItem[];
+  config: RuleQuantConfig;
+  onDelete: (recordId: string) => void;
+  onClear: () => void;
+  onExportJson: () => void;
+  onExportExcel: () => void;
+  onExportWord: () => void;
+  onExportText: () => void;
+}) {
+  const [expandedId, setExpandedId] = useState(records[0]?.id ?? "");
+  const visibleRecords = records.slice(0, 30);
+
+  useEffect(() => {
+    if (!records.length) {
+      setExpandedId("");
+      return;
+    }
+    setExpandedId((current) => (current && records.some((record) => record.id === current) ? current : records[0].id));
+  }, [records]);
+
+  return (
+    <Panel className="p-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h3 className="font-semibold text-white">综合推荐档案</h3>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+            这里保存每次生成推荐时的完整快照：Top8、Top12、Top16、Top18 号码、全量49号码、生肖Top7/Top8/Top9、全量12生肖、公式数量、证据数量和后续开奖命中情况。它和上面的近10期观察不同，这里是实际保存下来的复盘记录。
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" disabled={!records.length} onClick={onExportJson}><FileJson className="h-4 w-4" />JSON</Button>
+          <Button size="sm" disabled={!records.length} onClick={onExportExcel}><Download className="h-4 w-4" />Excel</Button>
+          <Button size="sm" disabled={!records.length} onClick={onExportWord}><FileDown className="h-4 w-4" />Word</Button>
+          <Button size="sm" disabled={!records.length} onClick={onExportText}><Download className="h-4 w-4" />文本</Button>
+          <Button size="sm" variant="danger" disabled={!records.length} onClick={onClear}>清空记录</Button>
+        </div>
+      </div>
+
+      {!records.length ? (
+        <div className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.03] p-4 text-sm text-slate-500">
+          暂无保存记录。打开或重新生成综合参考结果后，系统会自动保存；也可以点击“保存本次推荐”手动保存。
+        </div>
+      ) : (
+        <div className="mt-4 space-y-3">
+          {visibleRecords.map((record) => {
+            const expanded = expandedId === record.id;
+            const actualDrawLabel = record.actualSpecial ? `${record.actualNextIssue}期：${numberWithZodiac(record.actualSpecial, config)}` : "待开奖";
+            return (
+              <div key={record.id} className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-4">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                  <button type="button" className="min-w-0 text-left" onClick={() => setExpandedId(expanded ? "" : record.id)}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone={record.saveType === "manual" ? "cyan" : "green"}>{record.saveType === "manual" ? "手动保存" : "自动保存"}</Badge>
+                      <span className="font-semibold text-white">{record.baseIssue ?? "-"} 期综合推荐</span>
+                      <span className="text-xs text-slate-500">保存 {new Date(record.savedAt).toLocaleString("zh-CN", { hour12: false })}</span>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">
+                      最新开奖 {record.latestNumbers.map((number) => numberWithZodiac(number, config)).join("  ")} · 参与公式 {record.ruleCount} 条 · 证据 {record.signalCount} 条 · 后续开奖 {actualDrawLabel}
+                    </p>
+                  </button>
+                  <div className="flex flex-col gap-2 xl:items-end">
+                    <ReferenceHistoryHitSummary record={record} />
+                    <div className="flex flex-wrap gap-2 xl:justify-end">
+                      <Button size="sm" onClick={() => setExpandedId(expanded ? "" : record.id)}>{expanded ? "收起明细" : "展开明细"}</Button>
+                      <Button size="sm" variant="danger" onClick={() => onDelete(record.id)}>删除</Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  <div>
+                    <p className="mb-2 text-xs text-slate-500">重点号码 Top8</p>
+                    <ReferenceHistoryNumberList items={record.topNumbers8} config={config} />
+                  </div>
+                  <div>
+                    <p className="mb-2 text-xs text-slate-500">生肖 Top7</p>
+                    <ReferenceHistoryZodiacList items={record.topZodiacs7} />
+                  </div>
+                </div>
+
+                {expanded && (
+                  <div className="mt-4 space-y-4 border-t border-white/[0.08] pt-4">
+                    <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-md border border-white/[0.08] bg-black/20 p-3"><p className="text-slate-500">数据来源</p><p className="mt-1 text-white">{record.dataSourceLabel ?? "-"}</p></div>
+                      <div className="rounded-md border border-white/[0.08] bg-black/20 p-3"><p className="text-slate-500">开奖记录</p><p className="mt-1 text-white">{record.recordCount} 期</p></div>
+                      <div className="rounded-md border border-white/[0.08] bg-black/20 p-3"><p className="text-slate-500">证据构成</p><p className="mt-1 text-white">支持 {record.supportSignalCount ?? 0} / 排除 {record.opposeSignalCount ?? 0}</p></div>
+                      <div className="rounded-md border border-white/[0.08] bg-black/20 p-3"><p className="text-slate-500">命中位置</p><p className="mt-1 text-white">{record.outcome?.hitNumberRank ? `第 ${record.outcome.hitNumberRank} 名 / ${record.outcome.hitBand}` : "待核对"}</p></div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+                      <div>
+                        <p className="mb-2 text-xs text-slate-500">Top8 号码</p>
+                        <ReferenceHistoryNumberList items={record.topNumbers8} config={config} />
+                      </div>
+                      <div>
+                        <p className="mb-2 text-xs text-slate-500">Top12 号码</p>
+                        <ReferenceHistoryNumberList items={record.topNumbers12} config={config} />
+                      </div>
+                      <div>
+                        <p className="mb-2 text-xs text-slate-500">Top16 号码</p>
+                        <ReferenceHistoryNumberList items={record.topNumbers16} config={config} />
+                      </div>
+                      <div>
+                        <p className="mb-2 text-xs text-slate-500">Top18 号码</p>
+                        <ReferenceHistoryNumberList items={record.topNumbers18} config={config} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                      <div>
+                        <p className="mb-2 text-xs text-slate-500">生肖 Top7</p>
+                        <ReferenceHistoryZodiacList items={record.topZodiacs7} />
+                      </div>
+                      <div>
+                        <p className="mb-2 text-xs text-slate-500">生肖 Top8</p>
+                        <ReferenceHistoryZodiacList items={record.topZodiacs8} />
+                      </div>
+                      <div>
+                        <p className="mb-2 text-xs text-slate-500">生肖 Top9</p>
+                        <ReferenceHistoryZodiacList items={record.topZodiacs9} />
+                      </div>
+                    </div>
+                    <details className="rounded-md border border-white/[0.08] bg-black/15 p-3">
+                      <summary className="cursor-pointer text-sm text-slate-300">查看全量 49 号码排序</summary>
+                      <div className="mt-3">
+                        <ReferenceHistoryNumberList items={record.allNumbers} config={config} />
+                      </div>
+                    </details>
+                    <details className="rounded-md border border-white/[0.08] bg-black/15 p-3">
+                      <summary className="cursor-pointer text-sm text-slate-300">查看全量 12 生肖排序</summary>
+                      <div className="mt-3">
+                        <ReferenceHistoryZodiacList items={record.allZodiacs} />
+                      </div>
+                    </details>
+                    <details className="rounded-md border border-white/[0.08] bg-black/15 p-3">
+                      <summary className="cursor-pointer text-sm text-slate-300">查看证据摘要</summary>
+                      <div className="mt-3 grid gap-2">
+                        {record.evidenceSummary.slice(0, 40).map((item, index) => (
+                          <div key={`${item.ruleId}-${index}`} className="rounded-md border border-white/[0.06] bg-white/[0.025] p-2 text-xs text-slate-300">
+                            <span className={item.action === "include" ? "text-emerald-200" : "text-rose-200"}>{item.action === "include" ? "支持" : "排除"}</span>
+                            <span className="ml-2 text-white">{item.ruleName}</span>
+                            <span className="ml-2 text-slate-500">{item.targetType}：{item.targets.join("、")} · 分 {item.scoreDelta} · 历史 {item.successRate}% · 近况 {item.recentRate}%</span>
+                          </div>
+                        ))}
+                        {!record.evidenceSummary.length && <p className="text-xs text-slate-500">暂无证据摘要。</p>}
+                        {record.evidenceSummary.length > 40 && <p className="text-xs text-slate-500">仅展示前 40 条，完整证据请导出 JSON/Excel。</p>}
+                      </div>
+                    </details>
+                    <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                      <div className="rounded-md border border-white/[0.08] bg-black/20 p-3"><p className="text-slate-500">生成时间</p><p className="mt-1 text-white">{new Date(record.generatedAt).toLocaleString("zh-CN", { hour12: false })}</p></div>
+                      <div className="rounded-md border border-white/[0.08] bg-black/20 p-3"><p className="text-slate-500">备注</p><p className="mt-1 text-white">{record.note ?? "-"}</p></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {records.length > visibleRecords.length && (
+            <p className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-3 text-xs text-slate-500">
+              已保存 {records.length} 条，页面先展示最近 {visibleRecords.length} 条；完整内容请导出 JSON 或 Excel 查看。
+            </p>
+          )}
+        </div>
       )}
     </Panel>
   );
@@ -3331,11 +3922,12 @@ function RuleUnderstandingPage() {
     ["号码属性", "头=十位，尾=个位，合=十位+个位，合尾=合数个位，段位按 01-49 分 7 段。"],
     ["生肖表", "当前默认使用 2026 年生肖表，生肖顺序为马、蛇、龙、兔、虎、牛、鼠、猪、狗、鸡、猴、羊。"],
     ["波色和五行", "波色值为红=0、蓝=1、绿=2；五行值为金=1、木=2、水=3、火=4、土=5，可在设置里校验和修改。"],
+    ["平码/平位/生肖位", "平三码、平四码、平3、平4 都是开奖号码本身；平3位、平4位是该号码对应生肖在固定十二生肖序里的位置：鼠1、牛2、虎3、兔4、龙5、蛇6、马7、羊8、猴9、鸡10、狗11、猪12。单独写“位/平位/定位”才算未锁定变量。"],
     ["杀类规则", "杀一肖、杀一尾、杀一合、杀一头、杀一段、杀一行都是排除规则：下期没开到才算正确。"],
     ["候选类规则", "七尾、八肖、九肖是候选支持规则：下期落在集合里才算正确。七尾不是杀尾。"],
     ["时间关系", "默认用第 N 期计算，用第 N+1 期的特码验证；八肖管两期验证 N+1 和 N+2；期合按后三位期数计算，例如 174 期合=1+7+4=12。"],
     ["归一化", "杀肖结果大于 49 减 48；杀合减 13；杀头减 5；杀段减 7；出现 0 等异常要提示。"],
-    ["待人工确认", "遇到“位”等未锁定变量、样例对不上、表值不一致、类型不明确时，不要猜，标记待人工确认。"],
+    ["待人工确认", "遇到单独的“位/平位/定位”、样例对不上、表值不一致、类型不明确时，不要猜，标记待人工确认。"],
     ["公式校验", "每条公式应校验变量取值、计算过程、原始结果、归一化、映射结果和下一期对错判断。"],
     ["逐期明细", "每条公式都要展示每期完整计算流水账：当前期、变量、过程、结果处理、下一期开奖和对错。"],
     ["综合参考", "综合参考合并已启用且可计算的用户提供公式；样例未核对不拦截，计算报错、变量不确定、停用或手动退出的公式不参与。"],
@@ -3366,6 +3958,7 @@ function HelpContent() {
     ["L序是什么", "落球顺序：n1,n2,n3,n4,n5,n6,special，对应 L1-L7。"],
     ["D序是什么", "只把 6 个平码按大小排序得到 D1-D6，D7/特码仍然是原始特码。"],
     ["平位和特码", "平1-平7 会按规则的 L/D 模式取值；特码永远等于 special。"],
+    ["平3位和平三码区别", "平三码、平四码、平3、平4 是开奖号码本身；平3位、平4位 是该号码生肖在固定十二生肖序中的位置，鼠1到猪12。"],
     ["头尾合合尾", "头为十位，尾为个位，合为号码各位相加，合尾为合数个位。"],
     ["段位", "01-07 为 1段，08-14 为 2段，依此到 43-49 为 7段。"],
     ["波色值", "红=0，蓝=1，绿=2，配置中心可编辑。"],

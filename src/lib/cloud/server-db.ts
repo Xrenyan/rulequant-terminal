@@ -71,7 +71,7 @@ async function readUpdatedAt() {
   const rows = await sql<{ updated_at: Date }[]>`
     select max(updated_at) as updated_at
     from rulequant_state
-    where key in ('draws', 'rules', 'samples', 'config', 'logs', 'backups')
+    where key in ('draws', 'rules', 'samples', 'config', 'logs', 'backups', 'referenceHistory')
   `;
   return rows[0]?.updated_at?.toISOString();
 }
@@ -87,13 +87,14 @@ export async function loadCloudState(): Promise<RuleQuantCloudState> {
     };
   }
 
-  const [draws, rules, samples, config, logs, backups, updatedAt] = await Promise.all([
+  const [draws, rules, samples, config, logs, backups, referenceHistory, updatedAt] = await Promise.all([
     readJson<RuleQuantCloudState["draws"]>("draws", []),
     readJson<RuleQuantCloudState["rules"]>("rules", []),
     readJson<RuleQuantCloudState["samples"]>("samples", []),
     readJson<RuleQuantConfig | undefined>("config", undefined),
     readJson<RuleQuantCloudState["logs"]>("logs", []),
     readJson<RuleQuantCloudState["backups"]>("backups", []),
+    readJson<RuleQuantCloudState["referenceHistory"]>("referenceHistory", []),
     readUpdatedAt(),
   ]);
 
@@ -105,6 +106,7 @@ export async function loadCloudState(): Promise<RuleQuantCloudState> {
     config,
     logs,
     backups,
+    referenceHistory,
     meta: {
       enabled: true,
       source: "postgres",
@@ -124,6 +126,7 @@ export async function saveCloudStatePatch(patch: Partial<Omit<RuleQuantCloudStat
   if (patch.config) writes.push(writeJson("config", patch.config));
   if (patch.logs) writes.push(writeJson("logs", patch.logs));
   if (patch.backups) writes.push(writeJson("backups", patch.backups));
+  if (patch.referenceHistory) writes.push(writeJson("referenceHistory", patch.referenceHistory));
   await Promise.all(writes);
   return loadCloudState();
 }

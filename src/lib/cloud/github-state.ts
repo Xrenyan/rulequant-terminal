@@ -94,6 +94,7 @@ export async function loadGitHubState(): Promise<RuleQuantCloudState> {
     config: result.state.config,
     logs: result.state.logs ?? [],
     backups: result.state.backups ?? [],
+    referenceHistory: result.state.referenceHistory ?? [],
     meta: {
       enabled: true,
       source: "github",
@@ -118,6 +119,7 @@ export async function saveGitHubStatePatch(patch: Partial<Omit<RuleQuantCloudSta
     config: patch.config ?? current.config,
     logs: patch.logs ?? current.logs ?? [],
     backups: patch.backups ?? current.backups ?? [],
+    referenceHistory: patch.referenceHistory ?? current.referenceHistory ?? [],
     meta: {
       enabled: true,
       source: "github",

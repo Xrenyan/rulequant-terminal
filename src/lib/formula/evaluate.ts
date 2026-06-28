@@ -3,6 +3,21 @@ import type { FormulaEvaluation, NormalizedDraw, OrderMode, RuleQuantConfig } fr
 
 type Token = { type: "number" | "identifier" | "operator" | "paren"; value: string };
 
+const FIXED_ZODIAC_POSITION_ORDER = ["鼠", "牛", "虎", "兔", "龙", "蛇", "马", "羊", "猴", "鸡", "狗", "猪"];
+
+function normalizeFormulaText(formula: string) {
+  return formula
+    .replace(/([1-7])\uFE0F?\u20E3/g, "$1")
+    .replace(/[，、；;]/g, "+");
+}
+
+function fixedZodiacPosition(number: number, config: RuleQuantConfig): number {
+  const zodiac = getNumberAttributes(number, config).zodiac;
+  const index = FIXED_ZODIAC_POSITION_ORDER.indexOf(zodiac);
+  if (index < 0) throw new Error(`未知生肖位置：${zodiac}`);
+  return index + 1;
+}
+
 function tokenize(formula: string): Token[] {
   const tokens: Token[] = [];
   let i = 0;
@@ -79,6 +94,10 @@ function attrValue(name: string, number: number, config: RuleQuantConfig): numbe
     case "码":
     case "号码":
       return attrs.number;
+    case "位":
+    case "位置":
+    case "生肖位":
+      return fixedZodiacPosition(number, config);
     default:
       throw new Error(`未知属性函数：${name}`);
   }
@@ -150,6 +169,15 @@ function resolveIdentifier(name: string, draw: NormalizedDraw, orderMode: OrderM
   const dMatch = name.match(/^D([1-7])$/i);
   if (dMatch) return draw.dOrder[Number(dMatch[1]) - 1];
 
+  const prefixedCodeMatch = name.match(/^(平|落)码([1-7一二三四五六七])(.+)?$/);
+  if (prefixedCodeMatch) {
+    const index = positionIndex(prefixedCodeMatch[2]);
+    if (!index) throw new Error(`未知位置：${name}`);
+    const baseNumber = prefixedCodeMatch[1] === "落" ? draw.lOrder[index - 1] : order[index - 1];
+    const suffix = prefixedCodeMatch[3];
+    return suffix ? attrValue(suffix, baseNumber, config) : baseNumber;
+  }
+
   const positionMatch = name.match(/^(平|落)([1-7一二三四五六七])$/);
   if (positionMatch) {
     const index = positionIndex(positionMatch[2]);
@@ -180,7 +208,8 @@ export function evaluateFormula(
   config: RuleQuantConfig,
   orderMode: OrderMode,
 ): FormulaEvaluation {
-  const tokens = tokenize(formula);
+  const expression = normalizeFormulaText(formula);
+  const tokens = tokenize(expression);
   let index = 0;
   const variables: Record<string, number> = {};
   const trace: string[] = [];
@@ -255,5 +284,5 @@ export function evaluateFormula(
     throw new Error(`公式存在未消费片段：${tokens.slice(index).map((item) => item.value).join("")}`);
   }
 
-  return { value, expression: formula, variables, trace };
+  return { value, expression, variables, trace };
 }

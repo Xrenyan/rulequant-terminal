@@ -294,7 +294,7 @@ function formulaForPeriod(
 ): { formula: string; patternTrace: string[]; position: ReturnType<typeof periodPosition> } {
   const position = periodPosition(rule, current, context);
   if (!position) return { formula: rule.formula, patternTrace: [], position };
-  const formula = rule.formula.replace(/([平落])([1-7])/g, (_match, prefix) => `${prefix}${position.position}`);
+  const formula = rule.formula.replace(/([平落])([1-7])(?![\p{Script=Han}\dA-Za-z])/gu, (_match, prefix) => `${prefix}${position.position}`);
   return {
     formula,
     patternTrace: [`取位循环：第 ${position.periodIndex + 1} 期使用序列第 ${position.patternIndex + 1} 位 -> ${formula}`],

@@ -81,6 +81,81 @@ describe("formula engine", () => {
     });
   });
 
+  test("distinguishes code variables from fixed zodiac position variables", () => {
+    const result = evaluateFormula("平码3 + 平三码 + 平3 + 平四码 + 平4位 + 特码位", draw, defaultConfig, "L");
+
+    expect(result.value).toBe(66);
+    expect(result.variables).toMatchObject({
+      平码3: 7,
+      平三码: 7,
+      平3: 7,
+      平四码: 41,
+      平4位: 3,
+      特码位: 1,
+    });
+  });
+
+  test("normalizes pasted keycap digits and simple text separators", () => {
+    const result = evaluateFormula("平3、平4️⃣", draw, defaultConfig, "L");
+
+    expect(result.expression).toBe("平3+平4");
+    expect(result.value).toBe(48);
+    expect(result.variables).toMatchObject({
+      平3: 7,
+      平4: 41,
+    });
+  });
+
+  test("uses order mode for 平码 variables while 落码 stays in original draw order", () => {
+    const result = evaluateFormula("平三码 + 落三码 + 平3位", draw, defaultConfig, "D");
+
+    expect(result.value).toBe(27);
+    expect(result.variables).toMatchObject({
+      平三码: 13,
+      落三码: 7,
+      平3位: 7,
+    });
+  });
+
+  test("position pattern only rewrites whole 平/落 variables, not attribute variables", () => {
+    const keepAttributeRule: RuleRecord = {
+      id: "pattern-keeps-zodiac-position",
+      name: "取位不改平3位",
+      category: "include_zodiac",
+      orderMode: "L",
+      formula: "平3位",
+      normalizer: "auto",
+      target: "special_zodiac",
+      verifyMode: "next_special",
+      positionPattern: [5],
+      anchorIssue: "2026156",
+      anchorPatternIndex: 0,
+      periodSpan: 1,
+      enabled: true,
+      tags: [],
+      description: "",
+      sourceFile: "unit",
+      examples: [],
+      createdAt: "2026-06-28T00:00:00.000Z",
+      updatedAt: "2026-06-28T00:00:00.000Z",
+    };
+    const rewriteWholeVariableRule: RuleRecord = {
+      ...keepAttributeRule,
+      id: "pattern-rewrites-whole-position",
+      name: "取位改平1",
+      formula: "平1",
+    };
+
+    const attributeResult = calculateRule(keepAttributeRule, draw, defaultConfig, { periodIndex: 0 });
+    const wholeVariableResult = calculateRule(rewriteWholeVariableRule, draw, defaultConfig, { periodIndex: 0 });
+
+    expect(attributeResult.expression).toBe("平3位");
+    expect(attributeResult.rawResult).toBe(1);
+    expect(attributeResult.variables).toMatchObject({ 平3位: 1 });
+    expect(wholeVariableResult.expression).toBe("平5");
+    expect(wholeVariableResult.rawResult).toBe(draw.lOrder[4]);
+  });
+
   test("supports attribute calls and synonyms", () => {
     const result = evaluateFormula("尾(平1) + 合(平2) + 行(特码) + 波(特码)", draw, defaultConfig, "L");
 

@@ -1,11 +1,12 @@
 "use client";
 
 import { create } from "zustand";
-import { calculateRule } from "@/lib/formula-engine/formula-engine";
+import { runRuleCalculation } from "@/lib/rule-engine/rule-engine";
 import { defaultConfig } from "@/lib/config/default-config";
 import { seedConfig, seedDraws, seedRules, seedSampleCases } from "@/lib/data/seed";
 import { normalizeDraw } from "@/lib/engine/attributes";
-import { loadPersistedState, persistAll } from "@/lib/storage/db";
+import { loadPersistedState, persistAll, persistReferenceHistoryAndLogs } from "@/lib/storage/db";
+import { trimReferenceHistory } from "@/lib/reference-history/reference-history";
 import {
   addRuleToLibrary as addRuleDraftToLibrary,
   addRulesToLibrary as addRuleDraftsToLibrary,
@@ -15,7 +16,9 @@ import {
   type RuleLibraryDraft,
 } from "@/lib/rules/rule-library";
 import type { RuleQuantCloudState } from "@/lib/cloud/cloud-state";
-import type { DrawRecord, OperationLog, RuleLibraryBackup, RuleQuantConfig, RuleRecord, SampleCase } from "@/types/domain";
+import type { DrawRecord, OperationLog, ReferenceHistoryItem, RuleLibraryBackup, RuleQuantConfig, RuleRecord, SampleCase } from "@/types/domain";
+
+const REMOTE_CLOUD_STATE_ENDPOINT = "https://rulequant-terminal.vercel.app/api/cloud/state";
 
 type RuleQuantState = {
   draws: DrawRecord[];
@@ -23,12 +26,17 @@ type RuleQuantState = {
   samples: SampleCase[];
   operationLogs: OperationLog[];
   ruleBackups: RuleLibraryBackup[];
+  referenceHistory: ReferenceHistoryItem[];
   config: RuleQuantConfig;
   cloudStateMeta?: RuleQuantCloudState["meta"];
+  cloudPublishStatus: "idle" | "local_only" | "publishing" | "published" | "failed";
+  cloudPublishMessage: string;
+  lastCloudPublishAt?: string;
   hasHydrated: boolean;
   selectedRuleId: string;
   hydrate: () => Promise<void>;
   persist: () => Promise<void>;
+  publishCloudState: (reason?: string) => Promise<void>;
   resetSeed: () => Promise<void>;
   resetRules: () => Promise<void>;
   importDraws: (records: DrawRecord[]) => Promise<void>;
@@ -39,6 +47,9 @@ type RuleQuantState = {
   appendRules: (records: RuleRecord[], reason?: string) => Promise<AddRulesToLibraryResult>;
   restoreLastRuleBackup: () => Promise<void>;
   addOperationLog: (log: Omit<OperationLog, "id" | "timestamp"> & { timestamp?: string }) => Promise<void>;
+  saveReferenceHistory: (record: ReferenceHistoryItem) => Promise<void>;
+  deleteReferenceHistory: (recordId: string) => Promise<void>;
+  clearReferenceHistory: () => Promise<void>;
   upsertRule: (rule: RuleRecord) => Promise<AddRuleToLibraryResult>;
   duplicateRule: (ruleId: string) => Promise<void>;
   deleteRule: (ruleId: string) => Promise<void>;
@@ -51,7 +62,14 @@ type RuleQuantState = {
 };
 
 function sortDraws(draws: DrawRecord[]) {
-  return [...draws].sort((a, b) => a.issue.localeCompare(b.issue, "zh-CN", { numeric: true }));
+  return [...draws].sort((a, b) => {
+    const aNumber = /^\d+$/.test(a.issue) ? Number(a.issue) : undefined;
+    const bNumber = /^\d+$/.test(b.issue) ? Number(b.issue) : undefined;
+    if (aNumber !== undefined && bNumber !== undefined) return aNumber - bNumber;
+    if (aNumber !== undefined) return 1;
+    if (bNumber !== undefined) return -1;
+    return a.issue.localeCompare(b.issue, "zh-CN", { numeric: true });
+  });
 }
 
 function makeLog(input: Omit<OperationLog, "id" | "timestamp"> & { timestamp?: string }): OperationLog {
@@ -78,6 +96,10 @@ function trimLogs(logs: OperationLog[]) {
 
 function trimBackups(backups: RuleLibraryBackup[]) {
   return [...backups].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 12);
+}
+
+function isManualDraw(record: Pick<DrawRecord, "sourceUrl" | "rawAttributes">) {
+  return record.sourceUrl === "manual://user-input" || record.rawAttributes?.sourceType === "manual";
 }
 
 function normalizeRuleForLibrary(rule: RuleRecord, fallback?: RuleRecord): RuleRecord {
@@ -116,16 +138,28 @@ async function loadCloudStateFromApi(): Promise<RuleQuantCloudState | null> {
   if (typeof window === "undefined") return null;
 
   const staticBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-  const endpoints = [
-    "/api/cloud/state",
-    `${staticBasePath}/static-cloud-state.json`,
-    "/static-cloud-state.json",
-    "../static-cloud-state.json",
-  ].filter((endpoint, index, list) => endpoint && list.indexOf(endpoint) === index);
+  const isGithubPagesHost = window.location.hostname.endsWith("github.io");
+  const endpoints = (
+    isGithubPagesHost
+      ? [
+          REMOTE_CLOUD_STATE_ENDPOINT,
+          `${staticBasePath}/static-cloud-state.json`,
+          "/static-cloud-state.json",
+          "../static-cloud-state.json",
+        ]
+      : [
+          "/api/cloud/state",
+          REMOTE_CLOUD_STATE_ENDPOINT,
+          `${staticBasePath}/static-cloud-state.json`,
+          "/static-cloud-state.json",
+          "../static-cloud-state.json",
+        ]
+  ).filter((endpoint, index, list) => endpoint && list.indexOf(endpoint) === index);
 
   for (const endpoint of endpoints) {
     try {
-      const response = await fetch(endpoint, { cache: "no-store" });
+      const url = endpoint.includes("?") ? `${endpoint}&t=${Date.now()}` : `${endpoint}?t=${Date.now()}`;
+      const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) continue;
       const state = (await response.json()) as RuleQuantCloudState;
       if (state.meta?.enabled) return state;
@@ -142,24 +176,36 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
   samples: seedSampleCases,
   operationLogs: [],
   ruleBackups: [],
+  referenceHistory: [],
   config: seedConfig,
   cloudStateMeta: undefined,
+  cloudPublishStatus: "idle",
+  cloudPublishMessage: "",
+  lastCloudPublishAt: undefined,
   hasHydrated: false,
   selectedRuleId: seedRules[0]?.id ?? "",
   hydrate: async () => {
     const [persisted, cloud] = await Promise.all([loadPersistedState(), loadCloudStateFromApi()]);
-    const nextDraws = cloud?.draws.length ? cloud.draws : persisted.draws.length ? persisted.draws : seedDraws;
-    const nextRules = cloud?.rules.length ? mergeRulesWithSeedRules(cloud.rules) : persisted.rules.length ? mergeRulesWithSeedRules(persisted.rules) : mergeRulesWithSeedRules(seedRules);
-    const nextSamples = cloud?.samples.length ? cloud.samples : persisted.samples.length ? persisted.samples : seedSampleCases;
+    const cloudDraws = cloud?.draws ?? [];
+    const cloudRules = cloud?.rules ?? [];
+    const cloudSamples = cloud?.samples ?? [];
+    const cloudLogs = cloud?.logs ?? [];
+    const cloudBackups = cloud?.backups ?? [];
+    const cloudReferenceHistory = cloud?.referenceHistory ?? [];
+    const nextDraws = cloudDraws.length ? cloudDraws : persisted.draws.length ? persisted.draws : seedDraws;
+    const nextRules = cloudRules.length ? mergeRulesWithSeedRules(cloudRules) : persisted.rules.length ? mergeRulesWithSeedRules(persisted.rules) : mergeRulesWithSeedRules(seedRules);
+    const nextSamples = cloudSamples.length ? cloudSamples : persisted.samples.length ? persisted.samples : seedSampleCases;
     const nextConfig = normalizeConfigForCurrentRules(cloud?.config ?? persisted.config ?? seedConfig);
-    const nextLogs = cloud?.logs.length ? trimLogs([...cloud.logs, ...(persisted.logs ?? [])]) : trimLogs(persisted.logs ?? []);
-    const nextBackups = cloud?.backups.length ? trimBackups([...cloud.backups, ...(persisted.backups ?? [])]) : trimBackups(persisted.backups ?? []);
+    const nextLogs = cloudLogs.length ? trimLogs([...cloudLogs, ...(persisted.logs ?? [])]) : trimLogs(persisted.logs ?? []);
+    const nextBackups = cloudBackups.length ? trimBackups([...cloudBackups, ...(persisted.backups ?? [])]) : trimBackups(persisted.backups ?? []);
+    const nextReferenceHistory = cloudReferenceHistory.length ? trimReferenceHistory([...cloudReferenceHistory, ...(persisted.referenceHistory ?? [])]) : trimReferenceHistory(persisted.referenceHistory ?? []);
     set({
       draws: sortDraws(nextDraws),
       rules: nextRules,
       samples: nextSamples,
       operationLogs: nextLogs,
       ruleBackups: nextBackups,
+      referenceHistory: nextReferenceHistory,
       config: nextConfig,
       cloudStateMeta: cloud?.meta,
       selectedRuleId: nextRules[0]?.id ?? "",
@@ -175,7 +221,56 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
       config: state.config,
       logs: state.operationLogs,
       backups: state.ruleBackups,
+      referenceHistory: state.referenceHistory,
     });
+    void get().publishCloudState("auto");
+  },
+  publishCloudState: async (reason = "manual") => {
+    if (typeof window === "undefined") return;
+    const token = window.localStorage.getItem("rulequant:adminToken") || process.env.NEXT_PUBLIC_RULEQUANT_ADMIN_TOKEN || "";
+    const endpoint = window.location.hostname.endsWith("github.io") ? REMOTE_CLOUD_STATE_ENDPOINT : "/api/cloud/state";
+    const state = get();
+    set({ cloudPublishStatus: "publishing", cloudPublishMessage: "正在发布到云端..." });
+    try {
+      const response = await fetch(`${endpoint}?t=${Date.now()}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        cache: "no-store",
+        body: JSON.stringify({
+          draws: state.draws,
+          rules: state.rules,
+          samples: state.samples,
+          config: state.config,
+          logs: state.operationLogs,
+          backups: state.ruleBackups,
+          referenceHistory: state.referenceHistory,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { state?: RuleQuantCloudState; error?: string };
+      if (response.status === 401) {
+        set({
+          cloudPublishStatus: "local_only",
+          cloudPublishMessage: "已保存到本机。云端设置了管理员密钥，需要管理员发布后朋友才能看到。",
+        });
+        return;
+      }
+      if (!response.ok) throw new Error(data.error ?? `HTTP ${response.status}`);
+      const publishedAt = new Date().toISOString();
+      set({
+        cloudPublishStatus: "published",
+        cloudPublishMessage: reason === "auto" ? "已同步到云端" : "已发布到云端，朋友刷新后可看到。",
+        lastCloudPublishAt: publishedAt,
+        cloudStateMeta: data.state?.meta ?? state.cloudStateMeta,
+      });
+    } catch (error) {
+      set({
+        cloudPublishStatus: "failed",
+        cloudPublishMessage: `本机已保存，云端发布失败：${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
   },
   resetSeed: async () => {
     const nextRules = mergeRulesWithSeedRules(seedRules);
@@ -229,7 +324,9 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
       await get().persist();
       return;
     }
-    const nextDraws = sortDraws(records);
+    const merged = new Map(records.map((record) => [record.issue, record]));
+    get().draws.filter(isManualDraw).forEach((record) => merged.set(record.issue, record));
+    const nextDraws = sortDraws([...merged.values()]);
     const latest = nextDraws.at(-1);
     const log = makeLog({
       type: "sync_draws",
@@ -341,6 +438,35 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
     const log = makeLog(logInput);
     set({ operationLogs: trimLogs([log, ...get().operationLogs]) });
     await get().persist();
+  },
+  saveReferenceHistory: async (record) => {
+    const nextHistory = trimReferenceHistory([record, ...get().referenceHistory.filter((item) => item.id !== record.id)]);
+    const log = makeLog({
+      type: "generate_reference",
+      message: `${record.saveType === "manual" ? "手动保存" : "自动保存"}综合推荐记录：${record.baseIssue ?? "-"}期`,
+      issue: record.baseIssue,
+      formulaCount: record.ruleCount,
+      signalCount: record.signalCount,
+      details: {
+        top8: record.topNumbers8.map((item) => item.number),
+        top18: record.topNumbers18.map((item) => item.number),
+        top9Zodiacs: record.topZodiacs9.map((item) => item.zodiac),
+      },
+    });
+    set({
+      referenceHistory: nextHistory,
+      operationLogs: trimLogs([log, ...get().operationLogs]),
+    });
+    await persistReferenceHistoryAndLogs(get().referenceHistory, get().operationLogs);
+  },
+  deleteReferenceHistory: async (recordId) => {
+    set({ referenceHistory: get().referenceHistory.filter((record) => record.id !== recordId) });
+    await persistReferenceHistoryAndLogs(get().referenceHistory, get().operationLogs);
+  },
+  clearReferenceHistory: async () => {
+    const log = makeLog({ type: "generate_reference", message: "清空综合推荐历史记录" });
+    set({ referenceHistory: [], operationLogs: trimLogs([log, ...get().operationLogs]) });
+    await persistReferenceHistoryAndLogs(get().referenceHistory, get().operationLogs);
   },
   upsertRule: async (rule) => {
     return get().addRuleToLibrary(rule, get().rules.some((item) => item.id === rule.id) ? "修改公式" : "新增公式");
@@ -456,7 +582,7 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
     const draw = get().draws[0] ?? seedDraws[0];
     normalizeDraw(draw, config);
     const rule = get().rules[0] ?? seedRules[0];
-    calculateRule(rule, normalizeDraw(draw, config), config);
+    runRuleCalculation(rule, normalizeDraw(draw, config), config);
     const log = makeLog({ type: "rule_updated", message: "修改基础表配置，综合参考需要重新计算" });
     set({ config, operationLogs: trimLogs([log, ...get().operationLogs]) });
     await get().persist();

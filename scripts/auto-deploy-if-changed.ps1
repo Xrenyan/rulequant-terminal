@@ -156,15 +156,15 @@ try {
     throw "tests failed with code $LASTEXITCODE"
   }
 
-  pnpm build
-  if ($LASTEXITCODE -ne 0) {
-    throw "build failed with code $LASTEXITCODE"
-  }
-
   Publish-GithubPagesShare -ProjectRoot $ProjectRoot -Reason "Deploy-affecting code changed. Publishing GitHub Pages share URL first."
 
   $vercelStatus = "Vercel publish not attempted"
   try {
+    pnpm build
+    if ($LASTEXITCODE -ne 0) {
+      throw "local production build failed with code $LASTEXITCODE"
+    }
+
     & (Join-Path $ProjectRoot "scripts\publish-production.ps1") -ProjectRoot $ProjectRoot
     if ($LASTEXITCODE -ne 0) {
       throw "publish failed with code $LASTEXITCODE"
