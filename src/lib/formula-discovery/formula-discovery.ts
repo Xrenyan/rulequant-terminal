@@ -23,6 +23,72 @@ export type FormulaDiscoveryInput = {
 
 const DEFAULT_CATEGORIES: RuleCategory[] = ["kill_zodiac", "kill_tail", "kill_sum", "kill_head", "kill_segment", "kill_element"];
 const DEFAULT_VARIABLES = ["尾(平1)", "尾(平2)", "合(平3)", "段(平4)", "头(平5)", "特码合", "总数尾", "期尾"];
+const discoveryCache = new Map<string, FormulaDiscoveryCandidate[]>();
+
+function discoveryCacheKey(input: FormulaDiscoveryInput): string {
+  return JSON.stringify({
+    draws: input.draws.map((draw) => [draw.issue, draw.n1, draw.n2, draw.n3, draw.n4, draw.n5, draw.n6, draw.special]),
+    categories: input.categories ?? DEFAULT_CATEGORIES,
+    variablePool: input.variablePool ?? DEFAULT_VARIABLES,
+    limit: input.limit ?? 20,
+    maxTerms: input.maxTerms ?? 3,
+    trainRatio: input.trainRatio ?? 0.7,
+    minTrainingRate: input.minTrainingRate ?? 50,
+    minValidationRate: input.minValidationRate ?? 50,
+    config: input.config,
+  });
+}
+
+function cloneCandidate(candidate: FormulaDiscoveryCandidate): FormulaDiscoveryCandidate {
+  return {
+    ...candidate,
+    rule: {
+      ...candidate.rule,
+      positionPattern: [...candidate.rule.positionPattern],
+      tags: [...candidate.rule.tags],
+      examples: [...candidate.rule.examples],
+    },
+    last10: [...candidate.last10],
+    failedIssues: [...candidate.failedIssues],
+    details: candidate.details.map((detail) => ({
+      ...detail,
+      currentNumbers: [...detail.currentNumbers],
+      lOrder: [...detail.lOrder],
+      dOrder: [...detail.dOrder],
+      variables: { ...detail.variables },
+      process: [...detail.process],
+      normalizerSteps: [...detail.normalizerSteps],
+      finalResult: Array.isArray(detail.finalResult) ? [...detail.finalResult] as number[] | string[] : detail.finalResult,
+      mappedResult: [...detail.mappedResult],
+      secondaryMappedResult: detail.secondaryMappedResult ? [...detail.secondaryMappedResult] : undefined,
+      nextNumbers: detail.nextNumbers ? [...detail.nextNumbers] : undefined,
+      nextSpecialAttributes: detail.nextSpecialAttributes ? { ...detail.nextSpecialAttributes } : undefined,
+      futureChecks: detail.futureChecks.map((check) => ({ ...check, specialAttributes: { ...check.specialAttributes } })),
+    })),
+    trainingResult: {
+      ...candidate.trainingResult,
+      rule: { ...candidate.trainingResult.rule, positionPattern: [...candidate.trainingResult.rule.positionPattern], tags: [...candidate.trainingResult.rule.tags], examples: [...candidate.trainingResult.rule.examples] },
+      last10: [...candidate.trainingResult.last10],
+      failedIssues: [...candidate.trainingResult.failedIssues],
+      details: candidate.trainingResult.details,
+    },
+    validationResult: {
+      ...candidate.validationResult,
+      rule: { ...candidate.validationResult.rule, positionPattern: [...candidate.validationResult.rule.positionPattern], tags: [...candidate.validationResult.rule.tags], examples: [...candidate.validationResult.rule.examples] },
+      last10: [...candidate.validationResult.last10],
+      failedIssues: [...candidate.validationResult.failedIssues],
+      details: candidate.validationResult.details,
+    },
+  };
+}
+
+export function clearFormulaDiscoveryCache(): void {
+  discoveryCache.clear();
+}
+
+export function getFormulaDiscoveryCacheSize(): number {
+  return discoveryCache.size;
+}
 
 function normalizerFor(category: RuleCategory): string {
   switch (category) {
@@ -176,6 +242,10 @@ function candidateScore(overall: RuleBacktestResult, training: RuleBacktestResul
 }
 
 export function discoverFormulaCandidates(input: FormulaDiscoveryInput): FormulaDiscoveryCandidate[] {
+  const key = discoveryCacheKey(input);
+  const cached = discoveryCache.get(key);
+  if (cached) return cached.map(cloneCandidate);
+
   const categories = input.categories ?? DEFAULT_CATEGORIES;
   const variablePool = input.variablePool ?? DEFAULT_VARIABLES;
   const maxTerms = Math.max(2, Math.min(input.maxTerms ?? 3, 5));
@@ -217,7 +287,9 @@ export function discoverFormulaCandidates(input: FormulaDiscoveryInput): Formula
     if (candidates.length >= targetPoolSize) break;
   }
 
-  return candidates
+  const result = candidates
     .sort((a, b) => b.score - a.score || b.validationRate - a.validationRate || b.successRate - a.successRate || b.currentStreak - a.currentStreak || a.failed - b.failed)
     .slice(0, input.limit ?? 20);
+  discoveryCache.set(key, result.map(cloneCandidate));
+  return result.map(cloneCandidate);
 }

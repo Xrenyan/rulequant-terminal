@@ -1,4 +1,4 @@
-import type { DrawRecord, OperationLog, ReferenceHistoryItem, RuleLibraryBackup, RuleQuantConfig, RuleRecord, SampleCase } from "@/types/domain";
+import type { DrawRecord, OperationLog, ReferenceHistoryItem, RuleLibraryBackup, RuleQuantConfig, RuleRecord, RuleSourceType, SampleCase } from "@/types/domain";
 
 export type RuleQuantCloudState = {
   draws: DrawRecord[];
@@ -74,4 +74,34 @@ export function mergeManualCloudDraws(input: {
       if (!merged.has(draw.issue)) merged.set(draw.issue, draw);
     });
   return summarizeDraws([...merged.values()]).sorted;
+}
+
+const userCreatedRuleSources = new Set<RuleSourceType>(["manual", "txt_import", "system_recommended", "copied"]);
+
+export function isUserCreatedCloudRule(rule: Pick<RuleRecord, "sourceType">) {
+  return userCreatedRuleSources.has(rule.sourceType ?? "user_provided");
+}
+
+export function userRuleDeleteIds(logs: OperationLog[] = []) {
+  return new Set(
+    logs
+      .filter((log) => log.type === "rule_deleted" && Boolean(log.ruleId))
+      .map((log) => String(log.ruleId)),
+  );
+}
+
+export function mergeUserCreatedCloudRules(input: {
+  incomingRules: RuleRecord[];
+  currentRules?: RuleRecord[];
+  logs?: OperationLog[];
+}) {
+  const deletedRuleIds = userRuleDeleteIds(input.logs);
+  const merged = new Map(input.incomingRules.map((rule) => [rule.id, rule]));
+  (input.currentRules ?? [])
+    .filter(isUserCreatedCloudRule)
+    .filter((rule) => !deletedRuleIds.has(rule.id))
+    .forEach((rule) => {
+      if (!merged.has(rule.id)) merged.set(rule.id, rule);
+    });
+  return [...merged.values()];
 }

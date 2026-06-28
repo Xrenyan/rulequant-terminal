@@ -104,6 +104,32 @@ describe("candidate pool", () => {
     expect(report.topNumbers18.every((candidate) => candidate.supportCount + candidate.opposeCount > 0)).toBe(true);
   });
 
+  it("includes manually added formulas in comprehensive reference signals", () => {
+    const manualRule = {
+      ...seedRules[0],
+      id: "manual-added-rule",
+      name: "人工新增测试公式",
+      sourceType: "manual" as const,
+      enabled: true,
+      participatesInReference: true,
+      manuallyConfirmed: true,
+      updatedAt: "2026-06-28T00:00:00.000Z",
+    };
+    const backtest = runBacktest({ draws: seedDraws, rules: [manualRule], config: seedConfig });
+    const report = generateCandidatePool({ draws: seedDraws, rules: [manualRule], config: seedConfig, backtest });
+
+    expect(report.ruleCount).toBe(1);
+    expect(report.signalCount).toBeGreaterThan(0);
+    expect(report.signals[0]).toMatchObject({
+      ruleId: "manual-added-rule",
+      sourceType: "manual",
+    });
+    expect(report.topNumbers18.some((candidate) =>
+      candidate.supportRules.some((rule) => rule.ruleId === "manual-added-rule")
+      || candidate.opposeRules.some((rule) => rule.ruleId === "manual-added-rule"),
+    )).toBe(true);
+  });
+
   it("does not expose fake top results when formulas are disabled or explicitly excluded", () => {
     const excludedRules = seedRules.slice(0, 2).map((rule, index) => ({
       ...rule,

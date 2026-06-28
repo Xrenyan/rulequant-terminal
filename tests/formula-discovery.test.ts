@@ -1,8 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { discoverFormulaCandidates } from "@/lib/formula-discovery/formula-discovery";
+import { clearFormulaDiscoveryCache, discoverFormulaCandidates, getFormulaDiscoveryCacheSize } from "@/lib/formula-discovery/formula-discovery";
 import { seedConfig, seedDraws } from "@/lib/data/seed";
+import type { RuleCategory } from "@/types/domain";
 
 describe("formula discovery", () => {
+  it("caches identical discovery runs", () => {
+    clearFormulaDiscoveryCache();
+    const input = {
+      draws: seedDraws,
+      config: seedConfig,
+      limit: 6,
+      categories: ["kill_tail", "kill_zodiac"] satisfies RuleCategory[],
+      variablePool: ["尾(平1)", "段(平2)", "特码合", "期尾"],
+      maxTerms: 3,
+    };
+
+    discoverFormulaCandidates(input);
+    discoverFormulaCandidates(input);
+
+    expect(getFormulaDiscoveryCacheSize()).toBe(1);
+  });
+
   it("generates addable formulas from historical data and ranks them by performance", () => {
     const candidates = discoverFormulaCandidates({
       draws: seedDraws,

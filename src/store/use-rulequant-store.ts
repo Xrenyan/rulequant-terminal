@@ -16,7 +16,7 @@ import {
   type RuleLibraryDraft,
 } from "@/lib/rules/rule-library";
 import type { RuleQuantCloudState } from "@/lib/cloud/cloud-state";
-import type { DrawRecord, OperationLog, ReferenceHistoryItem, RuleLibraryBackup, RuleQuantConfig, RuleRecord, SampleCase } from "@/types/domain";
+import type { DrawRecord, OperationLog, ReferenceHistoryItem, RuleLibraryBackup, RuleQuantConfig, RuleRecord, RuleSourceType, SampleCase } from "@/types/domain";
 
 const REMOTE_CLOUD_STATE_ENDPOINT = "https://rulequant-terminal.vercel.app/api/cloud/state";
 
@@ -109,6 +109,36 @@ function mergeManualDraws(baseDraws: DrawRecord[], localDraws: DrawRecord[]) {
   return [...merged.values()];
 }
 
+const userCreatedRuleSources = new Set<RuleSourceType>(["manual", "txt_import", "system_recommended", "copied"]);
+
+function timestampValue(value?: string) {
+  const time = Date.parse(value ?? "");
+  return Number.isFinite(time) ? time : 0;
+}
+
+function isUserCreatedRule(rule: Pick<RuleRecord, "id" | "sourceType">) {
+  if (userCreatedRuleSources.has(rule.sourceType ?? "user_provided")) return true;
+  return !seedRules.some((seedRule) => seedRule.id === rule.id);
+}
+
+function shouldPreferLocalRule(localRule: RuleRecord, baseRule: RuleRecord) {
+  if (isUserCreatedRule(localRule) && timestampValue(localRule.updatedAt) >= timestampValue(baseRule.updatedAt)) return true;
+  return timestampValue(localRule.updatedAt) > timestampValue(baseRule.updatedAt);
+}
+
+function mergeLocalRules(baseRules: RuleRecord[], localRules: RuleRecord[]) {
+  const merged = new Map(baseRules.map((rule) => [rule.id, rule]));
+  localRules.forEach((localRule) => {
+    const current = merged.get(localRule.id);
+    if (!current) {
+      if (isUserCreatedRule(localRule)) merged.set(localRule.id, localRule);
+      return;
+    }
+    if (shouldPreferLocalRule(localRule, current)) merged.set(localRule.id, localRule);
+  });
+  return [...merged.values()];
+}
+
 function normalizeRuleForLibrary(rule: RuleRecord, fallback?: RuleRecord): RuleRecord {
   const normalized = {
     ...fallback,
@@ -139,6 +169,46 @@ function mergeRulesWithSeedRules(rules: RuleRecord[]) {
   const existing = new Set(rules.map((rule) => rule.id));
   const missingSeedRules = seedRules.filter((rule) => !existing.has(rule.id));
   return [...rules, ...missingSeedRules].map((rule) => normalizeRuleForLibrary(rule, seedById.get(rule.id)));
+}
+
+type PersistedRuleQuantState = Awaited<ReturnType<typeof loadPersistedState>>;
+
+function buildHydratedState(input: {
+  persisted: PersistedRuleQuantState;
+  cloud?: RuleQuantCloudState | null;
+  current: Pick<RuleQuantState, "draws" | "rules" | "selectedRuleId">;
+}) {
+  const cloudDraws = input.cloud?.draws ?? [];
+  const cloudRules = input.cloud?.rules ?? [];
+  const cloudSamples = input.cloud?.samples ?? [];
+  const cloudLogs = input.cloud?.logs ?? [];
+  const cloudBackups = input.cloud?.backups ?? [];
+  const cloudReferenceHistory = input.cloud?.referenceHistory ?? [];
+  const baseDraws = cloudDraws.length ? cloudDraws : input.persisted.draws.length ? input.persisted.draws : seedDraws;
+  const localDraws = [...(input.persisted.draws ?? []), ...input.current.draws.filter(isManualDraw)];
+  const nextDraws = mergeManualDraws(baseDraws, localDraws);
+  const baseRules = cloudRules.length ? cloudRules : input.persisted.rules.length ? input.persisted.rules : seedRules;
+  const localRules = [...(input.persisted.rules ?? []), ...input.current.rules.filter(isUserCreatedRule)];
+  const nextRules = mergeRulesWithSeedRules(mergeLocalRules(baseRules, localRules));
+  const nextSamples = cloudSamples.length ? cloudSamples : input.persisted.samples.length ? input.persisted.samples : seedSampleCases;
+  const nextConfig = normalizeConfigForCurrentRules(input.cloud?.config ?? input.persisted.config ?? seedConfig);
+  const nextLogs = cloudLogs.length ? trimLogs([...cloudLogs, ...(input.persisted.logs ?? [])]) : trimLogs(input.persisted.logs ?? []);
+  const nextBackups = cloudBackups.length ? trimBackups([...cloudBackups, ...(input.persisted.backups ?? [])]) : trimBackups(input.persisted.backups ?? []);
+  const nextReferenceHistory = cloudReferenceHistory.length ? trimReferenceHistory([...cloudReferenceHistory, ...(input.persisted.referenceHistory ?? [])]) : trimReferenceHistory(input.persisted.referenceHistory ?? []);
+  const selectedRuleId = nextRules.some((rule) => rule.id === input.current.selectedRuleId) ? input.current.selectedRuleId : nextRules[0]?.id ?? "";
+
+  return {
+    draws: sortDraws(nextDraws),
+    rules: nextRules,
+    samples: nextSamples,
+    operationLogs: nextLogs,
+    ruleBackups: nextBackups,
+    referenceHistory: nextReferenceHistory,
+    config: nextConfig,
+    cloudStateMeta: input.cloud?.meta,
+    selectedRuleId,
+    hasHydrated: true,
+  };
 }
 
 async function loadCloudStateFromApi(): Promise<RuleQuantCloudState | null> {
@@ -207,33 +277,13 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
   hasHydrated: false,
   selectedRuleId: seedRules[0]?.id ?? "",
   hydrate: async () => {
-    const [persisted, cloud] = await Promise.all([loadPersistedState(), loadCloudStateFromApi()]);
-    const cloudDraws = cloud?.draws ?? [];
-    const cloudRules = cloud?.rules ?? [];
-    const cloudSamples = cloud?.samples ?? [];
-    const cloudLogs = cloud?.logs ?? [];
-    const cloudBackups = cloud?.backups ?? [];
-    const cloudReferenceHistory = cloud?.referenceHistory ?? [];
-    const baseDraws = cloudDraws.length ? cloudDraws : persisted.draws.length ? persisted.draws : seedDraws;
-    const nextDraws = mergeManualDraws(baseDraws, persisted.draws ?? []);
-    const nextRules = cloudRules.length ? mergeRulesWithSeedRules(cloudRules) : persisted.rules.length ? mergeRulesWithSeedRules(persisted.rules) : mergeRulesWithSeedRules(seedRules);
-    const nextSamples = cloudSamples.length ? cloudSamples : persisted.samples.length ? persisted.samples : seedSampleCases;
-    const nextConfig = normalizeConfigForCurrentRules(cloud?.config ?? persisted.config ?? seedConfig);
-    const nextLogs = cloudLogs.length ? trimLogs([...cloudLogs, ...(persisted.logs ?? [])]) : trimLogs(persisted.logs ?? []);
-    const nextBackups = cloudBackups.length ? trimBackups([...cloudBackups, ...(persisted.backups ?? [])]) : trimBackups(persisted.backups ?? []);
-    const nextReferenceHistory = cloudReferenceHistory.length ? trimReferenceHistory([...cloudReferenceHistory, ...(persisted.referenceHistory ?? [])]) : trimReferenceHistory(persisted.referenceHistory ?? []);
-    set({
-      draws: sortDraws(nextDraws),
-      rules: nextRules,
-      samples: nextSamples,
-      operationLogs: nextLogs,
-      ruleBackups: nextBackups,
-      referenceHistory: nextReferenceHistory,
-      config: nextConfig,
-      cloudStateMeta: cloud?.meta,
-      selectedRuleId: nextRules[0]?.id ?? "",
-      hasHydrated: true,
-    });
+    const persisted = await loadPersistedState();
+    set(buildHydratedState({ persisted, current: get() }));
+
+    const cloud = await loadCloudStateFromApi();
+    if (cloud) {
+      set(buildHydratedState({ persisted, cloud, current: get() }));
+    }
   },
   persist: async () => {
     const state = get();

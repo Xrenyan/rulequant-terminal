@@ -640,13 +640,13 @@ function NumberTile({ number, special = false, config }: { number: number; speci
 function LatestDrawCard({ draw, config, issue, source }: { draw: DrawRecord | undefined; config: RuleQuantConfig; issue?: string; source?: string }) {
   const numbers = draw ? [draw.n1, draw.n2, draw.n3, draw.n4, draw.n5, draw.n6] : [];
   return (
-    <div className="min-w-0 rounded-md border border-cyan-300/15 bg-cyan-300/[0.045] p-3 sm:col-span-2 xl:col-span-2">
+    <div className="min-w-0 rounded-md border border-cyan-300/15 bg-cyan-300/[0.045] p-3 sm:col-span-2 xl:col-span-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[12px] leading-5 text-slate-500">最新开奖号码</p>
         <Badge tone="cyan">{issue ?? draw?.issue ?? "-"}</Badge>
       </div>
       {draw ? (
-        <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
+        <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 sm:flex-nowrap">
           {numbers.map((number, index) => <NumberTile key={`${draw.issue}-${index}-${number}`} number={number} config={config} />)}
           <span className="px-1 font-mono text-lg text-cyan-100">+</span>
           <NumberTile number={draw.special} special config={config} />
@@ -799,7 +799,7 @@ export function RuleQuantTerminal({ activeView }: { activeView: ViewKey }) {
 function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const searchParams = useSearchParams();
   const store = useRuleQuantStore();
-  const { draws, rules, samples, operationLogs, ruleBackups, referenceHistory, config, selectedRuleId, cloudStateMeta, cloudPublishStatus, cloudPublishMessage, lastCloudPublishAt } = store;
+  const { draws, rules, samples, operationLogs, ruleBackups, referenceHistory, config, selectedRuleId, cloudStateMeta, cloudPublishStatus, cloudPublishMessage, lastCloudPublishAt, hasHydrated } = store;
   const hydrate = store.hydrate;
   const [importText, setImportText] = useState("issue,n1,n2,n3,n4,n5,n6,special\n2026166,8,13,19,27,35,44,6");
   const [importErrors, setImportErrors] = useState<string[]>([]);
@@ -1200,7 +1200,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   }, [activeDraws, sourceUrl, sourceFromYear, sourceToYear, store]);
 
   useEffect(() => {
-    if (sourceLoading || !WEBSITE_FIRST_VIEWS.has(activeView)) return;
+    if (!hasHydrated || sourceLoading || !WEBSITE_FIRST_VIEWS.has(activeView)) return;
 
     const syncLatest = () => {
       const now = Date.now();
@@ -1212,7 +1212,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     queueMicrotask(syncLatest);
     const timer = window.setInterval(syncLatest, AUTO_SYNC_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [activeView, fetchSourceDraws, sourceLoading]);
+  }, [activeView, fetchSourceDraws, hasHydrated, sourceLoading]);
 
   async function handleParseImport() {
     const result = parseDrawText(importText);
@@ -3845,7 +3845,7 @@ function ReferenceObservationPanel({ report }: { report: ReferenceObservationRep
 function ReferenceHistoryNumberList({ items, config, limit }: { items: ReferenceHistoryNumber[]; config: RuleQuantConfig; limit?: number }) {
   const displayItems = limit ? items.slice(0, limit) : items;
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(86px,1fr))] gap-2">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,96px))] gap-2">
       {displayItems.map((item, index) => (
         <span
           key={`${item.number}-${index}`}
@@ -3866,7 +3866,7 @@ function ReferenceHistoryNumberList({ items, config, limit }: { items: Reference
 
 function ReferenceHistoryZodiacList({ items }: { items: ReferenceHistoryZodiac[] }) {
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(58px,1fr))] gap-2">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(66px,66px))] gap-2">
       {items.map((item, index) => (
         <span
           key={`${item.zodiac}-${index}`}

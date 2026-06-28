@@ -1,5 +1,5 @@
 import type { RuleQuantCloudState } from "@/lib/cloud/cloud-state";
-import { EMPTY_CLOUD_STATE, mergeManualCloudDraws, summarizeDraws } from "@/lib/cloud/cloud-state";
+import { EMPTY_CLOUD_STATE, mergeManualCloudDraws, mergeUserCreatedCloudRules, summarizeDraws } from "@/lib/cloud/cloud-state";
 
 const DEFAULT_STATE_PATH = ".rulequant/cloud-state.json";
 
@@ -118,9 +118,16 @@ export async function saveGitHubStatePatch(patch: Partial<Omit<RuleQuantCloudSta
       })
     : current.draws ?? [];
   const summary = summarizeDraws(draws);
+  const rules = patch.rules
+    ? mergeUserCreatedCloudRules({
+        incomingRules: patch.rules,
+        currentRules: current.rules ?? [],
+        logs: patch.logs ?? current.logs ?? [],
+      })
+    : current.rules ?? [];
   const nextState: RuleQuantCloudState = {
     draws,
-    rules: patch.rules ?? current.rules ?? [],
+    rules,
     samples: patch.samples ?? current.samples ?? [],
     config: patch.config ?? current.config,
     logs: patch.logs ?? current.logs ?? [],
