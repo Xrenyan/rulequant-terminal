@@ -5,8 +5,8 @@ on:
     branches: [main]
   workflow_dispatch:
   schedule:
-    # Vercel cron syncs cloud state at 16:30 UTC; build the static fallback after it has time to finish.
-    - cron: "50 16 * * *"
+    # Refresh the public share page regularly so friends get the latest daily draw without manual redeploys.
+    - cron: "15,45 * * * *"
 
 permissions:
   contents: read
