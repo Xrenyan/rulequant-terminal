@@ -75,7 +75,7 @@ if (Test-Path -LiteralPath $buildRootFull) {
     if (-not ($linkItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
       throw "Refusing to remove non-junction node_modules at $linkedNodeModules"
     }
-    cmd /c "rmdir `"$linkedNodeModules`"" | Out-Null
+    Remove-PathWithRetry -Path $linkedNodeModules
   }
   Remove-PathWithRetry -Path $resolvedBuildRoot -Recurse
 }
