@@ -384,6 +384,53 @@ describe("formula engine", () => {
     expect(subtractResult.secondaryMappedResult).toEqual([10]);
   });
 
+  test("calculates six-zodiac sets from cyclic regular positions and selected offsets", () => {
+    const rule: RuleRecord = {
+      id: "test-six-zodiac-position-offsets",
+      name: "取平321循环六肖",
+      category: "six_zodiac" as RuleRecord["category"],
+      orderMode: "L",
+      formula: "平3",
+      normalizer: "zodiac_set_offsets:+012348",
+      target: "special_zodiac",
+      verifyMode: "next_special",
+      positionPattern: [3, 2, 1],
+      positionMeaning: "取平321.321循环+012348",
+      periodSpan: 1,
+      enabled: true,
+      tags: [],
+      description: "",
+      sourceFile: "unit",
+      examples: [],
+      createdAt: "2026-06-28T00:00:00.000Z",
+      updatedAt: "2026-06-28T00:00:00.000Z",
+    };
+
+    const result = calculateRule(rule, draw, defaultConfig);
+    const expectedNumbers = [7, 29, 15, 10, 32, 21];
+    const expectedRows = [
+      [3, 7, 0, 7],
+      [2, 28, 1, 29],
+      [1, 13, 2, 15],
+      [3, 7, 3, 10],
+      [2, 28, 4, 32],
+      [1, 13, 8, 21],
+    ] as const;
+
+    expect(result.secondaryMappedResult).toEqual(expectedNumbers);
+    expect(result.mappedResult).toEqual(expectedNumbers.map((number) => getNumberAttributes(number, defaultConfig).zodiac));
+    expect(result.process).toEqual(expect.arrayContaining(expectedRows.map(([position, base, offset, resultNumber]) =>
+      `第${position}位 ${String(base).padStart(2, "0")} ${getNumberAttributes(base, defaultConfig).zodiac} +${offset} -> ${String(resultNumber).padStart(2, "0")} ${getNumberAttributes(resultNumber, defaultConfig).zodiac}`,
+    )));
+
+    const twelveOffsetResult = calculateRule(
+      { ...rule, id: "test-twelve-zodiac-offsets", normalizer: "zodiac_set_offsets:+123456789101112", positionPattern: [3] },
+      draw,
+      defaultConfig,
+    );
+    expect(twelveOffsetResult.secondaryMappedResult).toEqual([8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
+  });
+
   test("caches the same rule and issue calculation once", () => {
     const rule: RuleRecord = {
       id: "cache-rule",

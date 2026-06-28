@@ -130,6 +130,37 @@ describe("candidate pool", () => {
     )).toBe(true);
   });
 
+  it("uses six-zodiac position-offset rules as comprehensive reference evidence", () => {
+    const sixZodiacRule = {
+      ...seedRules[0],
+      id: "manual-six-zodiac-rule",
+      name: "取平321循环六肖",
+      category: "six_zodiac" as const,
+      formula: "平3",
+      normalizer: "zodiac_set_offsets:0,1,2,3,4,8",
+      target: "special_zodiac",
+      positionPattern: [3, 2, 1],
+      sourceType: "manual" as const,
+      enabled: true,
+      participatesInReference: true,
+      manuallyConfirmed: true,
+      updatedAt: "2026-06-28T00:00:00.000Z",
+    };
+    const backtest = runBacktest({ draws: seedDraws, rules: [sixZodiacRule], config: seedConfig });
+    const report = generateCandidatePool({ draws: seedDraws, rules: [sixZodiacRule], config: seedConfig, backtest });
+
+    expect(report.ruleCount).toBe(1);
+    expect(report.signals).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        ruleId: "manual-six-zodiac-rule",
+        action: "include",
+        targetType: "zodiac",
+      }),
+    ]));
+    expect(report.signals[0].targets.length).toBeGreaterThanOrEqual(1);
+    expect(report.topNumbers8.length).toBeGreaterThan(0);
+  });
+
   it("does not expose fake top results when formulas are disabled or explicitly excluded", () => {
     const excludedRules = seedRules.slice(0, 2).map((rule, index) => ({
       ...rule,

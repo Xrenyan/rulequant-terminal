@@ -85,6 +85,7 @@ function targetForCategory(category: RuleRecord["category"]): { action: RuleSign
       return { action: "exclude", targetType: "segment" };
     case "seven_tail":
       return { action: "include", targetType: "tail" };
+    case "six_zodiac":
     case "eight_zodiac":
     case "eight_zodiac_two_period":
     case "nine_zodiac":

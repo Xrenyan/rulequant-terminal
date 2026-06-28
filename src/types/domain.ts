@@ -15,6 +15,7 @@ export type RuleCategory =
   | "kill_element"
   | "kill_segment"
   | "seven_tail"
+  | "six_zodiac"
   | "eight_zodiac"
   | "eight_zodiac_two_period"
   | "nine_zodiac"

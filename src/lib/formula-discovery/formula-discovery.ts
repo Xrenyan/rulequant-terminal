@@ -116,6 +116,7 @@ function normalizerFor(category: RuleCategory): string {
 function targetFor(category: RuleCategory): string {
   switch (category) {
     case "kill_zodiac":
+    case "six_zodiac":
     case "eight_zodiac":
     case "eight_zodiac_two_period":
     case "nine_zodiac":

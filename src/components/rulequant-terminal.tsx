@@ -157,6 +157,7 @@ const categories: Array<{ value: RuleCategory; label: string }> = [
   { value: "kill_element", label: "杀一行" },
   { value: "kill_segment", label: "杀一段" },
   { value: "seven_tail", label: "七尾" },
+  { value: "six_zodiac", label: "取六肖" },
   { value: "eight_zodiac", label: "八肖" },
   { value: "eight_zodiac_two_period", label: "八肖管两期" },
   { value: "nine_zodiac", label: "九肖" },
@@ -719,7 +720,7 @@ function mergeDrawRecords(primary: DrawRecord[], extra: DrawRecord[]) {
 }
 
 function parsePositionPattern(value: FormDataEntryValue | null): number[] {
-  const text = String(value || "").trim();
+  const text = String(value || "").replace(/[平落取循环]/g, "").trim();
   if (/1234567\.1234567/.test(text)) return [1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7];
   if (/7654321\.7654321/.test(text)) return [7, 6, 5, 4, 3, 2, 1, 7, 6, 5, 4, 3, 2, 1];
   if (/7654321\.23456/.test(text)) return [7, 6, 5, 4, 3, 2, 1, 2, 3, 4, 5, 6];
@@ -2761,13 +2762,14 @@ function FormulaLedgerRow({ entry }: { entry: FormulaLedgerEntry }) {
 }
 
 type BuilderMode = "paste" | "template" | "advanced";
-type BuilderIntent = "include_zodiac" | "kill_zodiac" | "seven_tail" | "eight_zodiac" | "nine_zodiac" | "kill_tail" | "kill_sum";
+type BuilderIntent = "include_zodiac" | "kill_zodiac" | "seven_tail" | "six_zodiac" | "eight_zodiac" | "nine_zodiac" | "kill_tail" | "kill_sum";
 type BuilderValueKind = "number" | "head" | "tail" | "sum" | "sumTail" | "segment" | "element" | "color" | "parity" | "size";
 
 const builderIntentOptions: Array<{ value: BuilderIntent; label: string; hint: string }> = [
   { value: "include_zodiac", label: "选生肖", hint: "公式算出一个生肖，作为支持信号" },
   { value: "kill_zodiac", label: "杀生肖", hint: "公式算出一个生肖，作为排除信号" },
   { value: "seven_tail", label: "七尾", hint: "按定位尾数做 0-9 闭环偏移" },
+  { value: "six_zodiac", label: "取六肖", hint: "按平码位置循环加减，生成一组生肖候选" },
   { value: "eight_zodiac", label: "八肖起点", hint: "从定位生肖扩展成八肖候选" },
   { value: "nine_zodiac", label: "九肖自用", hint: "按 +1234567911 这类取值扩展九肖" },
   { value: "kill_tail", label: "杀尾", hint: "公式算出一个尾数，作为排除信号" },
@@ -2832,12 +2834,46 @@ function normalizeTailOffsetText(text: string) {
   return cleaned || "-3,-2,-1,0,1,2,4";
 }
 
+function parseCompactOffsetText(text: string): number[] {
+  const source = text.trim();
+  if (!source) return [];
+  if (/^[+]?\d+$/.test(source)) {
+    const compact = source.replace(/[^\d]/g, "");
+    if (compact === "1234567911") return [1, 2, 3, 4, 5, 6, 7, 9, 11];
+    const offsets: number[] = [];
+    let index = 0;
+    while (index < compact.length) {
+      const two = compact.slice(index, index + 2);
+      const requiredPrevious = two === "10" ? 9 : two === "11" ? 10 : two === "12" ? 11 : undefined;
+      if (requiredPrevious !== undefined && offsets.includes(requiredPrevious)) {
+        offsets.push(Number(two));
+        index += 2;
+      } else {
+        offsets.push(Number(compact[index]));
+        index += 1;
+      }
+    }
+    return offsets;
+  }
+  return [...source.matchAll(/[+-]?\d+/g)].map((match) => Number(match[0])).filter(Number.isFinite);
+}
+
+function formatOffsetList(offsets: number[]) {
+  return offsets.map((offset) => String(offset)).join(",");
+}
+
+function normalizeZodiacSetOffsetText(text: string) {
+  const offsets = parseCompactOffsetText(text);
+  return offsets.length ? formatOffsetList(offsets) : "0,1,2,3,4,8";
+}
+
 function normalizerForBuilder(intent: BuilderIntent, tailMode: string, customTailOffsets: string, zodiacOffsets: string) {
   if (intent === "seven_tail") {
     if (tailMode === "left2right4") return "tail_window:left=2,right=4";
     if (tailMode === "custom") return `tail_offsets:${normalizeTailOffsetText(customTailOffsets)}`;
     return "tail_window:left=3,right=3";
   }
+  if (intent === "six_zodiac") return `zodiac_set_offsets:${normalizeZodiacSetOffsetText(zodiacOffsets)}`;
   if (intent === "nine_zodiac") return `zodiac_offsets:${zodiacOffsets || "+1234567911"}`;
   return "auto";
 }
@@ -2856,10 +2892,16 @@ function builderName(intent: BuilderIntent, position: number, valueKind: Builder
 
 function inferRuleText(rawText: string, currentIssue?: string) {
   const text = rawText.trim();
+  const positionPatternText = text.match(/取\s*平\s*([1-7.\s]+)(?:循环)?/u)?.[1]
+    ?? text.match(/平\s*([1-7]+(?:\.[1-7]+)+)/u)?.[1]
+    ?? "";
+  const inferredPositionPattern = parsePositionPattern(positionPatternText);
+  const zodiacSetOffsets = text.match(/[+＋]\s*([0-9,\s.]+)/u)?.[1];
+  const isSixZodiacText = /六肖/.test(text) || /取\s*平\s*[1-7.\s]+/u.test(text);
   const positionMatch = text.match(/(?:平(?:码)?|第)\s*([1-7])|特码|特号|特/);
-  const position = positionMatch?.[1] ? Number(positionMatch[1]) : /特码|特号|特/.test(text) ? 7 : 1;
+  const position = inferredPositionPattern[0] ?? (positionMatch?.[1] ? Number(positionMatch[1]) : /特码|特号|特/.test(text) ? 7 : 1);
   const compactOffsets = text.match(/取值\s*([+-]?\d+)/);
-  const isZodiacOffsetText = /九肖/.test(text) || Boolean(compactOffsets && compactOffsets[1].replace(/\D/g, "").length >= 2);
+  const isZodiacOffsetText = !isSixZodiacText && (/九肖/.test(text) || Boolean(compactOffsets && compactOffsets[1].replace(/\D/g, "").length >= 2));
   const offsetMatch = text.match(/([+-])\s*(\d+)/);
   const offset = isZodiacOffsetText ? 0 : offsetMatch ? Number(`${offsetMatch[1]}${offsetMatch[2]}`) : 0;
   const leftRight = text.match(/左\s*(\d+)\s*右\s*(\d+)/);
@@ -2867,9 +2909,11 @@ function inferRuleText(rawText: string, currentIssue?: string) {
   const issueNumbers = [...text.matchAll(/(?:20)?(\d{3})/g)].map((match) => Number(match[1]));
   const currentSuffix = currentIssue ? Number(currentIssue.replace(/\D/g, "").slice(-3)) : undefined;
   const verifyOffset = issueNumbers.length >= 2 ? Math.max(1, issueNumbers[1] - issueNumbers[0]) : issueNumbers.length === 1 && currentSuffix ? Math.max(1, issueNumbers[0] - currentSuffix) : 1;
-  const intent: BuilderIntent = /七尾|尾数|左右/.test(text)
-    ? "seven_tail"
-    : isZodiacOffsetText
+  const intent: BuilderIntent = isSixZodiacText
+    ? "six_zodiac"
+    : /七尾|尾数|左右/.test(text)
+      ? "seven_tail"
+      : isZodiacOffsetText
       ? "nine_zodiac"
       : /八肖/.test(text)
         ? "eight_zodiac"
@@ -2890,7 +2934,12 @@ function inferRuleText(rawText: string, currentIssue?: string) {
     verifyOffset,
     tailMode: leftRight ? "left2right4" : bothSide ? "window3" : /七尾|尾数|左右/.test(text) ? "custom" : "window3",
     customTailOffsets: leftRightOffsets ?? (bothSide ? Array.from({ length: Number(bothSide[1]) * 2 + 1 }, (_, index) => index - Number(bothSide[1])).join(",") : "-3,-2,-1,0,1,2,4"),
-    zodiacOffsets: isZodiacOffsetText && compactOffsets?.[1] ? (compactOffsets[1].startsWith("+") || compactOffsets[1].startsWith("-") ? compactOffsets[1] : `+${compactOffsets[1]}`) : "+1234567911",
+    zodiacOffsets: isSixZodiacText && zodiacSetOffsets
+      ? normalizeZodiacSetOffsetText(zodiacSetOffsets)
+      : isZodiacOffsetText && compactOffsets?.[1]
+        ? (compactOffsets[1].startsWith("+") || compactOffsets[1].startsWith("-") ? compactOffsets[1] : `+${compactOffsets[1]}`)
+        : "+1234567911",
+    positionPattern: inferredPositionPattern.join(","),
   };
 }
 
@@ -2928,6 +2977,7 @@ function NewRuleBuilder({
     setCustomTailOffsets(inferred.customTailOffsets);
     setZodiacOffsets(inferred.zodiacOffsets);
     setVerifyOffset(inferred.verifyOffset);
+    setPositionPattern(inferred.positionPattern);
     if (!ruleName) setRuleName(builderName(inferred.intent, inferred.position, valueKind));
   }
 
@@ -2935,6 +2985,15 @@ function NewRuleBuilder({
   const normalizer = normalizerForBuilder(intent, tailMode, customTailOffsets, zodiacOffsets);
   const target = targetForBuilder(intent);
   const resolvedName = ruleName.trim() || builderName(intent, position, valueKind);
+  const selectedZodiacOffsets = useMemo(() => parseCompactOffsetText(zodiacOffsets), [zodiacOffsets]);
+
+  function toggleZodiacOffset(value: number) {
+    const current = selectedZodiacOffsets;
+    const next = current.includes(value)
+      ? current.filter((item) => item !== value)
+      : [...current, value].sort((a, b) => a - b);
+    setZodiacOffsets(formatOffsetList(next));
+  }
 
   const formData = useMemo(() => {
     const data = new FormData();
@@ -3083,16 +3142,39 @@ function NewRuleBuilder({
             </div>
           )}
 
-          {intent === "nine_zodiac" && (
-            <div className="mt-4">
-              <Label>九肖取值</Label>
-              <Input value={zodiacOffsets} onChange={(event) => setZodiacOffsets(event.target.value)} placeholder="+1234567911" />
+          {(intent === "nine_zodiac" || intent === "six_zodiac") && (
+            <div className="mt-4 rounded-lg border border-white/[0.08] bg-black/15 p-3">
+              <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                <div className="min-w-0 flex-1">
+                  <Label>{intent === "six_zodiac" ? "生肖偏移（点几个就是几肖）" : "九肖取值"}</Label>
+                  <Input value={zodiacOffsets} onChange={(event) => setZodiacOffsets(event.target.value)} placeholder={intent === "six_zodiac" ? "例如 012348" : "+1234567911"} />
+                </div>
+                <Badge tone="cyan">已选 {selectedZodiacOffsets.length} 个</Badge>
+              </div>
+              <div className="mt-3 grid grid-cols-5 gap-2 sm:grid-cols-9 xl:grid-cols-[repeat(13,minmax(0,1fr))]">
+                {Array.from({ length: 25 }, (_, index) => index - 12).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => toggleZodiacOffset(item)}
+                    className={cn(
+                      "h-9 rounded-md border text-xs font-semibold transition",
+                      selectedZodiacOffsets.includes(item)
+                        ? "border-cyan-300/50 bg-cyan-300/15 text-cyan-50"
+                        : "border-white/[0.08] bg-white/[0.03] text-slate-400 hover:bg-white/[0.06] hover:text-white",
+                    )}
+                  >
+                    {item >= 0 ? `+${item}` : item}
+                  </button>
+                ))}
+              </div>
+              {intent === "six_zodiac" && <p className="mt-2 text-xs text-slate-500">例：取位循环填 3,2,1 或 平321.321，偏移填 0,1,2,3,4,8，就是平3+0、平2+1、平1+2、平3+3、平2+4、平1+8。</p>}
             </div>
           )}
 
           <div className="mt-4">
             <Label>取位循环（可选）</Label>
-            <Input value={positionPattern} onChange={(event) => setPositionPattern(event.target.value)} placeholder="例如 平1234567.1234567. 或 平7654321.7654321." />
+            <Input value={positionPattern} onChange={(event) => setPositionPattern(event.target.value)} placeholder="例如 平321.321、平1234567.1234567. 或 平7654321.7654321." />
           </div>
         </details>
       </Panel>

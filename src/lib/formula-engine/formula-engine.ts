@@ -208,7 +208,8 @@ function parseCompactZodiacOffsets(value: string): number[] {
   let index = 0;
   while (index < compact.length) {
     const two = compact.slice(index, index + 2);
-    if ((two === "10" || two === "11" || two === "12") && index > 0) {
+    const requiredPrevious = two === "10" ? 9 : two === "11" ? 10 : two === "12" ? 11 : undefined;
+    if (requiredPrevious !== undefined && offsets.includes(requiredPrevious)) {
       offsets.push(Number(two));
       index += 2;
     } else {
@@ -242,6 +243,17 @@ function zodiacOffsetsForRule(rule: RuleRecord): number[] {
   const source = match[1].trim();
   if (/^[+]?\d+$/.test(source)) return parseCompactZodiacOffsets(source);
   return parseSignedOffsets(source);
+}
+
+function zodiacSetOffsetsForRule(rule: RuleRecord): number[] {
+  const normalizer = rule.normalizer ?? "";
+  const match = normalizer.match(/zodiac_set_offsets\s*:?\s*([+\-\d,\s.]+)/i);
+  if (match) {
+    const source = match[1].trim();
+    if (/^[+]?\d+$/.test(source)) return parseCompactZodiacOffsets(source);
+    return parseSignedOffsets(source);
+  }
+  return zodiacOffsetsForRule(rule);
 }
 
 function calcZodiacOffsetSet(baseNumber: number, offsets: number[], config: RuleQuantConfig): { numbers: number[]; zodiacs: string[]; lines: string[] } {
@@ -287,6 +299,23 @@ function periodPosition(
   return { position, patternIndex, periodIndex };
 }
 
+function patternFromFormula(rule: RuleRecord): number[] {
+  const match = rule.formula.match(/[平落]([1-7]+)/u);
+  if (!match) return [];
+  return [...match[1]].map(Number).filter((item) => item >= 1 && item <= 7);
+}
+
+function regularNumberAtPosition(current: NormalizedDraw, position: number): number {
+  if (position === 7) return current.special;
+  const value = current.lOrder[position - 1];
+  if (!Number.isFinite(value)) throw new Error(`未找到第${position}位开奖号`);
+  return value;
+}
+
+function positionDisplay(position: number): string {
+  return position === 7 ? "特码" : `第${position}位`;
+}
+
 function formulaForPeriod(
   rule: RuleRecord,
   current: NormalizedDraw,
@@ -318,12 +347,67 @@ function parityAdjustment(rule: RuleRecord, position: ReturnType<typeof periodPo
   return 0;
 }
 
+function calculateSixZodiacRule(
+  rule: RuleRecord,
+  current: NormalizedDraw,
+  config: RuleQuantConfig,
+): FormulaEngineCalculation {
+  const offsets = zodiacSetOffsetsForRule(rule);
+  if (!offsets.length) throw new Error("六肖规则缺少生肖偏移");
+  const positions = rule.positionPattern.length ? rule.positionPattern : patternFromFormula(rule);
+  if (!positions.length) throw new Error("六肖规则缺少取位序列");
+
+  const rows = offsets.map((offset, index) => {
+    const position = positions[index % positions.length];
+    if (!Number.isInteger(position) || position < 1 || position > 7) throw new Error(`取位序列只能使用 1-7，当前为 ${position}`);
+    const baseNumber = regularNumberAtPosition(current, position);
+    const resultNumber = closedZodiacNumber(baseNumber, offset);
+    const base = getNumberAttributes(baseNumber, config);
+    const result = getNumberAttributes(resultNumber, config);
+    const sign = offset >= 0 ? `+${offset}` : String(offset);
+    return {
+      position,
+      offset,
+      baseNumber,
+      resultNumber,
+      zodiac: result.zodiac,
+      variableKey: `${positionDisplay(position)}${sign}`,
+      line: `${positionDisplay(position)} ${String(baseNumber).padStart(2, "0")} ${base.zodiac} ${sign} -> ${String(resultNumber).padStart(2, "0")} ${result.zodiac}`,
+    };
+  });
+
+  const numbers = unique(rows.map((row) => row.resultNumber));
+  const zodiacs = unique(rows.map((row) => row.zodiac));
+  const variables = Object.fromEntries(rows.map((row) => [row.variableKey, row.resultNumber]));
+  const expression = rows.map((row) => `平${row.position}${row.offset >= 0 ? "+" : ""}${row.offset}`).join("，");
+
+  return {
+    rawResult: numbers[0] ?? 0,
+    normalizerSteps: numbers,
+    finalResult: zodiacs,
+    mappedResult: zodiacs,
+    secondaryMappedResult: numbers,
+    process: [
+      `取位循环：${positions.join("")}；生肖偏移：${offsets.map((offset) => `${offset >= 0 ? "+" : ""}${offset}`).join(", ")}`,
+      ...rows.map((row) => row.line),
+      `六肖 = ${zodiacs.join(", ")}`,
+    ],
+    variables,
+    expression,
+    trace: rows.map((row) => row.line),
+  };
+}
+
 function calculateRuleUncached(
   rule: RuleRecord,
   current: NormalizedDraw,
   config: RuleQuantConfig,
   context: CalculateRuleContext = {},
 ): FormulaEngineCalculation {
+  if (rule.category === "six_zodiac") {
+    return calculateSixZodiacRule(rule, current, config);
+  }
+
   const dynamicFormula = formulaForPeriod(rule, current, context);
   const formula = evaluateFormula(dynamicFormula.formula, current, config, rule.orderMode);
   const rawResult = formula.value;
@@ -639,6 +723,7 @@ export function checkRuleSuccess(rule: RuleRecord, calculation: RuleCalculation,
       return !resultSet.includes(special.segment);
     case "seven_tail":
       return resultSet.includes(special.tail);
+    case "six_zodiac":
     case "eight_zodiac":
     case "eight_zodiac_two_period":
     case "nine_zodiac":
@@ -653,6 +738,7 @@ export function targetLabel(rule: RuleRecord, calculation: RuleCalculation): str
   const value = calculation.mappedResult.join("、");
   if (rule.category.startsWith("kill_") && rule.category !== "kill_three_as_nine") return `要杀：${value}`;
   if (rule.category.startsWith("include_")) return `参考：${value}`;
+  if (rule.category === "six_zodiac") return `六肖候选：${value}`;
   if (rule.category === "nine_zodiac") return `九肖候选：${value}`;
   if (rule.category === "kill_three_as_nine") return `九肖候选：${value}`;
   return `候选集合：${value}`;

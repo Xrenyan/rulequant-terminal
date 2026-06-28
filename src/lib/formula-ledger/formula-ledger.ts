@@ -130,6 +130,8 @@ function finalOutputLabel(rule: RuleRecord, mappedResult: Array<number | string>
       return `杀段${value}`;
     case "seven_tail":
       return `七尾 ${value}`;
+    case "six_zodiac":
+      return `六肖 ${value}`;
     case "eight_zodiac":
     case "eight_zodiac_two_period":
       return `八肖 ${value}`;
@@ -169,6 +171,8 @@ function mappingLine(rule: RuleRecord, calculation: Pick<RuleCalculation, "final
       return `${finalResult} 对应段位${mapped}`;
     case "seven_tail":
       return `计算结果：七尾 ${mapped}`;
+    case "six_zodiac":
+      return `计算结果：六肖 ${mapped}`;
     case "eight_zodiac":
     case "eight_zodiac_two_period":
       return `计算结果：八肖 ${mapped}`;
