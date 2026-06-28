@@ -1492,7 +1492,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       </div>
                       <Badge tone={hasSharedDraws ? "green" : "yellow"}>{dataSourceLabel}</Badge>
                     </div>
-                    <div className="mt-5 grid grid-cols-4 justify-items-center gap-2 sm:flex sm:flex-wrap sm:justify-items-start">
+                    <div className="mt-5 flex w-full max-w-[342px] flex-wrap gap-2 sm:max-w-full">
                       {latestRawDraw ? [latestRawDraw.n1, latestRawDraw.n2, latestRawDraw.n3, latestRawDraw.n4, latestRawDraw.n5, latestRawDraw.n6, latestRawDraw.special].map((number, index) => (
                         <NumberTile key={`${number}-${index}`} number={number} special={index === 6} config={config} />
                       )) : <span className="text-slate-500">暂无开奖数据</span>}

@@ -69,52 +69,7 @@ try {
   Pop-Location
 }
 
-if (Test-Path -LiteralPath $buildRootFull) {
-  $resolvedBuildRoot = (Resolve-Path -LiteralPath $buildRootFull).Path
-  if (-not $resolvedBuildRoot.StartsWith("D:\RuleQuant\rulequant-terminal-static-build")) {
-    throw "Unexpected static build target: $resolvedBuildRoot"
-  }
-  $linkedNodeModules = Join-Path $resolvedBuildRoot "node_modules"
-  if (Test-Path -LiteralPath $linkedNodeModules) {
-    $linkItem = Get-Item -LiteralPath $linkedNodeModules -Force
-    if (-not ($linkItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-      throw "Refusing to remove non-junction node_modules at $linkedNodeModules"
-    }
-    Remove-PathWithRetry -Path $linkedNodeModules
-  }
-  Remove-PathWithRetry -Path $resolvedBuildRoot -Recurse
-}
-
-New-Item -ItemType Directory -Path $buildRootFull -Force | Out-Null
-$robocopyArgs = @(
-  $project,
-  $buildRootFull,
-  "/MIR",
-  "/XD", ".git", ".next", "out", "output", "node_modules",
-  "/XF", "*.log", "*.pid"
-)
-robocopy @robocopyArgs | Out-Null
-if ($LASTEXITCODE -gt 7) {
-  throw "static build workspace copy failed with code $LASTEXITCODE"
-}
-New-Item -ItemType Junction -Path (Join-Path $buildRootFull "node_modules") -Target (Join-Path $project "node_modules") | Out-Null
-
-$buildFavicon = Join-Path $buildRootFull "src\app\favicon.ico"
-if (-not (Test-Path -LiteralPath $buildFavicon)) {
-  $sourceFavicon = Join-Path $project "src\app\favicon.ico"
-  $faviconDir = Split-Path -Parent $buildFavicon
-  New-Item -ItemType Directory -Path $faviconDir -Force | Out-Null
-  Copy-Item -LiteralPath $sourceFavicon -Destination $buildFavicon -Force
-}
-
-if (-not (Test-Path -LiteralPath (Join-Path $buildRootFull "scripts\build-static-pages.mjs"))) {
-  throw "static build workspace is incomplete: scripts\build-static-pages.mjs was not copied"
-}
-if (-not (Test-Path -LiteralPath $buildFavicon)) {
-  throw "static build workspace is incomplete: src\app\favicon.ico was not copied"
-}
-
-Push-Location $buildRootFull
+Push-Location $project
 try {
   node scripts/build-static-pages.mjs
   if ($LASTEXITCODE -ne 0) {
@@ -124,7 +79,7 @@ try {
   Pop-Location
 }
 
-$out = (Resolve-Path -LiteralPath (Join-Path $buildRootFull "out")).Path
+$out = (Resolve-Path -LiteralPath (Join-Path $project "out")).Path
 
 Push-Location $pages
 try {

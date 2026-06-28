@@ -34,7 +34,7 @@ try {
   fs.rmSync(path.join(root, ".next"), { recursive: true, force: true, maxRetries: 8, retryDelay: 500 });
   fs.rmSync(path.join(root, "out"), { recursive: true, force: true, maxRetries: 8, retryDelay: 500 });
 
-  const result = spawnSync(process.execPath, [nextBin, "build", "--webpack"], {
+  const result = spawnSync(process.execPath, [nextBin, "build", "--turbopack"], {
     cwd: root,
     stdio: "inherit",
     env: {
@@ -44,7 +44,6 @@ try {
       GITHUB_PAGES_BASE_PATH: githubPagesBasePath,
       NEXT_PUBLIC_BASE_PATH: githubPagesBasePath,
       NEXT_SKIP_NEXT_TYPECHECK: "true",
-      NEXT_PRIVATE_BUILD_WORKER: "0",
       RULEQUANT_DISABLE_MINIFY: "true",
     },
   });
