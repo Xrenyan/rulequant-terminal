@@ -12077,11 +12077,13 @@
     }
   ],
   "backups": [],
+  "referenceHistory": [],
   "meta": {
     "enabled": true,
     "source": "github",
-    "updatedAt": "2026-06-28T06:22:40.940Z",
+    "updatedAt": "2026-06-28T06:26:18.290Z",
     "latestIssue": "2026178",
-    "recordCount": 178
+    "recordCount": 178,
+    "message": "Static data refreshed without rolling back newer local draws"
   }
 }
