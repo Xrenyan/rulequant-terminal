@@ -71,10 +71,10 @@ function targetFor(category: RuleCategory): string {
   }
 }
 
-function combinations(items: string[], maxTerms: number): string[][] {
+function combinations(items: string[], maxTerms: number, exactTerms?: number): string[][] {
   const output: string[][] = [];
   function walk(start: number, current: string[]) {
-    if (current.length >= 2) output.push([...current]);
+    if (current.length >= 2 && (!exactTerms || current.length === exactTerms)) output.push([...current]);
     if (current.length >= maxTerms) return;
     for (let index = start; index < items.length; index += 1) {
       current.push(items[index]);
@@ -111,13 +111,51 @@ function makeRule(category: RuleCategory, formula: string, index: number): RuleR
   };
 }
 
-function splitDraws(draws: DrawRecord[], ratio: number): { trainingDraws: DrawRecord[]; validationDraws: DrawRecord[] } {
+function splitDraws(draws: DrawRecord[], ratio: number): { sortedDraws: DrawRecord[]; cut: number } {
   const sorted = [...draws].sort((a, b) => a.issue.localeCompare(b.issue, "zh-CN", { numeric: true }));
   const boundedRatio = Math.min(Math.max(ratio, 0.5), 0.85);
   const cut = Math.max(3, Math.min(sorted.length - 2, Math.floor(sorted.length * boundedRatio)));
   return {
-    trainingDraws: sorted.slice(0, cut),
-    validationDraws: sorted.slice(Math.max(0, cut - 1)),
+    sortedDraws: sorted,
+    cut,
+  };
+}
+
+function ruleSpan(rule: RuleRecord): number {
+  return Math.max(rule.periodSpan || 1, rule.verifyOffset || 1, rule.category === "eight_zodiac_two_period" ? 2 : 1);
+}
+
+function summarizeResult(result: RuleBacktestResult, details: RuleBacktestResult["details"]): RuleBacktestResult {
+  const values = details.map((detail) => detail.success);
+  const success = values.filter(Boolean).length;
+  let currentStreak = 0;
+  let maxStreak = 0;
+  let running = 0;
+
+  for (const value of values) {
+    if (value) {
+      running += 1;
+      maxStreak = Math.max(maxStreak, running);
+    } else {
+      running = 0;
+    }
+  }
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    if (!values[index]) break;
+    currentStreak += 1;
+  }
+
+  return {
+    ...result,
+    total: details.length,
+    success,
+    failed: details.length - success,
+    successRate: details.length ? Number(((success / details.length) * 100).toFixed(2)) : 0,
+    currentStreak,
+    maxStreak,
+    last10: values.slice(-10),
+    failedIssues: details.filter((detail) => !detail.success).map((detail) => detail.currentIssue),
+    details,
   };
 }
 
@@ -143,34 +181,41 @@ export function discoverFormulaCandidates(input: FormulaDiscoveryInput): Formula
   const maxTerms = Math.max(2, Math.min(input.maxTerms ?? 3, 5));
   const minTrainingRate = input.minTrainingRate ?? 50;
   const minValidationRate = input.minValidationRate ?? 50;
-  const { trainingDraws, validationDraws } = splitDraws(input.draws, input.trainRatio ?? 0.7);
-  const formulas = combinations(variablePool, maxTerms).map((items) => items.join(" + "));
-  const rules = categories.flatMap((category) => formulas.map((formula, index) => makeRule(category, formula, index)));
+  const { sortedDraws, cut } = splitDraws(input.draws, input.trainRatio ?? 0.7);
+  const issueIndex = new Map(sortedDraws.map((draw, index) => [draw.issue, index]));
   const candidates: FormulaDiscoveryCandidate[] = [];
+  const targetPoolSize = Math.max(input.limit ?? 20, 20) * 2;
 
-  rules.forEach((rule) => {
-    try {
-      const enabledRule = { ...rule, enabled: true };
-      const trainingResult = runBacktest({ draws: trainingDraws, rules: [enabledRule], config: input.config }).ruleResults[0];
-      const validationResult = runBacktest({ draws: validationDraws, rules: [enabledRule], config: input.config }).ruleResults[0];
-      const result = runBacktest({ draws: input.draws, rules: [enabledRule], config: input.config }).ruleResults[0];
-      if (!result || !trainingResult || !validationResult || result.total === 0 || trainingResult.total === 0 || validationResult.total === 0) return;
-      if (trainingResult.successRate < minTrainingRate) return;
-      if (validationResult.successRate < minValidationRate) return;
-      if (validationResult.successRate + 25 < trainingResult.successRate) return;
-      candidates.push({
-        ...result,
-        rule,
-        trainingRate: trainingResult.successRate,
-        validationRate: validationResult.successRate,
-        trainingResult,
-        validationResult,
-        score: candidateScore(result, trainingResult, validationResult),
-      });
-    } catch {
-      // Invalid combinations are skipped and shown through the remaining ranked results.
-    }
-  });
+  for (let termCount = 2; termCount <= maxTerms; termCount += 1) {
+    const formulas = combinations(variablePool, termCount, termCount).map((items) => items.join(" + "));
+    const rules = categories.flatMap((category) => formulas.map((formula, index) => ({ ...makeRule(category, formula, index + termCount * 1000), enabled: true })));
+    const batchResults = runBacktest({ draws: sortedDraws, rules, config: input.config }).ruleResults;
+
+    batchResults.forEach((result) => {
+      try {
+        const span = ruleSpan(result.rule);
+        const trainingResult = summarizeResult(result, result.details.filter((detail) => (issueIndex.get(detail.currentIssue) ?? Number.MAX_SAFE_INTEGER) < cut - span));
+        const validationResult = summarizeResult(result, result.details.filter((detail) => (issueIndex.get(detail.currentIssue) ?? -1) >= cut - 1));
+        if (!result || !trainingResult || !validationResult || result.total === 0 || trainingResult.total === 0 || validationResult.total === 0) return;
+        if (trainingResult.successRate < minTrainingRate) return;
+        if (validationResult.successRate < minValidationRate) return;
+        if (validationResult.successRate + 25 < trainingResult.successRate) return;
+        candidates.push({
+          ...result,
+          rule: { ...result.rule, enabled: false },
+          trainingRate: trainingResult.successRate,
+          validationRate: validationResult.successRate,
+          trainingResult,
+          validationResult,
+          score: candidateScore(result, trainingResult, validationResult),
+        });
+      } catch {
+        // Invalid combinations are skipped and shown through the remaining ranked results.
+      }
+    });
+
+    if (candidates.length >= targetPoolSize) break;
+  }
 
   return candidates
     .sort((a, b) => b.score - a.score || b.validationRate - a.validationRate || b.successRate - a.successRate || b.currentStreak - a.currentStreak || a.failed - b.failed)

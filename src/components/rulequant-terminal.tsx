@@ -305,6 +305,31 @@ const WEBSITE_FIRST_VIEWS = new Set<ViewKey>([
   "reports",
 ]);
 
+function useDeferredViewReady(active: boolean, delay = 80) {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!active) {
+      setReady(false);
+      return;
+    }
+    if (typeof window === "undefined") return;
+
+    setReady(false);
+    let timeoutId: number | undefined;
+    const frameId = window.requestAnimationFrame(() => {
+      timeoutId = window.setTimeout(() => setReady(true), delay);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    };
+  }, [active, delay]);
+
+  return active && ready;
+}
+
 function hasCalculation(item: NextOutputItem): item is { rule: RuleRecord; calculation: RuleCalculation; error?: never } {
   return Boolean(item.calculation);
 }
@@ -580,8 +605,22 @@ function Metric({ label, value, hint, tone = "cyan" }: { label: string; value: s
         <p className="truncate text-[12px] leading-5 text-slate-500">{label}</p>
         <Badge tone={tone}>{hint ?? "实时"}</Badge>
       </div>
-      <p className="mt-2 truncate font-mono text-[24px] font-semibold leading-none text-white">{value}</p>
+      <p className="mt-2 min-w-0 break-words font-mono text-[24px] font-semibold leading-tight text-white">{value}</p>
     </div>
+  );
+}
+
+function ComputationPendingPanel({ title, desc }: { title: string; desc: string }) {
+  return (
+    <Panel className="p-5">
+      <div className="flex items-center gap-3">
+        <Activity className="h-5 w-5 animate-pulse text-cyan-200" />
+        <div>
+          <h3 className="font-semibold text-white">{title}</h3>
+          <p className="mt-1 text-sm text-slate-500">{desc}</p>
+        </div>
+      </div>
+    </Panel>
   );
 }
 
@@ -595,6 +634,28 @@ function NumberTile({ number, special = false, config }: { number: number; speci
       <span className="font-mono text-[15px] leading-none">{padNumber(number)}</span>
       <span className="mt-1 text-[11px] leading-none text-slate-300">{label[1] ?? ""}</span>
     </span>
+  );
+}
+
+function LatestDrawCard({ draw, config, issue, source }: { draw: DrawRecord | undefined; config: RuleQuantConfig; issue?: string; source?: string }) {
+  const numbers = draw ? [draw.n1, draw.n2, draw.n3, draw.n4, draw.n5, draw.n6] : [];
+  return (
+    <div className="min-w-0 rounded-md border border-cyan-300/15 bg-cyan-300/[0.045] p-3 sm:col-span-2 xl:col-span-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[12px] leading-5 text-slate-500">最新开奖号码</p>
+        <Badge tone="cyan">{issue ?? draw?.issue ?? "-"}</Badge>
+      </div>
+      {draw ? (
+        <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
+          {numbers.map((number, index) => <NumberTile key={`${draw.issue}-${index}-${number}`} number={number} config={config} />)}
+          <span className="px-1 font-mono text-lg text-cyan-100">+</span>
+          <NumberTile number={draw.special} special config={config} />
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-slate-500">暂无开奖数据</p>
+      )}
+      <p className="mt-3 text-xs text-slate-500">{source || "平1-6 + 特码，号码下方标注生肖"}</p>
+    </div>
   );
 }
 
@@ -750,6 +811,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const [ruleLibraryFilter, setRuleLibraryFilter] = useState<RuleLibraryFilter>("all");
   const [ruleSort, setRuleSort] = useState<RuleSortKey>("smart");
   const [selectedComboRuleIds, setSelectedComboRuleIds] = useState<string[]>([]);
+  const [referenceArchiveIssue, setReferenceArchiveIssue] = useState("");
+  const [referenceArchiveSaving, setReferenceArchiveSaving] = useState(false);
   const [sampleDraft, setSampleDraft] = useState({ ruleId: selectedRuleId, issue: draws[0]?.issue ?? "", expectedRawResult: "", expectedFinalResult: "", expectedMappedResult: "", expectedSuccess: "true" });
 
   useEffect(() => {
@@ -772,6 +835,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const latestDraw = normalizedDraws.at(-1);
   const latestRawDraw = activeDraws.at(-1);
   const latestPeriodIndex = Math.max(normalizedDraws.length - 1, 0);
+  useEffect(() => {
+    if (referenceArchiveIssue) return;
+    if (latestRawDraw?.issue) setReferenceArchiveIssue(latestRawDraw.issue);
+  }, [latestRawDraw?.issue, referenceArchiveIssue]);
   const hasLiveDraws = activeDraws.some((draw) => Boolean(draw.sourceUrl));
   const isSeedOnly = !hasLiveDraws && draws.length === seedDraws.length && draws.every((draw, index) => draw.issue === seedDraws[index]?.issue);
   const isCloudData = Boolean(cloudStateMeta?.enabled && cloudStateMeta.recordCount);
@@ -792,13 +859,17 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       : "未同步";
   const shouldWarnStaleData = !websiteDraws.length && !(isStaticShareHost && hasSharedDraws);
   const latestNumbersLabel = drawNumbersWithZodiac(latestRawDraw, config);
-  const shouldBuildBacktest = activeView === "dashboard" || activeView === "rules" || activeView === "formula-detail" || activeView === "sample-check" || activeView === "candidate-pool" || activeView === "formula-discovery" || activeView === "backtest" || activeView === "reports";
+  const isCandidatePoolReady = useDeferredViewReady(activeView === "candidate-pool");
+  const isFormulaDiscoveryReady = useDeferredViewReady(activeView === "formula-discovery");
+  const isFormulaDiscoveryPreparing = activeView === "formula-discovery" && !isFormulaDiscoveryReady;
+  const isCandidatePoolPreparing = activeView === "candidate-pool" && !isCandidatePoolReady;
+  const shouldBuildBacktest = activeView === "dashboard" || activeView === "rules" || activeView === "formula-detail" || activeView === "sample-check" || (activeView === "candidate-pool" && isCandidatePoolReady) || activeView === "backtest" || activeView === "reports";
   const backtest = useMemo(() => {
     if (!shouldBuildBacktest) return EMPTY_BACKTEST;
     return runBacktest({ draws: activeDraws, rules, config });
   }, [shouldBuildBacktest, activeDraws, rules, config]);
   const selectedRuleResult = useMemo(() => backtest.ruleResults.find((item) => item.rule.id === selectedRule?.id) ?? backtest.ruleResults[0], [backtest, selectedRule?.id]);
-  const shouldBuildValidation = activeView === "dashboard" || activeView === "rules" || activeView === "formula-detail" || activeView === "sample-check" || activeView === "candidate-pool" || activeView === "formula-discovery";
+  const shouldBuildValidation = activeView === "dashboard" || activeView === "rules" || activeView === "formula-detail" || activeView === "sample-check" || (activeView === "candidate-pool" && isCandidatePoolReady);
   const validationSampleResults = useMemo(() => {
     if (!shouldBuildValidation) return [];
     return runSampleChecks({ cases: samples, draws: activeDraws, rules, config });
@@ -807,8 +878,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     shouldBuildValidation ? buildRuleValidationSummaries({ rules, backtest, sampleResults: validationSampleResults }) : []
   ), [shouldBuildValidation, rules, backtest, validationSampleResults]);
   const ruleReconciliationRows = useMemo(() => (
-    buildRuleReconciliation({ sourceFiles: rawRuleFiles, rules, validationSummaries: ruleValidationSummaries })
-  ), [rules, ruleValidationSummaries]);
+    activeView === "rules" ? buildRuleReconciliation({ sourceFiles: rawRuleFiles, rules, validationSummaries: ruleValidationSummaries }) : []
+  ), [activeView, rules, ruleValidationSummaries]);
   const ruleValidationById = useMemo(() => new Map(ruleValidationSummaries.map((summary) => [summary.ruleId, summary])), [ruleValidationSummaries]);
   const enabledRuleCount = useMemo(() => rules.filter((rule) => rule.enabled).length, [rules]);
   const passedRuleCount = useMemo(() => ruleValidationSummaries.filter((summary) => summary.status === "checked").length, [ruleValidationSummaries]);
@@ -887,7 +958,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       });
   }, [activeView, rules, latestDraw, latestPeriodIndex, config]);
   const researchDraws = activeDraws;
-  const shouldBuildCandidateReport = activeView === "dashboard" || activeView === "candidate-pool" || activeView === "reports";
+  const shouldBuildCandidateReport = activeView === "dashboard" || (activeView === "candidate-pool" && isCandidatePoolReady) || activeView === "reports";
   const candidateBacktest = backtest;
   const candidateReport = useMemo(() => {
     if (!shouldBuildCandidateReport) return EMPTY_CANDIDATE_REPORT;
@@ -915,20 +986,21 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     }));
   }, [activeDraws.length, activeView, candidateReport, dataSourceLabel, referenceHistory, store]);
   const referenceObservation = useMemo(() => {
-    if (activeView !== "candidate-pool") return EMPTY_REFERENCE_OBSERVATION;
+    if (activeView !== "candidate-pool" || !isCandidatePoolReady) return EMPTY_REFERENCE_OBSERVATION;
     return buildReferenceObservation({ draws: researchDraws, rules, config, validationSummaries: ruleValidationSummaries, window: 10 });
-  }, [activeView, researchDraws, rules, config, ruleValidationSummaries, referenceRunId]);
+  }, [activeView, isCandidatePoolReady, researchDraws, rules, config, ruleValidationSummaries, referenceRunId]);
   const resolvedReferenceHistory = useMemo<ResolvedReferenceHistoryItem[]>(() => {
+    if (activeView !== "candidate-pool" && activeView !== "reports") return [];
     return resolveReferenceHistoryOutcomes(referenceHistory, activeDraws, config);
-  }, [activeDraws, config, referenceHistory]);
+  }, [activeDraws, activeView, config, referenceHistory]);
   const manualComboRules = useMemo(() => {
     const selected = rules.filter((rule) => selectedComboRuleIds.includes(rule.id));
     return selected.length ? selected : rules.filter((rule) => canRuleParticipateInReference(rule, ruleValidationById.get(rule.id))).slice(0, 6);
   }, [rules, ruleValidationById, selectedComboRuleIds]);
   const manualComboReport = useMemo(() => {
-    if (activeView !== "candidate-pool") return EMPTY_CANDIDATE_REPORT;
+    if (activeView !== "candidate-pool" || !isCandidatePoolReady) return EMPTY_CANDIDATE_REPORT;
     return generateCandidatePool({ draws: researchDraws, rules: manualComboRules, config, backtest: candidateBacktest, validationSummaries: ruleValidationSummaries });
-  }, [activeView, researchDraws, manualComboRules, config, candidateBacktest, ruleValidationSummaries]);
+  }, [activeView, isCandidatePoolReady, researchDraws, manualComboRules, config, candidateBacktest, ruleValidationSummaries]);
   const manualDrawValidation = useMemo(() => {
     const values = MANUAL_DRAW_KEYS.map((key) => ({ key, value: Number(manualDraw[key]) }));
     const invalidKeys = new Set<ManualDrawKey>();
@@ -969,9 +1041,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   }, [activeView, selectedRuleResult, activeDraws, config]);
   const selectedRuleValidation = selectedRule ? ruleValidationById.get(selectedRule.id) : undefined;
   const discoveryCandidates = useMemo(() => {
-    if (activeView !== "formula-discovery") return [];
+    if (activeView !== "formula-discovery" || !isFormulaDiscoveryReady) return [];
     return discoverFormulaCandidates({ draws: activeDraws, config, limit: 18 });
-  }, [activeView, activeDraws, config]);
+  }, [activeView, isFormulaDiscoveryReady, activeDraws, config]);
   const focusedDiscoveryCandidate = useMemo(() => {
     if (activeView !== "formula-discovery") return undefined;
     return discoveryCandidates.find((candidate) => candidate.rule.id === discoveryFocusId) ?? discoveryCandidates[0];
@@ -1270,6 +1342,60 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     });
     await store.saveReferenceHistory(record);
     setReferenceStatus(`已保存 ${record.baseIssue ?? "-"} 期综合推荐档案：Top8/12/16/18、全量49号码、生肖Top7/8/9、全量12生肖和证据摘要都已入库。`);
+  }
+
+  function saveReferenceArchiveForIssue(issue: string) {
+    const targetIssue = issue.trim();
+    if (!targetIssue) {
+      setReferenceStatus("请选择要复盘保存的基准期号。");
+      return;
+    }
+    const sorted = sortDrawRecords(activeDraws);
+    const targetIndex = sorted.findIndex((draw) => draw.issue === targetIssue);
+    if (targetIndex < 1) {
+      setReferenceStatus("这个期号前面的历史数据不足，无法生成历史预测复盘。");
+      return;
+    }
+
+    setReferenceArchiveSaving(true);
+    window.setTimeout(async () => {
+      try {
+        const archiveDraws = sorted.slice(0, targetIndex + 1);
+        const archiveBacktest = runBacktest({ draws: archiveDraws, rules, config });
+        const archiveReport = generateCandidatePool({
+          draws: archiveDraws,
+          rules,
+          config,
+          backtest: archiveBacktest,
+          validationSummaries: ruleValidationSummaries,
+        });
+
+        if (!archiveReport.ruleCount || !archiveReport.signalCount) {
+          setReferenceStatus("这期没有生成可保存的公式依据，请检查公式是否启用且可计算。");
+          return;
+        }
+
+        const record = buildReferenceHistoryItem({
+          report: archiveReport,
+          saveType: "manual",
+          dataSourceLabel,
+          recordCount: archiveDraws.length,
+          note: `历史复盘：按 ${archiveReport.latestIssue ?? targetIssue} 期及以前数据生成`,
+        });
+        await store.saveReferenceHistory(record);
+        await store.addOperationLog({
+          type: "generate_reference",
+          message: `历史复盘保存：${record.baseIssue ?? targetIssue} 期，${record.ruleCount} 条公式，${record.signalCount} 条依据`,
+          issue: record.baseIssue ?? targetIssue,
+          dataCount: archiveDraws.length,
+          formulaCount: record.ruleCount,
+          signalCount: record.signalCount,
+        });
+        setReferenceStatus(`已保存 ${record.baseIssue ?? targetIssue} 期历史预测复盘；如果下一期已开奖，档案会自动对比命中情况。`);
+      } finally {
+        setReferenceArchiveSaving(false);
+      }
+    }, 0);
   }
 
   function handleRegenerateReference() {
@@ -1739,8 +1865,11 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   </div>
                 </Panel>
                 <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1fr_460px]">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {discoveryCandidates.map((candidate) => {
+                  {isFormulaDiscoveryPreparing ? (
+                    <ComputationPendingPanel title="正在准备公式筛选" desc="先完成页面响应，再运行训练期/验证期筛选，避免打开页面时卡住。" />
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      {discoveryCandidates.map((candidate) => {
                       const active = focusedDiscoveryCandidate?.rule.id === candidate.rule.id;
                       return (
                         <button
@@ -1764,8 +1893,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                           <p className="mt-3 text-xs text-rose-200">错期：{candidate.failedIssues.slice(0, 6).join("、") || "暂无"}</p>
                         </button>
                       );
-                    })}
-                  </div>
+                      })}
+                    </div>
+                  )}
                   <DiscoveryDetailPanel
                     candidate={focusedDiscoveryCandidate}
                     categoryLabel={focusedDiscoveryCandidate ? categoryLabel(focusedDiscoveryCandidate.rule.category) : ""}
@@ -2102,8 +2232,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                 </Panel>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <LatestDrawCard draw={latestRawDraw} config={config} issue={candidateReport.latestIssue ?? latestRawDraw?.issue} source="平1-6 + 特码，号码下方标注生肖" />
                   <Metric label="使用最新期号" value={candidateReport.latestIssue ?? "-"} hint={candidateReport.latestDate ?? "-"} tone="violet" />
-                  <Metric label="最新开奖号码" value={latestNumbersLabel} hint="平1-6 + 特码" />
                   <Metric label="数据来源" value={dataSourceLabel} hint={sourceRecords.length ? "已同步" : "本地"} />
                   <Metric label="启用公式" value={enabledRuleCount} hint={`手动排除 ${excludedRuleCount}`} tone="green" />
                   <Metric label="用户提供公式" value={userProvidedRuleCount} hint="默认可参与" tone="green" />
@@ -2126,6 +2256,25 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     <p className="text-sm text-emerald-100">{referenceStatus}</p>
                   </Panel>
                 )}
+                <Panel className="p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                    <div>
+                      <h3 className="font-semibold text-white">历史预测复盘保存</h3>
+                      <p className="mt-1 text-sm text-slate-500">选择以前某一期，系统会按那一期及以前的数据重新生成当时的综合推荐，并自动和后续开奖对比命中情况。</p>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-[180px_auto]">
+                      <Select value={referenceArchiveIssue} onChange={(event) => setReferenceArchiveIssue(event.target.value)}>
+                        {activeDraws.map((draw) => <option key={draw.issue} value={draw.issue}>{draw.issue}期</option>)}
+                      </Select>
+                      <Button disabled={referenceArchiveSaving || !isCandidatePoolReady} onClick={() => saveReferenceArchiveForIssue(referenceArchiveIssue)}>
+                        <Save className="h-4 w-4" />{referenceArchiveSaving ? "正在保存复盘..." : "保存这期历史复盘"}
+                      </Button>
+                    </div>
+                  </div>
+                </Panel>
+                {isCandidatePoolPreparing && (
+                  <ComputationPendingPanel title="正在准备综合参考结果" desc="页面已经响应，正在延后计算公式信号、候选排序和证据链，避免切换页面卡住。" />
+                )}
                 <ReferenceObservationPanel report={referenceObservation} />
                 <ReferenceHistoryPanel
                   records={resolvedReferenceHistory}
@@ -2147,7 +2296,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   validationById={ruleValidationById}
                 />
 
-                {candidateReport.ruleCount === 0 || candidateReport.signalCount === 0 ? (
+                {isCandidatePoolPreparing ? null : candidateReport.ruleCount === 0 || candidateReport.signalCount === 0 ? (
                   <ReferenceEmptyState />
                 ) : (
                   <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1fr_420px]">
@@ -3569,12 +3718,12 @@ function ReferenceObservationPanel({ report }: { report: ReferenceObservationRep
 function ReferenceHistoryNumberList({ items, config, limit }: { items: ReferenceHistoryNumber[]; config: RuleQuantConfig; limit?: number }) {
   const displayItems = limit ? items.slice(0, limit) : items;
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(86px,1fr))] gap-2">
       {displayItems.map((item, index) => (
         <span
           key={`${item.number}-${index}`}
           className={cn(
-            "rounded-md border px-2 py-1 font-mono text-xs",
+            "flex h-9 min-w-0 items-center justify-center rounded-md border px-2 text-center font-mono text-[12px] leading-none",
             item.hit ? "border-emerald-300/45 bg-emerald-300/14 text-emerald-50" : "border-white/[0.08] bg-white/[0.04] text-cyan-50",
           )}
           title={`${padNumber(item.number)} ${item.zodiac}，排名 ${item.rank}，支持 ${item.supportCount}，反对 ${item.opposeCount}`}
@@ -3590,12 +3739,12 @@ function ReferenceHistoryNumberList({ items, config, limit }: { items: Reference
 
 function ReferenceHistoryZodiacList({ items }: { items: ReferenceHistoryZodiac[] }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(58px,1fr))] gap-2">
       {items.map((item, index) => (
         <span
           key={`${item.zodiac}-${index}`}
           className={cn(
-            "rounded-md border px-2 py-1 text-xs",
+            "flex h-9 min-w-0 items-center justify-center rounded-md border px-2 text-center text-[12px] leading-none",
             item.hit ? "border-emerald-300/45 bg-emerald-300/14 text-emerald-50" : "border-violet-300/15 bg-violet-300/[0.07] text-violet-50",
           )}
           title={`${item.zodiac}，排名 ${item.rank}，支持 ${item.supportCount}，反对 ${item.opposeCount}`}
@@ -3858,8 +4007,14 @@ function ConfigEditor({
   updateConfig: (config: ReturnType<typeof useRuleQuantStore.getState>["config"]) => Promise<void>;
   resetSeed: () => Promise<void>;
 }) {
-  const [text, setText] = useState(() => JSON.stringify(config, null, 2));
+  const [text, setText] = useState("");
   const [error, setError] = useState("");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  useEffect(() => {
+    if (!advancedOpen || text) return;
+    setText(JSON.stringify(config, null, 2));
+  }, [advancedOpen, config, text]);
 
   async function saveConfig() {
     try {
@@ -3872,16 +4027,21 @@ function ConfigEditor({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
+    <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[1fr_360px]">
       <Panel className="p-5">
         <h2 className="font-semibold text-white">配置 JSON</h2>
         <p className="mb-4 text-sm text-slate-500">生肖表、波色表、五行表、段位、对冲、偏移数组都可编辑。保存前会用当前数据做一次计算校验。</p>
-        <Textarea value={text} onChange={(event) => setText(event.target.value)} className="min-h-[620px] font-mono text-xs" />
-        {error && <p className="mt-3 text-sm text-rose-200">{error}</p>}
-        <div className="mt-4 flex gap-2">
+        <Button onClick={() => setAdvancedOpen((current) => !current)}>{advancedOpen ? "收起高级配置" : "展开高级配置"}</Button>
+        {advancedOpen ? <Textarea value={text} onChange={(event) => setText(event.target.value)} className="mt-4 min-h-[620px] font-mono text-xs" /> : (
+          <div className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.03] p-4 text-sm leading-6 text-slate-400">
+            高级 JSON 已默认隐藏，设置页会更快打开；只有修改生肖、波色、五行、段位、偏移等底层配置时再展开。
+          </div>
+        )}
+        {advancedOpen && error && <p className="mt-3 text-sm text-rose-200">{error}</p>}
+        {advancedOpen && <div className="mt-4 flex gap-2">
           <Button variant="primary" onClick={saveConfig}><Save className="h-4 w-4" />保存配置</Button>
           <Button onClick={() => exportJson(config, "rulequant-config.json")}><FileJson className="h-4 w-4" />导出 JSON</Button>
-        </div>
+        </div>}
       </Panel>
       <div className="space-y-4">
         <Panel className="p-5">
