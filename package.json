@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "build:static-pages": "node scripts/build-static-pages.mjs",
     "start": "next start",
     "refresh:static-data": "node scripts/refresh-static-data.mjs",
