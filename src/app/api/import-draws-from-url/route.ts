@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { fetchDrawsFromUrl } from "@/lib/server/draw-sync";
+import {
+  hasDrawWriteAuthorization,
+  isConfiguredDrawSourceUrl,
+  syncDrawsToCloud,
+} from "@/lib/server/sync-draws-to-cloud";
 
 export const runtime = "nodejs";
 
@@ -15,7 +20,12 @@ type ImportDrawsBody = {
   fromYear?: number;
   toYear?: number;
   years?: number[];
+  persist?: boolean;
 };
+
+function canPersistDraws(request: Request, baseUrl: string) {
+  return isConfiguredDrawSourceUrl(baseUrl) || hasDrawWriteAuthorization(request);
+}
 
 export async function OPTIONS() {
   return new NextResponse(null, { headers: CORS_HEADERS });
@@ -29,14 +39,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ records: [], years: [], errors: ["missing url"] }, { status: 400, headers: CORS_HEADERS });
     }
 
-    const result = await fetchDrawsFromUrl({
+    const input = {
       baseUrl,
       fromYear: body.fromYear,
       toYear: body.toYear,
       years: body.years,
-    });
+    };
+    if (body.persist === true && !canPersistDraws(request, baseUrl)) {
+      return NextResponse.json(
+        {
+          records: [],
+          years: [],
+          errors: ["custom source cannot persist without authorization"],
+          persisted: false,
+        },
+        { status: 403, headers: CORS_HEADERS },
+      );
+    }
 
-    return NextResponse.json(result, { headers: CORS_HEADERS });
+    const result = body.persist === true ? await syncDrawsToCloud(input) : await fetchDrawsFromUrl(input);
+
+    return NextResponse.json({ ...result, persisted: body.persist === true }, { headers: CORS_HEADERS });
   } catch (error) {
     return NextResponse.json({ records: [], years: [], errors: [error instanceof Error ? error.message : String(error)] }, { status: 500, headers: CORS_HEADERS });
   }

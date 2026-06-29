@@ -13,7 +13,7 @@ const CORS_HEADERS = {
 
 function isAuthorized(request: Request) {
   const token = process.env.RULEQUANT_ADMIN_TOKEN;
-  if (!token) return true;
+  if (!token) return false;
   return request.headers.get("authorization") === `Bearer ${token}`;
 }
 

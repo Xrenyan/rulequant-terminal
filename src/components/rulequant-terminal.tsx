@@ -119,7 +119,9 @@ const navItems: Array<{ key: ViewKey; href: string; label: string; icon: typeof 
 
 const mobileNavKeys: ViewKey[] = ["dashboard", "one-click", "candidate-pool", "rules"];
 const mobileNavItems = navItems.filter((item) => mobileNavKeys.includes(item.key));
+const REMOTE_CLOUD_STATE_ENDPOINT = "https://rulequant-terminal.vercel.app/api/cloud/state";
 const REMOTE_DRAW_IMPORT_ENDPOINT = "https://rulequant-terminal.vercel.app/api/import-draws-from-url";
+const REMOTE_DRAW_SYNC_ENDPOINT = "https://rulequant-terminal.vercel.app/api/cron/sync-draws";
 const AUTO_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 const MANUAL_DRAW_KEYS = ["n1", "n2", "n3", "n4", "n5", "n6", "special"] as const;
 type ManualDrawKey = typeof MANUAL_DRAW_KEYS[number];
@@ -245,6 +247,9 @@ type UrlImportResponse = {
   years: UrlImportSummary[];
   errors: string[];
   fetchedAt?: string;
+  latestIssue?: string;
+  recordCount?: number;
+  state?: { latestIssue?: string; recordCount?: number; updatedAt?: string };
 };
 
 type CandidateFocus = { type: "number"; value: number } | { type: "zodiac"; value: string } | null;
@@ -1142,6 +1147,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         baseUrl: sourceUrl,
         fromYear: Number(sourceFromYear),
         toYear: Number(sourceToYear),
+        persist: true,
       };
       const request = async (url: string) => {
         const response = await fetch(`${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`, {
@@ -1154,13 +1160,41 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         if (!response.ok) throw new Error(data.errors?.[0] ?? "网址数据抓取失败");
         return data;
       };
+      const requestServerSync = async () => {
+        const params = new URLSearchParams({
+          fromYear: sourceFromYear,
+          toYear: sourceToYear,
+          t: String(Date.now()),
+        });
+        const syncResponse = await fetch(`${REMOTE_DRAW_SYNC_ENDPOINT}?${params.toString()}`, { cache: "no-store" });
+        const syncData = (await syncResponse.json().catch(() => ({}))) as UrlImportResponse & { ok?: boolean; error?: string };
+        if (!syncResponse.ok || syncData.ok === false) throw new Error(syncData.error ?? `同步服务失败：HTTP ${syncResponse.status}`);
+
+        const cloudResponse = await fetch(`${REMOTE_CLOUD_STATE_ENDPOINT}?t=${Date.now()}`, { cache: "no-store" });
+        const cloudState = (await cloudResponse.json()) as { draws?: DrawRecord[]; meta?: UrlImportResponse["state"] };
+        if (!cloudResponse.ok || !Array.isArray(cloudState.draws)) throw new Error(`云端状态刷新失败：HTTP ${cloudResponse.status}`);
+        return {
+          records: cloudState.draws,
+          years: syncData.years ?? [],
+          errors: syncData.errors ?? [],
+          fetchedAt: syncData.fetchedAt,
+          latestIssue: cloudState.meta?.latestIssue ?? syncData.latestIssue,
+          recordCount: cloudState.meta?.recordCount ?? syncData.recordCount,
+          state: cloudState.meta,
+        } satisfies UrlImportResponse;
+      };
 
       let data: UrlImportResponse;
       try {
         data = await request(endpoint);
       } catch (primaryError) {
-        if (fallbackEndpoint.startsWith("/")) throw primaryError;
-        data = await request(fallbackEndpoint);
+        if (endpoint === REMOTE_DRAW_IMPORT_ENDPOINT) {
+          data = await requestServerSync();
+        } else if (fallbackEndpoint.startsWith("/")) {
+          throw primaryError;
+        } else {
+          data = await request(fallbackEndpoint);
+        }
       }
 
       const fetchedRecords = data.records ?? [];
@@ -1182,6 +1216,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         await store.replaceDraws(fetchedRecords);
       } else if (saveMode === "merge") {
         await store.importDraws(fetchedRecords);
+      }
+      if (data.state?.latestIssue) {
+        await store.hydrate();
       }
       clearCandidatePoolCache();
       setReferenceRunId((current) => current + 1);
