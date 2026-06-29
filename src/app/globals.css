@@ -5,6 +5,11 @@
   --foreground: #eef5ff;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -14,6 +19,7 @@
 
 body {
   min-height: 100vh;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 12% 8%, rgba(34, 211, 238, 0.18), transparent 30%),
     radial-gradient(circle at 88% 6%, rgba(139, 92, 246, 0.18), transparent 28%),
@@ -54,4 +60,22 @@ select {
 option {
   background: #090d16;
   color: #e2e8f0;
+}
+
+.rq-content {
+  max-width: 100%;
+}
+
+.rq-card-grid {
+  align-items: stretch;
+}
+
+@media (max-width: 640px) {
+  .rq-content {
+    padding: 0.875rem 0.75rem calc(8.25rem + env(safe-area-inset-bottom));
+  }
+
+  .rq-content section {
+    border-radius: 0.875rem;
+  }
 }

@@ -45,22 +45,25 @@ export function DataTable<T>({ data, columns, dense = false }: DataTableProps<T>
           value={globalFilter}
           onChange={(event) => setGlobalFilter(event.target.value)}
           placeholder="搜索期号、公式、结果..."
-          className="h-10 w-full max-w-sm rounded-lg border border-white/10 bg-white/[0.055] px-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/10"
+          className="h-10 w-full rounded-lg border border-white/10 bg-white/[0.055] px-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/10 sm:max-w-sm"
         />
-        <span className="shrink-0 text-xs text-slate-500">显示 {table.getFilteredRowModel().rows.length} / {data.length}</span>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 sm:justify-end">
+          <span className="sm:hidden">横向滑动查看更多列</span>
+          <span className="shrink-0">显示 {table.getFilteredRowModel().rows.length} / {data.length}</span>
+        </div>
       </div>
       <div className="max-h-[560px] overflow-auto [-webkit-overflow-scrolling:touch]">
-        <table className="w-full min-w-[720px] border-collapse text-left text-sm sm:min-w-[760px]">
+        <table className="w-full min-w-[640px] border-collapse text-left text-xs sm:min-w-[760px] sm:text-sm">
           <thead className="sticky top-0 z-10 bg-[#0b0f1a]/95 backdrop-blur">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="border-b border-white/[0.08] px-3 py-3 text-xs font-medium text-slate-500">
+                  <th key={header.id} className="border-b border-white/[0.08] px-2 py-2 text-xs font-medium text-slate-500 sm:px-3 sm:py-3">
                     {header.isPlaceholder ? null : (
                       <button
                         type="button"
                         onClick={header.column.getToggleSortingHandler()}
-                        className={cn("inline-flex items-center gap-1 text-left", header.column.getCanSort() && "hover:text-slate-200")}
+                        className={cn("inline-flex min-w-0 items-center gap-1 text-left", header.column.getCanSort() && "hover:text-slate-200")}
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
                         {header.column.getIsSorted() === "asc" && <span>↑</span>}
@@ -76,7 +79,7 @@ export function DataTable<T>({ data, columns, dense = false }: DataTableProps<T>
             {table.getRowModel().rows.map((row) => (
               <tr key={row.id} className="border-b border-white/[0.05] transition hover:bg-white/[0.035]">
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className={cn("px-3 text-slate-200", dense ? "py-2" : "py-3")}>
+                  <td key={cell.id} className={cn("px-2 align-top text-slate-200 sm:px-3", dense ? "py-2" : "py-2.5 sm:py-3")}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}
@@ -86,8 +89,8 @@ export function DataTable<T>({ data, columns, dense = false }: DataTableProps<T>
         </table>
       </div>
       <div className="flex flex-col gap-3 border-t border-white/[0.08] bg-black/20 px-3 py-2 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
-        <span>第 {table.getState().pagination.pageIndex + 1} / {Math.max(table.getPageCount(), 1)} 页，每页 20 条</span>
-        <div className="flex flex-wrap gap-2">
+        <span className="leading-5">第 {table.getState().pagination.pageIndex + 1} / {Math.max(table.getPageCount(), 1)} 页，每页 20 条</span>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <button
             type="button"
             onClick={() => table.previousPage()}

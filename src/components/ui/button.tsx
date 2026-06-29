@@ -16,7 +16,7 @@ const variants = {
 
 const sizes = {
   sm: "h-8 min-h-8 px-3 text-[12px]",
-  md: "h-10 min-h-10 px-4 text-sm",
+  md: "h-10 min-h-10 px-4 text-sm max-sm:h-9 max-sm:min-h-9 max-sm:px-3 max-sm:text-[13px]",
   icon: "h-9 w-9 min-w-9 p-0",
 };
 
@@ -24,7 +24,7 @@ export function Button({ className, variant = "secondary", size = "md", loading 
   return (
     <button
       className={cn(
-        "inline-flex max-w-full shrink-0 touch-manipulation items-center justify-center gap-2 whitespace-nowrap rounded-md border font-medium leading-none shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex min-w-0 max-w-full shrink-0 touch-manipulation items-center justify-center gap-2 whitespace-nowrap rounded-md border font-medium leading-none shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0",
         variants[variant],
         sizes[size],
         className,
