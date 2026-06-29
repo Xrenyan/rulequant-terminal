@@ -10678,5 +10678,65 @@
         }
       ]
     }
+  },
+  {
+    "issue": "2026179",
+    "year": 2026,
+    "date": "2026-06-28",
+    "n1": 10,
+    "n2": 11,
+    "n3": 26,
+    "n4": 6,
+    "n5": 31,
+    "n6": 9,
+    "special": 15,
+    "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+    "rawAttributes": {
+      "pageIssue": "179",
+      "balls": [
+        {
+          "number": 10,
+          "zodiac": "鸡",
+          "element": "火",
+          "color": "蓝"
+        },
+        {
+          "number": 11,
+          "zodiac": "猴",
+          "element": "火",
+          "color": "绿"
+        },
+        {
+          "number": 26,
+          "zodiac": "蛇",
+          "element": "金",
+          "color": "蓝"
+        },
+        {
+          "number": 6,
+          "zodiac": "牛",
+          "element": "土",
+          "color": "绿"
+        },
+        {
+          "number": 31,
+          "zodiac": "鼠",
+          "element": "水",
+          "color": "蓝"
+        },
+        {
+          "number": 9,
+          "zodiac": "狗",
+          "element": "木",
+          "color": "蓝"
+        },
+        {
+          "number": 15,
+          "zodiac": "龙",
+          "element": "水",
+          "color": "蓝"
+        }
+      ]
+    }
   }
 ]
