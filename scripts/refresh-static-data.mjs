@@ -1,10 +1,18 @@
 import fs from "node:fs";
+import https from "node:https";
 import path from "node:path";
+import zlib from "node:zlib";
 
 const endpoint = process.env.RULEQUANT_CLOUD_STATE_URL || "https://rulequant-terminal.vercel.app/api/cloud/state";
 const drawImportEndpoint = process.env.RULEQUANT_DRAW_IMPORT_URL || "https://rulequant-terminal.vercel.app/api/import-draws-from-url";
 const drawSourceUrl = process.env.RULEQUANT_DRAW_SOURCE_URL || "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html";
+const drawFromYear = Number(process.env.RULEQUANT_DRAW_FROM_YEAR || 2026);
+const drawToYear = Number(process.env.RULEQUANT_DRAW_TO_YEAR || drawFromYear);
 const root = process.cwd();
+const REQUEST_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RuleQuant/1.0",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+};
 
 function readJsonIfExists(filePath, fallback) {
   if (!fs.existsSync(filePath)) return fallback;
@@ -35,6 +43,223 @@ function mergeByKey(localItems, remoteItems, getKey) {
     if (key) merged.set(key, item);
   }
   return [...merged.values()];
+}
+
+function decodeHtml(value) {
+  return String(value ?? "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
+}
+
+function stripTags(value) {
+  return decodeHtml(String(value ?? "").replace(/<[^>]+>/g, "")).replace(/\s+/g, " ").trim();
+}
+
+function parseUrlYear(sourceUrl) {
+  const match = String(sourceUrl ?? "").match(/(?:\/|^)(20\d{2})(?:\/\d+)?\.html(?:$|[?#])/);
+  return match ? Number(match[1]) : undefined;
+}
+
+function buildYearUrl(inputUrl, year) {
+  const trimmed = String(inputUrl ?? "").trim();
+  if (/(?:\/|^)20\d{2}(?:\/\d+)?\.html(?:$|[?#])/.test(trimmed)) {
+    return trimmed.replace(/20\d{2}(?=(?:\/\d+)?\.html(?:$|[?#]))/, String(year));
+  }
+  if (trimmed.endsWith("/")) return `${trimmed}${year}.html`;
+  return `${trimmed}/${year}.html`;
+}
+
+function normalizeYears(fromYear, toYear) {
+  const start = Math.min(Number(fromYear), Number(toYear));
+  const end = Math.max(Number(fromYear), Number(toYear));
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index)
+    .filter((year) => Number.isInteger(year) && year >= 2000 && year <= 2099);
+}
+
+function colorFromDtAttributes(attributes) {
+  const match = String(attributes ?? "").match(/ball-(red|blue|green)/i);
+  if (!match) return undefined;
+  return { red: "\u7ea2", blue: "\u84dd", green: "\u7eff" }[match[1].toLowerCase()];
+}
+
+function parseBall(liHtml) {
+  const dtMatch = liHtml.match(/<dt\b([^>]*)>([\s\S]*?)<\/dt>/i);
+  const ddMatch = liHtml.match(/<dd\b[^>]*>([\s\S]*?)<\/dd>/i);
+  if (!dtMatch || !ddMatch) return undefined;
+
+  const number = Number(stripTags(dtMatch[2]).replace(/\D/g, ""));
+  if (!Number.isInteger(number) || number < 1 || number > 49) return undefined;
+
+  const attributeText = stripTags(ddMatch[1]).replace(/\s+/g, "");
+  const [zodiac, element] = attributeText.split(/[\/\uff0f]/).filter(Boolean);
+  return {
+    number,
+    zodiac,
+    element,
+    color: colorFromDtAttributes(dtMatch[1]),
+  };
+}
+
+function collectBalls(blockHtml) {
+  const balls = [];
+  const liRegex = /<li\b([^>]*)>[\s\S]*?<\/li>/gi;
+  let match;
+  while ((match = liRegex.exec(blockHtml)) !== null) {
+    if (/\bkj-jia\b/i.test(match[1])) continue;
+    const ball = parseBall(match[0]);
+    if (ball) balls.push(ball);
+  }
+  return balls;
+}
+
+function formatDate(year, month, day) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function parseDrawHtml(html, { year, sourceUrl } = {}) {
+  const records = [];
+  const errors = [];
+  const titleRegex = /<div\b[^>]*class=["'][^"']*\bkj-tit\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi;
+  const titleMatches = [...html.matchAll(titleRegex)];
+
+  titleMatches.forEach((titleMatch, index) => {
+    const titleHtml = titleMatch[1];
+    const titleText = stripTags(titleHtml).replace(/\s+/g, "");
+    const dateMatch = titleText.match(/(\d{4})\u5e74(\d{1,2})\u6708(\d{1,2})\u65e5/);
+    const issueMatch = titleText.match(/\u7b2c(\d+)\u671f/) || titleHtml.match(/<span\b[^>]*>(\d+)<\/span>\s*\u671f/i);
+    const blockStart = titleMatch.index ?? 0;
+    const blockEnd = titleMatches[index + 1]?.index ?? html.length;
+    const blockHtml = html.slice(blockStart, blockEnd);
+
+    if (!dateMatch || !issueMatch) {
+      errors.push(`draw block ${index + 1} missing date or issue`);
+      return;
+    }
+
+    const recordYear = year ?? Number(dateMatch[1]) ?? parseUrlYear(sourceUrl);
+    const month = Number(dateMatch[2]);
+    const day = Number(dateMatch[3]);
+    const pageIssue = issueMatch[1];
+    const balls = collectBalls(blockHtml);
+    if (balls.length < 7) {
+      errors.push(`${recordYear} issue ${pageIssue} has fewer than 7 balls`);
+      return;
+    }
+
+    const numbers = balls.slice(0, 7).map((ball) => ball.number);
+    records.push({
+      issue: `${recordYear}${pageIssue.padStart(3, "0")}`,
+      year: recordYear,
+      date: formatDate(recordYear, month, day),
+      n1: numbers[0],
+      n2: numbers[1],
+      n3: numbers[2],
+      n4: numbers[3],
+      n5: numbers[4],
+      n6: numbers[5],
+      special: numbers[6],
+      sourceUrl,
+      rawAttributes: {
+        pageIssue,
+        balls: balls.slice(0, 7),
+      },
+    });
+  });
+
+  const seen = new Set();
+  const uniqueRecords = records.filter((record) => {
+    if (seen.has(record.issue)) {
+      errors.push(`duplicate issue ${record.issue}`);
+      return false;
+    }
+    seen.add(record.issue);
+    return true;
+  });
+  return { records: uniqueRecords, errors };
+}
+
+function unzipIfNeeded(buffer, encoding) {
+  if (/gzip/i.test(encoding ?? "")) return zlib.gunzipSync(buffer).toString("utf8");
+  if (/br/i.test(encoding ?? "")) return zlib.brotliDecompressSync(buffer).toString("utf8");
+  if (/deflate/i.test(encoding ?? "")) return zlib.inflateSync(buffer).toString("utf8");
+  return buffer.toString("utf8");
+}
+
+async function fetchWithNodeHttps(url) {
+  return new Promise((resolve, reject) => {
+    const request = https.get(
+      url,
+      { headers: REQUEST_HEADERS, rejectUnauthorized: false },
+      (response) => {
+        const chunks = [];
+        response.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+        response.on("end", () => {
+          const statusCode = response.statusCode ?? 0;
+          const body = unzipIfNeeded(Buffer.concat(chunks), response.headers["content-encoding"]);
+          if (statusCode >= 200 && statusCode < 300) {
+            resolve(body);
+            return;
+          }
+          reject(new Error(`HTTP ${statusCode}`));
+        });
+      },
+    );
+    request.on("error", reject);
+    request.setTimeout(20000, () => request.destroy(new Error("download timeout")));
+  });
+}
+
+async function downloadHtml(url) {
+  try {
+    const response = await fetch(url, { cache: "no-store", headers: REQUEST_HEADERS });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.text();
+  } catch (error) {
+    if (!url.startsWith("https://")) throw error;
+    return fetchWithNodeHttps(url);
+  }
+}
+
+async function fetchDrawsDirectlyFromSource(baseUrl, fromYear, toYear) {
+  const records = [];
+  const errors = [];
+  const years = [];
+  for (const year of normalizeYears(fromYear, toYear)) {
+    const url = buildYearUrl(baseUrl, year);
+    try {
+      const html = await downloadHtml(url);
+      const parsed = parseDrawHtml(html, { year, sourceUrl: url });
+      records.push(...parsed.records);
+      errors.push(...parsed.errors.map((message) => `${year}: ${message}`));
+      years.push({ year, url, count: parsed.records.length });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${year}: ${message}`);
+      years.push({ year, url, count: 0, error: message });
+    }
+  }
+
+  const unique = new Map(records.map((record) => [record.issue, record]));
+  return {
+    records: [...unique.values()].sort((a, b) => issueValue(b.issue) - issueValue(a.issue)),
+    years,
+    errors,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+async function fetchDrawsViaImportEndpoint() {
+  const drawResponse = await fetch(`${drawImportEndpoint}${drawImportEndpoint.includes("?") ? "&" : "?"}t=${Date.now()}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ baseUrl: drawSourceUrl, fromYear: drawFromYear, toYear: drawToYear }),
+    cache: "no-store",
+  });
+  if (!drawResponse.ok) throw new Error(`${drawResponse.status} ${drawResponse.statusText}`);
+  return drawResponse.json();
 }
 
 async function main() {
@@ -77,23 +302,22 @@ async function main() {
   let sourceDraws = [];
   let sourceFetchedAt = "";
   try {
-    const drawResponse = await fetch(`${drawImportEndpoint}${drawImportEndpoint.includes("?") ? "&" : "?"}t=${Date.now()}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ baseUrl: drawSourceUrl, fromYear: 2026, toYear: 2026 }),
-      cache: "no-store",
-    });
-    if (drawResponse.ok) {
-      const imported = await drawResponse.json();
+    const imported = await fetchDrawsDirectlyFromSource(drawSourceUrl, drawFromYear, drawToYear);
+    if (Array.isArray(imported.records)) {
+      sourceDraws = imported.records;
+      sourceFetchedAt = imported.fetchedAt ?? "";
+    }
+  } catch (error) {
+    console.warn(`Direct draw source refresh failed; trying import endpoint: ${error instanceof Error ? error.message : String(error)}`);
+    try {
+      const imported = await fetchDrawsViaImportEndpoint();
       if (Array.isArray(imported.records)) {
         sourceDraws = imported.records;
         sourceFetchedAt = imported.fetchedAt ?? "";
       }
-    } else {
-      console.warn(`Draw source refresh skipped: ${drawResponse.status} ${drawResponse.statusText}`);
+    } catch (fallbackError) {
+      console.warn(`Draw source refresh skipped: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`);
     }
-  } catch (error) {
-    console.warn(`Draw source refresh skipped: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   const mergedDraws = sortDraws(
