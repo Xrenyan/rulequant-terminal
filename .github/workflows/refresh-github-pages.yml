@@ -1,0 +1,95 @@
+name: Refresh RuleQuant GitHub Pages Data
+
+on:
+  schedule:
+    # Asia/Shanghai 01:10, 09:10, 15:10. The repeated checks are only for
+    # draw-data freshness, so a late source-site update still reaches Pages.
+    - cron: "10 17 * * *"
+    - cron: "10 1 * * *"
+    - cron: "10 7 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: rulequant-pages-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh-pages:
+    runs-on: ubuntu-latest
+    env:
+      RULEQUANT_DRAW_SOURCE_URL: "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html"
+      RULEQUANT_CLOUD_STATE_URL: "https://rulequant-terminal.vercel.app/api/cloud/state"
+      RULEQUANT_DRAW_IMPORT_URL: "https://rulequant-terminal.vercel.app/api/import-draws-from-url"
+      RULEQUANT_PAGES_REPO: "Xrenyan/rulequant-terminal-pages"
+      RULEQUANT_PAGES_BRANCH: "main"
+      RULEQUANT_PAGES_URL: "https://xrenyan.github.io/rulequant-terminal-pages/dashboard/"
+      GH_PAGES_TOKEN: ${{ secrets.RULEQUANT_PAGES_TOKEN || secrets.RULEQUANT_GITHUB_TOKEN || secrets.GH_PAGES_TOKEN }}
+    steps:
+      - name: Check Pages token
+        shell: bash
+        run: |
+          if [ -z "$GH_PAGES_TOKEN" ]; then
+            echo "Missing RULEQUANT_PAGES_TOKEN or RULEQUANT_GITHUB_TOKEN secret. Cannot push GitHub Pages refresh." >&2
+            exit 1
+          fi
+
+      - name: Checkout app
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Refresh static draw data
+        run: pnpm run refresh:static-data
+
+      - name: Build GitHub Pages static site
+        env:
+          GITHUB_PAGES: "true"
+          GITHUB_PAGES_BASE_PATH: "/rulequant-terminal-pages"
+          NEXT_PUBLIC_BASE_PATH: "/rulequant-terminal-pages"
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: pnpm run build:static-pages
+
+      - name: Publish Pages repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/rulequant-terminal-pages
+          git clone "https://x-access-token:${GH_PAGES_TOKEN}@github.com/${RULEQUANT_PAGES_REPO}.git" /tmp/rulequant-terminal-pages
+          cd /tmp/rulequant-terminal-pages
+          git checkout "${RULEQUANT_PAGES_BRANCH}"
+          find . -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} +
+          cp -R "${GITHUB_WORKSPACE}/out/." .
+          touch .nojekyll
+          git config user.name "RuleQuant Bot"
+          git config user.email "rulequant-bot@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "GitHub Pages already up to date."
+          else
+            git commit -m "Refresh RuleQuant static data $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push origin "${RULEQUANT_PAGES_BRANCH}"
+          fi
+
+      - name: Verify Pages data
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 20
+          node - <<'NODE'
+          const stateUrl = 'https://xrenyan.github.io/rulequant-terminal-pages/static-cloud-state.json?t=' + Date.now();
+          const pageUrl = 'https://xrenyan.github.io/rulequant-terminal-pages/dashboard/?t=' + Date.now();
+          const state = await fetch(stateUrl, { cache: 'no-store' }).then((r) => {
+            if (!r.ok) throw new Error(`static state HTTP ${r.status}`);
+            return r.json();
+          });
+          const page = await fetch(pageUrl, { cache: 'no-store' });
+          if (!page.ok) throw new Error(`dashboard HTTP ${page.status}`);
+          const latest = state?.meta?.latestIssue;
+          const count = Array.isArray(state?.draws) ? state.draws.length : 0;
+          if (!latest || count === 0) throw new Error('static state missing latestIssue/draws');
+          console.log(JSON.stringify({ latestIssue: latest, drawCount: count, dashboardStatus: page.status }, null, 2));
+          NODE
