@@ -12061,6 +12061,652 @@
   "logs": [
     {
       "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782722280088-quitjq",
+      "timestamp": "2026-06-29T08:38:00.088Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782718457912-vveddk",
+      "timestamp": "2026-06-29T07:34:17.912Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782718456892-lgr8dl",
+      "timestamp": "2026-06-29T07:34:16.892Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782717658930-wct4q3",
+      "timestamp": "2026-06-29T07:20:58.930Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782717623660-wvogui",
+      "timestamp": "2026-06-29T07:20:23.660Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782717435611-orctxn",
+      "timestamp": "2026-06-29T07:17:15.611Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782705465715-3uk549",
+      "timestamp": "2026-06-29T03:57:45.715Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782705463567-v4lqkb",
+      "timestamp": "2026-06-29T03:57:43.567Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782705462414-usojjp",
+      "timestamp": "2026-06-29T03:57:42.414Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782705434171-pkeplr",
+      "timestamp": "2026-06-29T03:57:14.171Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782705422421-6o0okd",
+      "timestamp": "2026-06-29T03:57:02.421Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782705421422-ez37va",
+      "timestamp": "2026-06-29T03:57:01.422Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782705420448-v6e2kg",
+      "timestamp": "2026-06-29T03:57:00.448Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782705417821-yp2ed7",
+      "timestamp": "2026-06-29T03:56:57.821Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782705413945-6rt960",
+      "timestamp": "2026-06-29T03:56:53.945Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782705393658-4291r9",
+      "timestamp": "2026-06-29T03:56:33.658Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782705388361-ykef23",
+      "timestamp": "2026-06-29T03:56:28.361Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782705333089-1bkz2e",
+      "timestamp": "2026-06-29T03:55:33.089Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782705278110-l6rza3",
+      "timestamp": "2026-06-29T03:54:38.110Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782705275642-2av50h",
+      "timestamp": "2026-06-29T03:54:35.642Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782702375210-bhtmrr",
+      "timestamp": "2026-06-29T03:06:15.210Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782702373043-j90xwz",
+      "timestamp": "2026-06-29T03:06:13.043Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782702371618-i5zls3",
+      "timestamp": "2026-06-29T03:06:11.618Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782702361041-jbuzq4",
+      "timestamp": "2026-06-29T03:06:01.041Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782702357886-htae7a",
+      "timestamp": "2026-06-29T03:05:57.886Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782702353365-gesfn0",
+      "timestamp": "2026-06-29T03:05:53.365Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782702315334-dg9nvl",
+      "timestamp": "2026-06-29T03:05:15.334Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782702303966-3c4l9u",
+      "timestamp": "2026-06-29T03:05:03.966Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782699577743-6jzyip",
+      "timestamp": "2026-06-29T02:19:37.743Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782699547265-39yhsl",
+      "timestamp": "2026-06-29T02:19:07.265Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782699259411-yxdo0s",
+      "timestamp": "2026-06-29T02:14:19.411Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782698949212-7fho2s",
+      "timestamp": "2026-06-29T02:09:09.212Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782698803521-klmokn",
+      "timestamp": "2026-06-29T02:06:43.521Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1782698743925-g9tgve",
+      "timestamp": "2026-06-29T02:05:43.925Z"
+    },
+    {
+      "type": "sync_draws",
       "message": "Cloud sync configured draw source 178 records, latest issue 2026178",
       "issue": "2026178",
       "dataCount": 178,
