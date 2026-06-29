@@ -89,4 +89,13 @@ describe("draw sync API write guards", () => {
     expect(response.status).toBe(401);
     expect(syncDrawsToCloud).not.toHaveBeenCalled();
   });
+
+  it("does not allow public cron writes even if a legacy public flag is set", async () => {
+    process.env.RULEQUANT_PUBLIC_DRAW_SYNC = "true";
+    const { GET } = await import("@/app/api/cron/sync-draws/route");
+    const response = await GET(new Request("https://rulequant.test/api/cron/sync-draws?fromYear=2026&toYear=2026"));
+
+    expect(response.status).toBe(401);
+    expect(syncDrawsToCloud).not.toHaveBeenCalled();
+  });
 });
