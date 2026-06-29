@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   basePath: githubPagesBasePath || undefined,
   assetPrefix: githubPagesBasePath || undefined,
   trailingSlash: isStaticExport,
+  allowedDevOrigins: ["127.0.0.1"],
   typescript: {
     ignoreBuildErrors: process.env.NEXT_SKIP_NEXT_TYPECHECK === "true",
   },

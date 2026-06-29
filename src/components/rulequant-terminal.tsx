@@ -71,7 +71,6 @@ import type {
   CandidateZodiac,
   DrawRecord,
   OperationLog,
-  ReferenceHistoryItem,
   ReferenceHistoryNumber,
   ReferenceHistoryZodiac,
   ReferenceObservationReport,
@@ -312,19 +311,18 @@ const WEBSITE_FIRST_VIEWS = new Set<ViewKey>([
 ]);
 
 function useDeferredViewReady(active: boolean, delay = 80) {
-  const [ready, setReady] = useState(false);
+  const [readyState, setReadyState] = useState({ active, ready: false });
 
   useEffect(() => {
-    if (!active) {
-      setReady(false);
-      return;
-    }
     if (typeof window === "undefined") return;
 
-    setReady(false);
     let timeoutId: number | undefined;
     const frameId = window.requestAnimationFrame(() => {
-      timeoutId = window.setTimeout(() => setReady(true), delay);
+      if (!active) {
+        setReadyState({ active, ready: false });
+        return;
+      }
+      timeoutId = window.setTimeout(() => setReadyState({ active, ready: true }), delay);
     });
 
     return () => {
@@ -333,7 +331,7 @@ function useDeferredViewReady(active: boolean, delay = 80) {
     };
   }, [active, delay]);
 
-  return active && ready;
+  return active && readyState.active === active && readyState.ready;
 }
 
 function hasCalculation(item: NextOutputItem): item is { rule: RuleRecord; calculation: RuleCalculation; error?: never } {
@@ -784,7 +782,8 @@ export function RuleQuantTerminal({ activeView }: { activeView: ViewKey }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
+    const timeoutId = window.setTimeout(() => setMounted(true), 0);
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   if (!mounted) {
@@ -874,10 +873,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const latestDraw = normalizedDraws.at(-1);
   const latestRawDraw = activeDraws.at(-1);
   const latestPeriodIndex = Math.max(normalizedDraws.length - 1, 0);
-  useEffect(() => {
-    if (referenceArchiveIssue) return;
-    if (latestRawDraw?.issue) setReferenceArchiveIssue(latestRawDraw.issue);
-  }, [latestRawDraw?.issue, referenceArchiveIssue]);
+  const selectedReferenceArchiveIssue = referenceArchiveIssue || latestRawDraw?.issue || "";
   const hasManualDraws = manualLocalDraws.length > 0;
   const hasLiveDraws = activeDraws.some((draw) => Boolean(draw.sourceUrl) && !isManualDrawRecord(draw));
   const isSeedOnly = !hasLiveDraws && draws.length === seedDraws.length && draws.every((draw, index) => draw.issue === seedDraws[index]?.issue);
@@ -1018,6 +1014,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const candidateBacktest = backtest;
   const candidateReport = useMemo(() => {
     if (!shouldBuildCandidateReport) return EMPTY_CANDIDATE_REPORT;
+    void referenceRunId;
     return generateCandidatePool({
       draws: researchDraws,
       rules,
@@ -1043,6 +1040,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   }, [activeDraws.length, activeView, candidateReport, dataSourceLabel, referenceHistory, store]);
   const referenceObservation = useMemo(() => {
     if (activeView !== "candidate-pool" || !isCandidatePoolReady) return EMPTY_REFERENCE_OBSERVATION;
+    void referenceRunId;
     return buildReferenceObservation({ draws: researchDraws, rules, config, validationSummaries: ruleValidationSummaries, window: 10 });
   }, [activeView, isCandidatePoolReady, researchDraws, rules, config, ruleValidationSummaries, referenceRunId]);
   const resolvedReferenceHistory = useMemo<ResolvedReferenceHistoryItem[]>(() => {
@@ -2428,10 +2426,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       <p className="mt-1 text-sm text-slate-500">选择以前某一期，系统会按那一期及以前的数据重新生成当时的综合推荐，并自动和后续开奖对比命中情况。</p>
                     </div>
                     <div className="grid gap-2 sm:grid-cols-[180px_auto]">
-                      <Select value={referenceArchiveIssue} onChange={(event) => setReferenceArchiveIssue(event.target.value)}>
+                      <Select value={selectedReferenceArchiveIssue} onChange={(event) => setReferenceArchiveIssue(event.target.value)}>
                         {activeDraws.map((draw) => <option key={draw.issue} value={draw.issue}>{draw.issue}期</option>)}
                       </Select>
-                      <Button disabled={referenceArchiveSaving || !isCandidatePoolReady} onClick={() => saveReferenceArchiveForIssue(referenceArchiveIssue)}>
+                      <Button disabled={referenceArchiveSaving || !isCandidatePoolReady || !selectedReferenceArchiveIssue} onClick={() => saveReferenceArchiveForIssue(selectedReferenceArchiveIssue)}>
                         <Save className="h-4 w-4" />{referenceArchiveSaving ? "正在保存复盘..." : "保存这期历史复盘"}
                       </Button>
                     </div>
@@ -3883,28 +3881,6 @@ function HitBadge({ hit, label }: { hit: boolean; label: string }) {
   return <Badge tone={hit ? "green" : "rose"}>{label}{hit ? "中" : "未中"}</Badge>;
 }
 
-function HistoryHitBadge({ hit, label }: { hit?: boolean; label: string }) {
-  if (hit === undefined) return <Badge tone="slate">{label}待开奖</Badge>;
-  return <Badge tone={hit ? "green" : "rose"}>{label}{hit ? "中" : "未中"}</Badge>;
-}
-
-function formatHistoryTime(value?: string) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("zh-CN", { hour12: false });
-}
-
-function historyNumberLine(items: ReferenceHistoryNumber[], limit = items.length) {
-  const visible = items.slice(0, limit);
-  return visible.map((item) => `${padNumber(item.number)} ${item.zodiac}`).join("、") || "-";
-}
-
-function historyZodiacLine(items: ReferenceHistoryZodiac[], limit = items.length) {
-  const visible = items.slice(0, limit);
-  return visible.map((item) => `${item.zodiac}(${item.numbers.map(candidateNumberLabel).join("、")})`).join("、") || "-";
-}
-
 function ReferenceObservationPanel({ report }: { report: ReferenceObservationReport }) {
   const rows = [...report.items].reverse();
   return (
@@ -4039,14 +4015,7 @@ function ReferenceHistoryPanel({
 }) {
   const [expandedId, setExpandedId] = useState(records[0]?.id ?? "");
   const visibleRecords = records.slice(0, 30);
-
-  useEffect(() => {
-    if (!records.length) {
-      setExpandedId("");
-      return;
-    }
-    setExpandedId((current) => (current && records.some((record) => record.id === current) ? current : records[0].id));
-  }, [records]);
+  const currentExpandedId = records.some((record) => record.id === expandedId) ? expandedId : records[0]?.id ?? "";
 
   return (
     <Panel className="p-5">
@@ -4073,7 +4042,7 @@ function ReferenceHistoryPanel({
       ) : (
         <div className="mt-4 space-y-3">
           {visibleRecords.map((record) => {
-            const expanded = expandedId === record.id;
+            const expanded = currentExpandedId === record.id;
             const actualDrawLabel = record.actualSpecial ? `${record.actualNextIssue}期：${numberWithZodiac(record.actualSpecial, config)}` : "待开奖";
             return (
               <div key={record.id} className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-4">
@@ -4257,10 +4226,12 @@ function ConfigEditor({
   const [error, setError] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  useEffect(() => {
-    if (!advancedOpen || text) return;
-    setText(JSON.stringify(config, null, 2));
-  }, [advancedOpen, config, text]);
+  function toggleAdvancedConfig() {
+    if (!advancedOpen && !text) {
+      setText(JSON.stringify(config, null, 2));
+    }
+    setAdvancedOpen((current) => !current);
+  }
 
   async function saveConfig() {
     try {
@@ -4277,7 +4248,7 @@ function ConfigEditor({
       <Panel className="p-5">
         <h2 className="font-semibold text-white">配置 JSON</h2>
         <p className="mb-4 text-sm text-slate-500">生肖表、波色表、五行表、段位、对冲、偏移数组都可编辑。保存前会用当前数据做一次计算校验。</p>
-        <Button onClick={() => setAdvancedOpen((current) => !current)}>{advancedOpen ? "收起高级配置" : "展开高级配置"}</Button>
+        <Button onClick={toggleAdvancedConfig}>{advancedOpen ? "收起高级配置" : "展开高级配置"}</Button>
         {advancedOpen ? <Textarea value={text} onChange={(event) => setText(event.target.value)} className="mt-4 min-h-[620px] font-mono text-xs" /> : (
           <div className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.03] p-4 text-sm leading-6 text-slate-400">
             高级 JSON 已默认隐藏，设置页会更快打开；只有修改生肖、波色、五行、段位、偏移等底层配置时再展开。
