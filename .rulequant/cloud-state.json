@@ -12075,6 +12075,25 @@
         ],
         "errors": []
       },
+      "id": "cloud-log-1782705413945-6rt960",
+      "timestamp": "2026-06-29T03:56:53.945Z"
+    },
+    {
+      "type": "sync_draws",
+      "message": "Cloud sync draw source 179 records, latest issue 2026179",
+      "issue": "2026179",
+      "dataCount": 179,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 179
+          }
+        ],
+        "errors": []
+      },
       "id": "cloud-log-1782705393658-4291r9",
       "timestamp": "2026-06-29T03:56:33.658Z"
     },
@@ -12521,7 +12540,7 @@
   "meta": {
     "enabled": true,
     "source": "github",
-    "updatedAt": "2026-06-29T03:56:33.793Z",
+    "updatedAt": "2026-06-29T03:56:54.072Z",
     "latestIssue": "2026179",
     "recordCount": 179
   }
