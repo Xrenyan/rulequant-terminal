@@ -16,8 +16,12 @@ const CORS_HEADERS = {
 };
 
 function isAuthorized(request: Request, requestedUrl: string) {
+  if (process.env.RULEQUANT_PUBLIC_DRAW_SYNC === "true") {
+    const usesConfiguredSource = !requestedUrl || isConfiguredDrawSourceUrl(requestedUrl);
+    if (usesConfiguredSource) return true;
+  }
   const usesConfiguredSource = !requestedUrl || isConfiguredDrawSourceUrl(requestedUrl);
-  if (usesConfiguredSource) return true;
+  if (usesConfiguredSource && hasDrawWriteAuthorization(request)) return true;
   return hasDrawWriteAuthorization(request);
 }
 

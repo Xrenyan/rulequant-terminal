@@ -1145,7 +1145,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         baseUrl: sourceUrl,
         fromYear: Number(sourceFromYear),
         toYear: Number(sourceToYear),
-        persist: true,
+        persist: false,
       };
       const request = async (url: string) => {
         const response = await fetch(`${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`, {
@@ -1187,7 +1187,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         data = await request(endpoint);
       } catch (primaryError) {
         if (endpoint === REMOTE_DRAW_IMPORT_ENDPOINT) {
-          data = await requestServerSync();
+          void requestServerSync;
+          throw primaryError;
         } else if (fallbackEndpoint.startsWith("/")) {
           throw primaryError;
         } else {
@@ -1242,7 +1243,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       const now = Date.now();
       if (now - sourceAutoFetchedAt.current < AUTO_SYNC_INTERVAL_MS) return;
       sourceAutoFetchedAt.current = now;
-      void fetchSourceDraws(false, "replace");
+      void fetchSourceDraws(false, "none");
     };
 
     queueMicrotask(syncLatest);

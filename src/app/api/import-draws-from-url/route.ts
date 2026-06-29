@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { fetchDrawsFromUrl } from "@/lib/server/draw-sync";
 import {
   hasDrawWriteAuthorization,
-  isConfiguredDrawSourceUrl,
   syncDrawsToCloud,
 } from "@/lib/server/sync-draws-to-cloud";
 
@@ -24,7 +23,8 @@ type ImportDrawsBody = {
 };
 
 function canPersistDraws(request: Request, baseUrl: string) {
-  return isConfiguredDrawSourceUrl(baseUrl) || hasDrawWriteAuthorization(request);
+  void baseUrl;
+  return hasDrawWriteAuthorization(request);
 }
 
 export async function OPTIONS() {
