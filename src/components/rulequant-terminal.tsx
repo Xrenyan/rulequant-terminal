@@ -118,12 +118,19 @@ const navItems: Array<{ key: ViewKey; href: string; label: string; icon: typeof 
 
 const mobileNavKeys: ViewKey[] = ["dashboard", "one-click", "candidate-pool", "rules"];
 const mobileNavItems = navItems.filter((item) => mobileNavKeys.includes(item.key));
-const REMOTE_CLOUD_STATE_ENDPOINT = "https://rulequant-terminal.vercel.app/api/cloud/state";
 const REMOTE_DRAW_IMPORT_ENDPOINT = "https://rulequant-terminal.vercel.app/api/import-draws-from-url";
-const REMOTE_DRAW_SYNC_ENDPOINT = "https://rulequant-terminal.vercel.app/api/cron/sync-draws";
 const AUTO_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 const MANUAL_DRAW_KEYS = ["n1", "n2", "n3", "n4", "n5", "n6", "special"] as const;
 type ManualDrawKey = typeof MANUAL_DRAW_KEYS[number];
+
+function staticCloudStateUrls() {
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+  return Array.from(new Set([
+    basePath ? `${basePath}/static-cloud-state.json` : "",
+    "/static-cloud-state.json",
+    "../static-cloud-state.json",
+  ].filter(Boolean)));
+}
 
 const viewLabels: Record<ViewKey, string> = {
   dashboard: "首页",
@@ -1137,10 +1144,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     setSourceLoading(true);
     setSourceStatus("正在同步配置的开奖源数据，请稍候...");
     try {
-      const endpoint = typeof window !== "undefined" && window.location.hostname.endsWith("github.io")
-        ? REMOTE_DRAW_IMPORT_ENDPOINT
-        : "/api/import-draws-from-url";
-      const fallbackEndpoint = endpoint === REMOTE_DRAW_IMPORT_ENDPOINT ? "/api/import-draws-from-url" : REMOTE_DRAW_IMPORT_ENDPOINT;
+      const isGithubPagesHost = typeof window !== "undefined" && window.location.hostname.endsWith("github.io");
+      const endpoint = "/api/import-draws-from-url";
+      const fallbackEndpoint = REMOTE_DRAW_IMPORT_ENDPOINT;
       const payload = {
         baseUrl: sourceUrl,
         fromYear: Number(sourceFromYear),
@@ -1158,38 +1164,37 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         if (!response.ok) throw new Error(data.errors?.[0] ?? "网址数据抓取失败");
         return data;
       };
-      const requestServerSync = async () => {
-        const params = new URLSearchParams({
-          fromYear: sourceFromYear,
-          toYear: sourceToYear,
-          t: String(Date.now()),
-        });
-        const syncResponse = await fetch(`${REMOTE_DRAW_SYNC_ENDPOINT}?${params.toString()}`, { cache: "no-store" });
-        const syncData = (await syncResponse.json().catch(() => ({}))) as UrlImportResponse & { ok?: boolean; error?: string };
-        if (!syncResponse.ok || syncData.ok === false) throw new Error(syncData.error ?? `同步服务失败：HTTP ${syncResponse.status}`);
-
-        const cloudResponse = await fetch(`${REMOTE_CLOUD_STATE_ENDPOINT}?t=${Date.now()}`, { cache: "no-store" });
-        const cloudState = (await cloudResponse.json()) as { draws?: DrawRecord[]; meta?: UrlImportResponse["state"] };
-        if (!cloudResponse.ok || !Array.isArray(cloudState.draws)) throw new Error(`云端状态刷新失败：HTTP ${cloudResponse.status}`);
-        return {
-          records: cloudState.draws,
-          years: syncData.years ?? [],
-          errors: syncData.errors ?? [],
-          fetchedAt: syncData.fetchedAt,
-          latestIssue: cloudState.meta?.latestIssue ?? syncData.latestIssue,
-          recordCount: cloudState.meta?.recordCount ?? syncData.recordCount,
-          state: cloudState.meta,
-        } satisfies UrlImportResponse;
+      const requestStaticSnapshot = async () => {
+        let lastError = "";
+        for (const url of staticCloudStateUrls()) {
+          try {
+            const response = await fetch(`${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`, { cache: "no-store" });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const state = (await response.json()) as { draws?: DrawRecord[]; meta?: UrlImportResponse["state"] };
+            if (!Array.isArray(state.draws) || !state.draws.length) throw new Error("static snapshot missing draws");
+            return {
+              records: state.draws,
+              years: [{ year: Number(sourceFromYear), url, count: state.draws.length }],
+              errors: [],
+              fetchedAt: state.meta?.updatedAt,
+              latestIssue: state.meta?.latestIssue,
+              recordCount: state.meta?.recordCount ?? state.draws.length,
+              state: state.meta,
+            } satisfies UrlImportResponse;
+          } catch (error) {
+            lastError = error instanceof Error ? error.message : String(error);
+          }
+        }
+        throw new Error(`Static draw snapshot unavailable: ${lastError || "unknown error"}`);
       };
 
       let data: UrlImportResponse;
-      try {
+      if (isGithubPagesHost) {
+        data = await requestStaticSnapshot();
+      } else try {
         data = await request(endpoint);
       } catch (primaryError) {
-        if (endpoint === REMOTE_DRAW_IMPORT_ENDPOINT) {
-          void requestServerSync;
-          throw primaryError;
-        } else if (fallbackEndpoint.startsWith("/")) {
+        if (fallbackEndpoint.startsWith("/")) {
           throw primaryError;
         } else {
           data = await request(fallbackEndpoint);
