@@ -23,13 +23,13 @@ jobs:
       RULEQUANT_PAGES_REPO: "Xrenyan/rulequant-terminal-pages"
       RULEQUANT_PAGES_BRANCH: "main"
       RULEQUANT_PAGES_URL: "https://xrenyan.github.io/rulequant-terminal-pages/dashboard/"
-      GH_PAGES_TOKEN: ${{ secrets.RULEQUANT_PAGES_TOKEN || secrets.RULEQUANT_GITHUB_TOKEN || secrets.GH_PAGES_TOKEN }}
+      RULEQUANT_PAGES_DEPLOY_KEY: ${{ secrets.RULEQUANT_PAGES_DEPLOY_KEY }}
     steps:
-      - name: Check Pages token
+      - name: Check Pages deploy key
         shell: bash
         run: |
-          if [ -z "$GH_PAGES_TOKEN" ]; then
-            echo "Missing RULEQUANT_PAGES_TOKEN or RULEQUANT_GITHUB_TOKEN secret. Cannot push GitHub Pages refresh." >&2
+          if [ -z "$RULEQUANT_PAGES_DEPLOY_KEY" ]; then
+            echo "Missing RULEQUANT_PAGES_DEPLOY_KEY secret. Cannot push GitHub Pages refresh." >&2
             exit 1
           fi
 
@@ -57,8 +57,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$RULEQUANT_PAGES_DEPLOY_KEY" > ~/.ssh/rulequant_pages_key
+          chmod 600 ~/.ssh/rulequant_pages_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/rulequant_pages_key -o IdentitiesOnly=yes"
           rm -rf /tmp/rulequant-terminal-pages
-          git clone "https://x-access-token:${GH_PAGES_TOKEN}@github.com/${RULEQUANT_PAGES_REPO}.git" /tmp/rulequant-terminal-pages
+          git clone "git@github.com:${RULEQUANT_PAGES_REPO}.git" /tmp/rulequant-terminal-pages
           cd /tmp/rulequant-terminal-pages
           git checkout "${RULEQUANT_PAGES_BRANCH}"
           find . -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} +
