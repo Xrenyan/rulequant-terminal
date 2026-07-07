@@ -11219,6 +11219,66 @@
           }
         ]
       }
+    },
+    {
+      "issue": "2026188",
+      "year": 2026,
+      "date": "2026-07-07",
+      "n1": 38,
+      "n2": 5,
+      "n3": 19,
+      "n4": 10,
+      "n5": 14,
+      "n6": 1,
+      "special": 16,
+      "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+      "rawAttributes": {
+        "pageIssue": "188",
+        "balls": [
+          {
+            "number": 38,
+            "zodiac": "蛇",
+            "element": "木",
+            "color": "绿"
+          },
+          {
+            "number": 5,
+            "zodiac": "虎",
+            "element": "金",
+            "color": "绿"
+          },
+          {
+            "number": 19,
+            "zodiac": "鼠",
+            "element": "火",
+            "color": "红"
+          },
+          {
+            "number": 10,
+            "zodiac": "鸡",
+            "element": "火",
+            "color": "蓝"
+          },
+          {
+            "number": 14,
+            "zodiac": "蛇",
+            "element": "水",
+            "color": "蓝"
+          },
+          {
+            "number": 1,
+            "zodiac": "马",
+            "element": "水",
+            "color": "红"
+          },
+          {
+            "number": 16,
+            "zodiac": "兔",
+            "element": "木",
+            "color": "绿"
+          }
+        ]
+      }
     }
   ],
   "rules": [
@@ -12541,6 +12601,25 @@
   "logs": [
     {
       "type": "sync_draws",
+      "message": "Cloud sync draw source 188 records, latest issue 2026188",
+      "issue": "2026188",
+      "dataCount": 188,
+      "details": {
+        "sourceUrl": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+        "years": [
+          {
+            "year": 2026,
+            "url": "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html",
+            "count": 188
+          }
+        ],
+        "errors": []
+      },
+      "id": "cloud-log-1783445166746-42wsha",
+      "timestamp": "2026-07-07T17:26:06.746Z"
+    },
+    {
+      "type": "sync_draws",
       "message": "Cloud sync draw source 187 records, latest issue 2026187",
       "issue": "2026187",
       "dataCount": 187,
@@ -13438,8 +13517,8 @@
   "meta": {
     "enabled": true,
     "source": "github",
-    "updatedAt": "2026-07-06T17:26:06.664Z",
-    "latestIssue": "2026187",
-    "recordCount": 187
+    "updatedAt": "2026-07-07T17:26:06.921Z",
+    "latestIssue": "2026188",
+    "recordCount": 188
   }
 }
