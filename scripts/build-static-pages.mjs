@@ -59,8 +59,8 @@ try {
       GITHUB_PAGES: "true",
       GITHUB_PAGES_BASE_PATH: githubPagesBasePath,
       NEXT_PUBLIC_BASE_PATH: githubPagesBasePath,
+      NEXT_PUBLIC_STATIC_EXPORT: "true",
       NEXT_SKIP_NEXT_TYPECHECK: "true",
-      RULEQUANT_DISABLE_MINIFY: "true",
     },
   });
 

@@ -20,12 +20,6 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: isStaticExport,
   },
-  webpack: (config, { dev }) => {
-    if (!dev && process.env.RULEQUANT_DISABLE_MINIFY === "true") {
-      config.optimization.minimize = false;
-    }
-    return config;
-  },
   ...(isStaticExport
     ? {}
     : {

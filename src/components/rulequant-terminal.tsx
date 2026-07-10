@@ -165,12 +165,13 @@ const mobileNavKeys: ViewKey[] = ["dashboard", "one-click", "candidate-pool", "r
 const mobileNavItems = navItems.filter((item) => mobileNavKeys.includes(item.key));
 const REMOTE_DRAW_IMPORT_ENDPOINT = "https://rulequant-terminal.vercel.app/api/import-draws-from-url";
 const AUTO_SYNC_INTERVAL_MS = 10 * 60 * 1000;
+const MAX_RULE_LIBRARY_FILE_BYTES = 5 * 1024 * 1024;
 const MANUAL_DRAW_KEYS = ["n1", "n2", "n3", "n4", "n5", "n6", "special"] as const;
 type ManualDrawKey = typeof MANUAL_DRAW_KEYS[number];
 
 function staticCloudStateUrls() {
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-  if (typeof window !== "undefined" && window.location.hostname.endsWith("github.io") && basePath) {
+  if (typeof window !== "undefined" && (window.location.hostname.endsWith("github.io") || process.env.NEXT_PUBLIC_STATIC_EXPORT === "true") && basePath) {
     return [`${basePath}/static-cloud-state.json`];
   }
   return Array.from(new Set([
@@ -962,7 +963,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const isSeedOnly = !hasLiveDraws && draws.length === seedDraws.length && draws.every((draw, index) => draw.issue === seedDraws[index]?.issue);
   const isCloudData = Boolean(cloudStateMeta?.enabled && cloudStateMeta.recordCount);
   const hasSharedDraws = hasLiveDraws || isCloudData || websiteDraws.length > 0 || hasManualDraws;
-  const isStaticShareHost = typeof window !== "undefined" && window.location.hostname.endsWith("github.io");
+  const isStaticShareHost = typeof window !== "undefined" && (window.location.hostname.endsWith("github.io") || process.env.NEXT_PUBLIC_STATIC_EXPORT === "true");
   const hasCloudAdminToken = typeof window !== "undefined" && Boolean(window.localStorage.getItem("rulequant:adminToken") || process.env.NEXT_PUBLIC_RULEQUANT_ADMIN_TOKEN);
   const showCloudPublishControls = hasCloudAdminToken || !isStaticShareHost;
   const cloudSyncAt = cloudStateMeta?.updatedAt ? new Date(cloudStateMeta.updatedAt).toLocaleString("zh-CN", { hour12: false }) : "";
@@ -1248,7 +1249,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     setSourceLoading(true);
     setSourceStatus("正在同步配置的开奖源数据，请稍候...");
     try {
-      const isGithubPagesHost = typeof window !== "undefined" && window.location.hostname.endsWith("github.io");
+      const isGithubPagesHost = typeof window !== "undefined" && (window.location.hostname.endsWith("github.io") || process.env.NEXT_PUBLIC_STATIC_EXPORT === "true");
       const endpoint = "/api/import-draws-from-url";
       const fallbackEndpoint = REMOTE_DRAW_IMPORT_ENDPOINT;
       const payload = {
@@ -1386,6 +1387,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     if (!file) return;
     setRuleLibraryStatus("");
     try {
+      if (file.size > MAX_RULE_LIBRARY_FILE_BYTES) {
+        setRuleLibraryStatus("导入失败：公式文件超过5MB，请拆分后重试。");
+        return;
+      }
       const text = await file.text();
       if (/\.txt$/i.test(file.name) || file.type === "text/plain") {
         const result = parseRuleTextFile(text, file.name);

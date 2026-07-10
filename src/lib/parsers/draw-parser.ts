@@ -1,7 +1,18 @@
 import Papa from "papaparse";
-import * as XLSX from "xlsx";
 import { parseDrawHtml } from "@/lib/parsers/draw-html-parser";
 import type { DrawRecord } from "@/types/domain";
+
+type XlsxModule = typeof import("xlsx");
+
+const MAX_DRAW_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_DRAW_TEXT_CHARS = 5 * 1024 * 1024;
+const MAX_DRAW_ROWS = 5000;
+let xlsxPromise: Promise<XlsxModule> | undefined;
+
+function loadXlsx() {
+  xlsxPromise ??= import("xlsx");
+  return xlsxPromise;
+}
 
 const FIELD_ALIASES: Record<string, keyof DrawRecord> = {
   issue: "issue",
@@ -59,10 +70,12 @@ function normalizeRow(row: Record<string, unknown>, rowIndex: number): { record?
   const required: Array<keyof DrawRecord> = ["issue", "n1", "n2", "n3", "n4", "n5", "n6", "special"];
   const missing = required.filter((key) => normalized[key] === undefined || normalized[key] === "");
   if (missing.length) return { error: `第 ${rowIndex + 1} 行缺少字段：${missing.join(", ")}` };
+  if (!/^\d{3,12}$/.test(String(normalized.issue))) return { error: `第 ${rowIndex + 1} 行期号格式无效：${normalized.issue}` };
 
   const numbers = [normalized.n1, normalized.n2, normalized.n3, normalized.n4, normalized.n5, normalized.n6, normalized.special] as number[];
   const invalid = numbers.find((number) => !Number.isInteger(number) || number < 1 || number > 49);
   if (invalid !== undefined) return { error: `第 ${rowIndex + 1} 行号码超出 1-49：${invalid}` };
+  if (new Set(numbers).size !== numbers.length) return { error: `第 ${rowIndex + 1} 行存在重复号码` };
 
   return { record: normalized as DrawRecord };
 }
@@ -81,6 +94,7 @@ function parseRows(rows: Array<Record<string, unknown>>): ParseResult {
     if (result.record) {
       if (seen.has(result.record.issue)) {
         errors.push(`重复期号：${result.record.issue}`);
+        return;
       }
       seen.add(result.record.issue);
       records.push(result.record);
@@ -104,6 +118,7 @@ function parseNoHeader(text: string): ParseResult {
 }
 
 export function parseDrawText(text: string): ParseResult {
+  if (text.length > MAX_DRAW_TEXT_CHARS) return { records: [], errors: ["文本超过 5MB，请缩小文件后重试"] };
   if (/<div\b[^>]*\bkj-tit\b/i.test(text) || /<html\b/i.test(text)) {
     const htmlResult = parseDrawHtml(text);
     if (htmlResult.records.length || htmlResult.errors.length) return htmlResult;
@@ -120,16 +135,25 @@ export function parseDrawText(text: string): ParseResult {
 }
 
 export async function parseDrawFile(file: File): Promise<ParseResult> {
-  const ext = file.name.toLowerCase().split(".").pop();
-  if (ext === "html" || ext === "htm") {
-    return parseDrawHtml(await file.text(), { sourceUrl: file.name });
+  if (file.size > MAX_DRAW_FILE_BYTES) return { records: [], errors: ["文件超过 8MB，请缩小文件后重试"] };
+  try {
+    const ext = file.name.toLowerCase().split(".").pop();
+    if (ext === "html" || ext === "htm") {
+      return parseDrawHtml(await file.text(), { sourceUrl: file.name });
+    }
+    if (ext === "xlsx" || ext === "xls") {
+      const XLSX = await loadXlsx();
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array", dense: true, sheetRows: MAX_DRAW_ROWS + 1 });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      if (!sheet) return { records: [], errors: ["Excel中没有可读取的工作表"] };
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+      if (rows.length > MAX_DRAW_ROWS) return { records: [], errors: [`Excel超过 ${MAX_DRAW_ROWS} 行，请分批导入`] };
+      if (!rows.length) return { records: [], errors: ["Excel工作表中没有可识别的开奖数据"] };
+      return parseRows(rows);
+    }
+    return parseDrawText(await file.text());
+  } catch (error) {
+    return { records: [], errors: [`文件解析失败：${error instanceof Error ? error.message : String(error)}`] };
   }
-  if (ext === "xlsx" || ext === "xls") {
-    const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: "array" });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
-    return parseRows(rows);
-  }
-  return parseDrawText(await file.text());
 }

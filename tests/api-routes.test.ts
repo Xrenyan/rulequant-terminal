@@ -82,6 +82,42 @@ describe("draw sync API write guards", () => {
     expect(syncDrawsToCloud).not.toHaveBeenCalled();
   });
 
+  it("rejects oversized import requests before parsing them", async () => {
+    const { POST } = await import("@/app/api/import-draws-from-url/route");
+    const response = await POST(new Request("https://rulequant.test/api/import-draws-from-url", {
+      method: "POST",
+      body: "x".repeat(33 * 1024),
+    }));
+
+    expect(response.status).toBe(413);
+    expect(fetchDrawsFromUrl).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unapproved custom source for public read-only imports", async () => {
+    isConfiguredDrawSourceUrl.mockReturnValue(false);
+    const { POST } = await import("@/app/api/import-draws-from-url/route");
+    const response = await POST(new Request("https://rulequant.test/api/import-draws-from-url", {
+      method: "POST",
+      body: JSON.stringify({ baseUrl: "https://untrusted.example/2026.html", fromYear: 2026, toYear: 2026, persist: false }),
+    }));
+
+    expect(response.status).toBe(403);
+    expect(fetchDrawsFromUrl).not.toHaveBeenCalled();
+  });
+
+  it("allows an authorized administrator to inspect a custom source", async () => {
+    isConfiguredDrawSourceUrl.mockReturnValue(false);
+    hasDrawWriteAuthorization.mockReturnValue(true);
+    const { POST } = await import("@/app/api/import-draws-from-url/route");
+    const response = await POST(new Request("https://rulequant.test/api/import-draws-from-url", {
+      method: "POST",
+      body: JSON.stringify({ baseUrl: "https://trusted-admin-source.example/2026.html", fromYear: 2026, toYear: 2026, persist: false }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(fetchDrawsFromUrl).toHaveBeenCalledOnce();
+  });
+
   it("rejects public cloud-writing cron sync by default", async () => {
     const { GET } = await import("@/app/api/cron/sync-draws/route");
     const response = await GET(new Request("https://rulequant.test/api/cron/sync-draws?fromYear=2026&toYear=2026"));

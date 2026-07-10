@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { runRuleCalculation } from "@/lib/rule-engine/rule-engine";
 import { defaultConfig } from "@/lib/config/default-config";
+import { validateRuleQuantConfig } from "@/lib/config/validate-config";
 import { seedConfig, seedDraws, seedRules, seedSampleCases } from "@/lib/data/seed";
 import { normalizeDraw } from "@/lib/engine/attributes";
 import { loadPersistedState, persistAll, persistReferenceHistoryAndLogs } from "@/lib/storage/db";
@@ -175,13 +176,18 @@ function normalizeRuleForLibrary(rule: RuleRecord, fallback?: RuleRecord): RuleR
 }
 
 function normalizeConfigForCurrentRules(config?: RuleQuantConfig): RuleQuantConfig {
-  return {
+  const normalized = {
     ...defaultConfig,
     ...(config ?? {}),
     colorValues: defaultConfig.colorValues,
     elementTable: defaultConfig.elementTable,
     elementValues: defaultConfig.elementValues,
   };
+  try {
+    return validateRuleQuantConfig(normalized);
+  } catch {
+    return defaultConfig;
+  }
 }
 
 function mergeRulesWithSeedRules(rules: RuleRecord[]) {
@@ -237,7 +243,8 @@ async function loadCloudStateFromApi(): Promise<RuleQuantCloudState | null> {
   if (typeof window === "undefined") return null;
 
   const staticBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-  const isGithubPagesHost = window.location.hostname.endsWith("github.io");
+  const isStaticExport = process.env.NEXT_PUBLIC_STATIC_EXPORT === "true";
+  const isGithubPagesHost = window.location.hostname.endsWith("github.io") || isStaticExport;
   const endpoints = (
     isGithubPagesHost
       ? [`${staticBasePath}/static-cloud-state.json`]
@@ -322,7 +329,7 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
   publishCloudState: async (reason = "manual") => {
     if (typeof window === "undefined") return;
     const token = window.localStorage.getItem("rulequant:adminToken") || process.env.NEXT_PUBLIC_RULEQUANT_ADMIN_TOKEN || "";
-    const endpoint = window.location.hostname.endsWith("github.io") ? REMOTE_CLOUD_STATE_ENDPOINT : "/api/cloud/state";
+    const endpoint = window.location.hostname.endsWith("github.io") || process.env.NEXT_PUBLIC_STATIC_EXPORT === "true" ? REMOTE_CLOUD_STATE_ENDPOINT : "/api/cloud/state";
     const state = get();
     set({ cloudPublishStatus: "publishing", cloudPublishMessage: "正在发布到云端..." });
     try {
@@ -693,12 +700,19 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
     await get().persist();
   },
   updateConfig: async (config) => {
+    const validatedConfig = validateRuleQuantConfig({
+      ...defaultConfig,
+      ...config,
+      colorValues: defaultConfig.colorValues,
+      elementTable: defaultConfig.elementTable,
+      elementValues: defaultConfig.elementValues,
+    });
     const draw = get().draws[0] ?? seedDraws[0];
-    normalizeDraw(draw, config);
+    normalizeDraw(draw, validatedConfig);
     const rule = get().rules[0] ?? seedRules[0];
-    runRuleCalculation(rule, normalizeDraw(draw, config), config);
+    runRuleCalculation(rule, normalizeDraw(draw, validatedConfig), validatedConfig);
     const log = makeLog({ type: "rule_updated", message: "修改基础表配置，综合参考需要重新计算" });
-    set({ config, operationLogs: trimLogs([log, ...get().operationLogs]) });
+    set({ config: validatedConfig, operationLogs: trimLogs([log, ...get().operationLogs]) });
     await get().persist();
   },
 }));

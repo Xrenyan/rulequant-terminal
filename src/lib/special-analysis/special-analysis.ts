@@ -1,5 +1,5 @@
 import { getNumberAttributes, normalizeDraw } from "@/lib/engine/attributes";
-import { evaluateFormula } from "@/lib/formula/evaluate";
+import { evaluateFormulaExpression } from "@/lib/formula-engine/formula-engine";
 import type { DrawRecord, OrderMode, RuleQuantConfig } from "@/types/domain";
 
 export type SpecialRuleId = "half-head-l" | "half-head-d" | "kill-color" | "kill-door" | "seven-tail-d" | "kill-element-d";
@@ -332,7 +332,7 @@ export function analyzeSpecialRule(specId: SpecialRuleId, draws: DrawRecord[], c
     const currentNumbers = [draw.n1, draw.n2, draw.n3, draw.n4, draw.n5, draw.n6, draw.special];
     try {
       const normalized = normalizeDraw(draw, config);
-      const formula = evaluateFormula(spec.formula, normalized, config, spec.orderMode);
+      const formula = evaluateFormulaExpression(spec.formula, normalized, config, spec.orderMode);
       const target = resolveTarget(spec, formula.value, config);
       const nextDraw = sorted[index + 1];
       const nextSpecial = nextDraw?.special;

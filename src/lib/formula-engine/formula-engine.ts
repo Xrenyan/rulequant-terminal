@@ -245,6 +245,15 @@ function zodiacOffsetsForRule(rule: RuleRecord): number[] {
   return parseSignedOffsets(source);
 }
 
+export function evaluateFormulaExpression(
+  formula: string,
+  current: NormalizedDraw,
+  config: RuleQuantConfig,
+  orderMode: RuleRecord["orderMode"],
+) {
+  return evaluateFormula(formula, current, config, orderMode);
+}
+
 function zodiacSetOffsetsForRule(rule: RuleRecord): number[] {
   const normalizer = rule.normalizer ?? "";
   const match = normalizer.match(/zodiac_set_offsets\s*:?\s*([+\-\d,\s.]+)/i);

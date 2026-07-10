@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { fetchDrawsFromUrl } from "@/lib/server/draw-sync";
 import {
   hasDrawWriteAuthorization,
+  isConfiguredDrawSourceUrl,
   syncDrawsToCloud,
 } from "@/lib/server/sync-draws-to-cloud";
 
@@ -22,6 +23,8 @@ type ImportDrawsBody = {
   persist?: boolean;
 };
 
+const MAX_REQUEST_BYTES = 32 * 1024;
+
 function canPersistDraws(request: Request, baseUrl: string) {
   void baseUrl;
   return hasDrawWriteAuthorization(request);
@@ -33,10 +36,26 @@ export async function OPTIONS() {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as ImportDrawsBody;
+    const declaredLength = Number(request.headers.get("content-length") ?? 0);
+    if (declaredLength > MAX_REQUEST_BYTES) {
+      return NextResponse.json({ records: [], years: [], errors: ["request body too large"] }, { status: 413, headers: CORS_HEADERS });
+    }
+    const rawBody = await request.text();
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_REQUEST_BYTES) {
+      return NextResponse.json({ records: [], years: [], errors: ["request body too large"] }, { status: 413, headers: CORS_HEADERS });
+    }
+    const body = JSON.parse(rawBody) as ImportDrawsBody;
     const baseUrl = String(body.baseUrl || body.url || "").trim();
     if (!baseUrl) {
       return NextResponse.json({ records: [], years: [], errors: ["missing url"] }, { status: 400, headers: CORS_HEADERS });
+    }
+
+    const authorized = hasDrawWriteAuthorization(request);
+    if (!isConfiguredDrawSourceUrl(baseUrl) && !authorized) {
+      return NextResponse.json(
+        { records: [], years: [], errors: ["custom source requires administrator authorization"], persisted: false },
+        { status: 403, headers: CORS_HEADERS },
+      );
     }
 
     const input = {
