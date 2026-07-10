@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeBinaryTrend, analyzeSpecialRule } from "@/lib/special-analysis/special-analysis";
+import { analyzeBinaryTrend, analyzeSpecialRule, buildPositionNineGridTriggers } from "@/lib/special-analysis/special-analysis";
 import { seedConfig, seedDraws } from "@/lib/data/seed";
 import type { DrawRecord } from "@/types/domain";
 
@@ -15,6 +15,32 @@ const first: DrawRecord = {
 };
 
 describe("special rule analysis", () => {
+  it("builds the positional nine-grid from the first three columns when the previous special appears at 平1", () => {
+    const draws: DrawRecord[] = [
+      { ...first, issue: "2026100", special: 18 },
+      { ...first, issue: "2026101", n1: 18, n2: 21, n3: 33, special: 49 },
+      { ...first, issue: "2026102", n1: 7, n2: 8, n3: 9, special: 10 },
+    ];
+
+    const trigger = buildPositionNineGridTriggers(draws).find((item) => item.triggerDraw.issue === "2026101");
+
+    expect(trigger?.positionIndex).toBe(0);
+    expect(trigger?.columnIndexes).toEqual([0, 1, 2]);
+    expect(trigger?.nextDraw?.issue).toBe("2026102");
+  });
+
+  it("builds the positional nine-grid from 平5, 平6 and 特码 when the previous special appears at 特码", () => {
+    const draws: DrawRecord[] = [
+      { ...first, issue: "2026200", special: 18 },
+      { ...first, issue: "2026201", n5: 30, n6: 31, special: 18 },
+    ];
+
+    const trigger = buildPositionNineGridTriggers(draws)[0];
+
+    expect(trigger.positionIndex).toBe(6);
+    expect(trigger.columnIndexes).toEqual([4, 5, 6]);
+  });
+
   it("calculates kill-color through the shared formula engine and checks the next special", () => {
     const report = analyzeSpecialRule("kill-color", [first, { ...first, issue: "2026002", special: 5 }], seedConfig);
     const detail = report.details[0];
@@ -66,6 +92,19 @@ describe("special rule analysis", () => {
     expect(size.backtestRate).toBeGreaterThanOrEqual(0);
     expect(size.backtestRate).toBeLessThanOrEqual(100);
     expect(size.sequence20.length).toBeLessThanOrEqual(20);
+    expect(size.modelWeights.reduce((sum, item) => sum + item.weight, 0)).toBeCloseTo(100, 0);
+    expect(size.trainingSamples).toBeGreaterThan(0);
+  });
+
+  it("learns different size probabilities when recent historical patterns change", () => {
+    const alternating = Array.from({ length: 40 }, (_, index): DrawRecord => ({ ...first, issue: `2026${String(index + 1).padStart(3, "0")}`, special: index % 2 === 0 ? 40 : 10 }));
+    const streaking = alternating.map((draw, index) => ({ ...draw, special: index >= 30 ? 40 : draw.special }));
+
+    const alternatingReport = analyzeBinaryTrend(alternating, "size");
+    const streakingReport = analyzeBinaryTrend(streaking, "size");
+
+    expect(alternatingReport.probabilities).not.toEqual(streakingReport.probabilities);
+    expect(streakingReport.currentStreak).toBe(10);
   });
 
   it("matches the D-order seven-tail example for base tail 8", () => {

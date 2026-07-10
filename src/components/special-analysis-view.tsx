@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronDown, RefreshCw, XCircle } from "lucide-react";
-import { analyzeBinaryTrend, analyzeSpecialRule, SPECIAL_RULE_SPECS, type BinaryTrendReport, type SpecialRuleDetail, type SpecialRuleId } from "@/lib/special-analysis/special-analysis";
+import { analyzeBinaryTrend, analyzeSpecialRule, buildPositionNineGridTriggers, drawNumbers, DRAW_POSITION_LABELS, SPECIAL_RULE_SPECS, type BinaryTrendReport, type SpecialRuleDetail, type SpecialRuleId } from "@/lib/special-analysis/special-analysis";
 import { getNumberAttributes } from "@/lib/engine/attributes";
 import type { DrawRecord, RuleQuantConfig } from "@/types/domain";
 import { Badge } from "@/components/ui/badge";
@@ -24,80 +24,94 @@ function numberLabel(number: number, config: RuleQuantConfig) {
   return `${String(number).padStart(2, "0")} ${zodiac}`;
 }
 
-const FIXED_ZODIAC_ORDER = ["鼠", "牛", "虎", "兔", "龙", "蛇", "马", "羊", "猴", "鸡", "狗", "猪"];
-const NINE_GRID_OFFSETS = [-4, -3, -2, -1, 0, 1, 2, 3, 4];
-
-function closedNumber(number: number, offset: number) {
-  return ((number - 1 + offset) % 49 + 49) % 49 + 1;
-}
-
-function closedIndex(index: number, offset: number, length: number) {
-  return ((index + offset) % length + length) % length;
-}
-
 function ZodiacNumberNineGrid({ draws, config }: { draws: DrawRecord[]; config: RuleQuantConfig }) {
-  const sortedDraws = useMemo(() => [...draws].sort((a, b) => a.issue.localeCompare(b.issue, "zh-CN", { numeric: true })).reverse(), [draws]);
+  const triggers = useMemo(() => buildPositionNineGridTriggers(draws), [draws]);
   const [selectedIssue, setSelectedIssue] = useState("");
-  const selectedDraw = sortedDraws.find((draw) => draw.issue === selectedIssue) ?? sortedDraws[0];
-  if (!selectedDraw) return null;
+  const selected = triggers.find((trigger) => trigger.triggerDraw.issue === selectedIssue) ?? triggers[0];
 
-  const centerAttributes = getNumberAttributes(selectedDraw.special, config);
-  const centerZodiacIndex = Math.max(0, FIXED_ZODIAC_ORDER.indexOf(centerAttributes.zodiac));
+  if (!selected) {
+    return (
+      <Panel className="p-4 sm:p-5">
+        <Badge tone="cyan">位置触发九宫格</Badge>
+        <h3 className="mt-3 font-semibold text-white">当前开奖记录中还没有找到触发期</h3>
+        <p className="mt-1 text-sm leading-6 text-slate-400">当上期的特码再次出现在下一期的平1至平6或特码位置时，系统会自动生成三期三列九宫格。</p>
+      </Panel>
+    );
+  }
+
+  const positionLabel = DRAW_POSITION_LABELS[selected.positionIndex];
+  const previousSpecialZodiac = getNumberAttributes(selected.previousSpecial, config).zodiac;
+  const rows = [
+    { label: "上一期", draw: selected.previousDraw },
+    { label: "触发期", draw: selected.triggerDraw },
+    { label: "下一期", draw: selected.nextDraw },
+  ];
 
   return (
     <Panel className="p-4 sm:p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="flex flex-wrap items-center gap-2"><Badge tone="cyan">九宫格肖码图</Badge><Badge tone="yellow">中心：特码</Badge></div>
-          <h3 className="mt-3 font-semibold text-white">以上期开奖特码为中心查看生肖和号码</h3>
-          <p className="mt-1 text-xs leading-5 text-slate-500">号码按1-49闭环，生肖按鼠、牛、虎、兔、龙、蛇、马、羊、猴、鸡、狗、猪固定顺序闭环。</p>
+          <div className="flex flex-wrap items-center gap-2"><Badge tone="cyan">位置触发九宫格</Badge><Badge tone="yellow">肖码同格</Badge></div>
+          <h3 className="mt-3 font-semibold text-white">上期的特码出现在本期哪个位置，就围绕该位置取三列</h3>
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">平1取平1、平2、平3；特码取平5、平6、特码；中间位置取前一列、本列、后一列。触发期固定显示在九宫格中间一行。</p>
         </div>
-        <Select className="w-full lg:w-48" value={selectedDraw.issue} onChange={(event) => setSelectedIssue(event.target.value)} aria-label="选择九宫格期号">
-          {sortedDraws.map((draw) => <option key={draw.issue} value={draw.issue}>{draw.issue}期</option>)}
+        <Select className="w-full lg:w-72" value={selected.triggerDraw.issue} onChange={(event) => setSelectedIssue(event.target.value)} aria-label="选择九宫格触发期">
+          {triggers.map((trigger) => (
+            <option key={trigger.triggerDraw.issue} value={trigger.triggerDraw.issue}>
+              {trigger.triggerDraw.issue}期 · 上期特码在{DRAW_POSITION_LABELS[trigger.positionIndex]}
+            </option>
+          ))}
         </Select>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className="rounded-lg border border-white/[0.08] bg-black/15 p-3 sm:p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="font-medium text-white">号码九宫格</p>
-            <span className="text-xs text-slate-500">{selectedDraw.issue}期 · 特码 {numberLabel(selectedDraw.special, config)}</span>
+      <div className="mt-4 rounded-lg border border-white/[0.08] bg-black/15 p-3 sm:p-4">
+        <div className="flex flex-col gap-2 border-b border-white/[0.07] pb-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-medium text-white">{selected.previousDraw.issue}期特码 {numberLabel(selected.previousSpecial, config)}，在 {selected.triggerDraw.issue}期出现在{positionLabel}</p>
+            <p className="mt-1 text-xs text-slate-500">当前显示第 {selected.columnIndexes[0] + 1} 至第 {selected.columnIndexes[2] + 1} 列位置窗口，共找到 {triggers.length} 次历史触发。</p>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {NINE_GRID_OFFSETS.map((offset) => {
-              const number = closedNumber(selectedDraw.special, offset);
-              const attrs = getNumberAttributes(number, config);
-              const center = offset === 0;
-              return (
-                <div key={offset} className={cn("flex aspect-[1.15/1] min-h-20 min-w-0 flex-col items-center justify-center rounded-md border p-2 text-center", center ? "border-amber-200/60 bg-amber-300/14 text-amber-50 shadow-[0_0_26px_rgba(251,191,36,0.10)]" : "border-cyan-300/18 bg-cyan-300/[0.055] text-cyan-50")}>
-                  <span className="text-[11px] text-slate-500">{center ? "中心特码" : offset > 0 ? `+${offset}` : offset}</span>
-                  <strong className="mt-1 text-xl tabular-nums">{String(number).padStart(2, "0")}</strong>
-                  <span className="mt-1 text-xs">{attrs.zodiac} · {attrs.color}</span>
-                </div>
-              );
-            })}
-          </div>
+          <Badge tone="cyan">触发：{String(selected.previousSpecial).padStart(2, "0")} {previousSpecialZodiac}</Badge>
         </div>
 
-        <div className="rounded-lg border border-white/[0.08] bg-black/15 p-3 sm:p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="font-medium text-white">生肖九宫格</p>
-            <span className="text-xs text-slate-500">中心生肖：{centerAttributes.zodiac}</span>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {NINE_GRID_OFFSETS.map((offset) => {
-              const zodiac = FIXED_ZODIAC_ORDER[closedIndex(centerZodiacIndex, offset, FIXED_ZODIAC_ORDER.length)];
-              const numbers = config.zodiacTable[zodiac] ?? [];
-              const center = offset === 0;
-              return (
-                <div key={offset} className={cn("flex aspect-[1.15/1] min-h-20 min-w-0 flex-col items-center justify-center rounded-md border p-2 text-center", center ? "border-amber-200/60 bg-amber-300/14 text-amber-50 shadow-[0_0_26px_rgba(251,191,36,0.10)]" : "border-violet-300/18 bg-violet-300/[0.055] text-violet-50")}>
-                  <span className="text-[11px] text-slate-500">{center ? "中心生肖" : offset > 0 ? `+${offset}` : offset}</span>
-                  <strong className="mt-1 text-xl">{zodiac}</strong>
-                  <span className="mt-1 break-words text-[10px] leading-4 text-slate-400">{numbers.map((number) => String(number).padStart(2, "0")).join("、")}</span>
-                </div>
-              );
-            })}
-          </div>
+        <div className="mt-3 grid grid-cols-[56px_repeat(3,minmax(0,1fr))] gap-2 sm:grid-cols-[76px_repeat(3,minmax(0,1fr))]">
+          <div />
+          {selected.columnIndexes.map((columnIndex) => (
+            <div key={columnIndex} className="flex min-h-9 items-center justify-center rounded-md border border-white/[0.07] bg-white/[0.035] px-1 text-center text-xs font-medium text-slate-300">
+              {DRAW_POSITION_LABELS[columnIndex]}
+            </div>
+          ))}
+
+          {rows.map((row, rowIndex) => (
+            <div className="contents" key={row.label}>
+              <div className={cn("flex min-h-24 items-center justify-center rounded-md border px-1 text-center text-[11px] font-medium leading-4 sm:text-xs", rowIndex === 1 ? "border-cyan-300/30 bg-cyan-300/[0.08] text-cyan-100" : "border-white/[0.07] bg-white/[0.025] text-slate-400")}>
+                <span>{row.label}<br />{row.draw?.issue.slice(-3) ?? "待定"}期</span>
+              </div>
+              {selected.columnIndexes.map((columnIndex) => {
+                const number = row.draw ? drawNumbers(row.draw)[columnIndex] : undefined;
+                const attributes = number ? getNumberAttributes(number, config) : undefined;
+                const isAnchor = rowIndex === 1 && columnIndex === selected.positionIndex;
+                return (
+                  <div key={columnIndex} className={cn("flex min-h-24 min-w-0 flex-col items-center justify-center rounded-md border p-1.5 text-center sm:p-2", isAnchor ? "border-amber-200/60 bg-amber-300/14 text-amber-50 shadow-[0_0_26px_rgba(251,191,36,0.10)]" : rowIndex === 1 ? "border-cyan-300/24 bg-cyan-300/[0.07] text-cyan-50" : "border-white/[0.08] bg-black/20 text-slate-200")}>
+                    {number && attributes ? (
+                      <>
+                        <strong className="text-lg tabular-nums sm:text-xl">{String(number).padStart(2, "0")}</strong>
+                        <span className="mt-1 text-xs font-medium">{attributes.zodiac}</span>
+                        <span className="mt-0.5 text-[10px] text-slate-500">{attributes.color}{isAnchor ? " · 上期特码" : ""}</span>
+                      </>
+                    ) : (
+                      <span className="text-xs leading-5 text-slate-500">等待<br />下一期开奖</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 gap-2 text-xs leading-5 text-slate-400 sm:grid-cols-3">
+          <div className="rounded-md border border-white/[0.07] bg-white/[0.025] px-3 py-2"><strong className="text-slate-200">在平1：</strong>取平1、平2、平3</div>
+          <div className="rounded-md border border-white/[0.07] bg-white/[0.025] px-3 py-2"><strong className="text-slate-200">在中间：</strong>取前一列、本列、后一列</div>
+          <div className="rounded-md border border-white/[0.07] bg-white/[0.025] px-3 py-2"><strong className="text-slate-200">在特码：</strong>取平5、平6、特码</div>
         </div>
       </div>
     </Panel>
@@ -187,7 +201,10 @@ function TrendCard({ report }: { report: BinaryTrendReport }) {
           <span key={`${item}-${index}`} className={cn("flex h-8 w-8 items-center justify-center rounded-md border text-xs", item === report.labels[0] ? "border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-100" : "border-violet-300/20 bg-violet-300/[0.08] text-violet-100")}>{item}</span>
         ))}
       </div>
-      <p className="mt-3 text-xs text-slate-500">最近20期 · 当前连续 {report.currentLabel} {report.currentStreak} 期 · 历史滚动验证 {report.backtestSuccess}/{report.backtestTotal}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {report.modelWeights.slice(0, 3).map((model) => <Badge key={model.label} tone="slate">{model.label} {model.weight}%</Badge>)}
+      </div>
+      <p className="mt-3 text-xs leading-5 text-slate-500">最近20期 · 当前连续 {report.currentLabel} {report.currentStreak} 期 · 学习样本 {report.trainingSamples} 期 · 概率差 {report.confidence}% · 历史滚动验证 {report.backtestSuccess}/{report.backtestTotal}</p>
     </Panel>
   );
 }

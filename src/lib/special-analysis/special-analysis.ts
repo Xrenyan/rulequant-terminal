@@ -70,8 +70,50 @@ export type BinaryTrendReport = {
   backtestTotal: number;
   backtestSuccess: number;
   backtestRate: number;
+  trainingSamples: number;
+  confidence: number;
+  modelWeights: Array<{ label: string; weight: number }>;
   explanation: string;
 };
+
+export const DRAW_POSITION_LABELS = ["平1", "平2", "平3", "平4", "平5", "平6", "特码"] as const;
+
+export type PositionNineGridTrigger = {
+  previousDraw: DrawRecord;
+  triggerDraw: DrawRecord;
+  nextDraw?: DrawRecord;
+  previousSpecial: number;
+  positionIndex: number;
+  columnIndexes: [number, number, number];
+};
+
+export function drawNumbers(draw: DrawRecord) {
+  return [draw.n1, draw.n2, draw.n3, draw.n4, draw.n5, draw.n6, draw.special];
+}
+
+export function buildPositionNineGridTriggers(draws: DrawRecord[]): PositionNineGridTrigger[] {
+  const sorted = sortDraws(draws);
+  const triggers: PositionNineGridTrigger[] = [];
+
+  for (let index = 1; index < sorted.length; index += 1) {
+    const previousDraw = sorted[index - 1];
+    const triggerDraw = sorted[index];
+    const positionIndex = drawNumbers(triggerDraw).indexOf(previousDraw.special);
+    if (positionIndex < 0) continue;
+
+    const windowStart = Math.min(Math.max(positionIndex - 1, 0), 4);
+    triggers.push({
+      previousDraw,
+      triggerDraw,
+      nextDraw: sorted[index + 1],
+      previousSpecial: previousDraw.special,
+      positionIndex,
+      columnIndexes: [windowStart, windowStart + 1, windowStart + 2],
+    });
+  }
+
+  return triggers.reverse();
+}
 
 export const SPECIAL_RULE_SPECS: SpecialRuleSpec[] = [
   {
@@ -363,31 +405,126 @@ function labelsFor(kind: BinaryTrendKind): [string, string] {
   return kind === "size" ? ["大", "小"] : ["单", "双"];
 }
 
-function trendProbability(states: number[]) {
-  if (!states.length) return [0.5, 0.5] as const;
-  const current = states.at(-1)!;
-  let next0 = 0;
-  let next1 = 0;
-  for (let index = 0; index < states.length - 1; index += 1) {
-    if (states[index] !== current) continue;
-    if (states[index + 1] === 0) next0 += 1;
-    else next1 += 1;
+type TrendModel = {
+  label: string;
+  predict: (states: number[]) => number;
+};
+
+function boundedProbability(value: number) {
+  return Math.min(0.95, Math.max(0.05, value));
+}
+
+function frequencyProbability(states: number[], window: number) {
+  const sample = states.slice(-window);
+  if (!sample.length) return 0.5;
+  return (sample.filter((state) => state === 0).length + 1) / (sample.length + 2);
+}
+
+function recencyProbability(states: number[]) {
+  const sample = states.slice(-40);
+  if (!sample.length) return 0.5;
+  let zeroWeight = 1;
+  let totalWeight = 2;
+  sample.forEach((state, index) => {
+    const weight = 0.88 ** (sample.length - index - 1);
+    totalWeight += weight;
+    if (state === 0) zeroWeight += weight;
+  });
+  return zeroWeight / totalWeight;
+}
+
+function patternProbability(states: number[], order: number) {
+  if (states.length <= order) return frequencyProbability(states, 30);
+  const pattern = states.slice(-order);
+  let zero = 1;
+  let one = 1;
+  for (let index = order; index < states.length; index += 1) {
+    let matches = true;
+    for (let offset = 0; offset < order; offset += 1) {
+      if (states[index - order + offset] !== pattern[offset]) {
+        matches = false;
+        break;
+      }
+    }
+    if (!matches) continue;
+    if (states[index] === 0) zero += 1;
+    else one += 1;
   }
-  const transition0 = (next0 + 1) / (next0 + next1 + 2);
-  const frequency0 = (states.filter((state) => state === 0).length + 1) / (states.length + 2);
-  const probability0 = transition0 * 0.65 + frequency0 * 0.35;
-  return [probability0, 1 - probability0] as const;
+  return zero / (zero + one);
+}
+
+function currentRunLength(states: number[]) {
+  const current = states.at(-1);
+  if (current === undefined) return 0;
+  let length = 0;
+  for (let index = states.length - 1; index >= 0 && states[index] === current; index -= 1) length += 1;
+  return length;
+}
+
+function streakProbability(states: number[]) {
+  const current = states.at(-1);
+  if (current === undefined) return 0.5;
+  const targetRun = Math.min(currentRunLength(states), 4);
+  let zero = 1;
+  let one = 1;
+
+  for (let nextIndex = 1; nextIndex < states.length; nextIndex += 1) {
+    if (states[nextIndex - 1] !== current) continue;
+    let run = 0;
+    for (let index = nextIndex - 1; index >= 0 && states[index] === current; index -= 1) run += 1;
+    if (Math.min(run, 4) !== targetRun) continue;
+    if (states[nextIndex] === 0) zero += 1;
+    else one += 1;
+  }
+  return zero / (zero + one);
+}
+
+const TREND_MODELS: TrendModel[] = [
+  { label: "近10期", predict: (states) => frequencyProbability(states, 10) },
+  { label: "近20期", predict: (states) => frequencyProbability(states, 20) },
+  { label: "近30期", predict: (states) => frequencyProbability(states, 30) },
+  { label: "时间衰减", predict: recencyProbability },
+  { label: "一阶走势", predict: (states) => patternProbability(states, 1) },
+  { label: "二阶走势", predict: (states) => patternProbability(states, 2) },
+  { label: "三阶走势", predict: (states) => patternProbability(states, 3) },
+  { label: "连开状态", predict: streakProbability },
+];
+
+function learnedTrendProbability(states: number[]) {
+  if (!states.length) {
+    return { probabilities: [0.5, 0.5] as const, weights: TREND_MODELS.map((model) => ({ label: model.label, weight: 1 / TREND_MODELS.length })), trainingSamples: 0 };
+  }
+
+  const losses = TREND_MODELS.map(() => 0);
+  const startIndex = Math.max(8, states.length - 80);
+  let trainingSamples = 0;
+  for (let targetIndex = startIndex; targetIndex < states.length; targetIndex += 1) {
+    const history = states.slice(0, targetIndex);
+    TREND_MODELS.forEach((model, modelIndex) => {
+      const predictedZero = boundedProbability(model.predict(history));
+      const actualZero = states[targetIndex] === 0 ? 1 : 0;
+      losses[modelIndex] += (predictedZero - actualZero) ** 2;
+    });
+    trainingSamples += 1;
+  }
+
+  const rawWeights = losses.map((loss) => Math.exp(-6 * (trainingSamples ? loss / trainingSamples : 0.25)));
+  const weightTotal = rawWeights.reduce((sum, weight) => sum + weight, 0) || 1;
+  const weights = TREND_MODELS.map((model, index) => ({ label: model.label, weight: rawWeights[index] / weightTotal }));
+  const probabilityZero = boundedProbability(TREND_MODELS.reduce((sum, model, index) => sum + boundedProbability(model.predict(states)) * weights[index].weight, 0));
+  return { probabilities: [probabilityZero, 1 - probabilityZero] as const, weights, trainingSamples };
 }
 
 export function analyzeBinaryTrend(draws: DrawRecord[], kind: BinaryTrendKind): BinaryTrendReport {
   const labels = labelsFor(kind);
   const states = sortDraws(draws).map((draw) => stateFor(draw.special, kind));
   const recent30 = states.slice(-30);
-  const probabilities = trendProbability(recent30);
+  const learned = learnedTrendProbability(states);
+  const probabilities = learned.probabilities;
   let backtestTotal = 0;
   let backtestSuccess = 0;
-  for (let index = 20; index < states.length; index += 1) {
-    const model = trendProbability(states.slice(Math.max(0, index - 30), index));
+  for (let index = Math.max(20, states.length - 100); index < states.length; index += 1) {
+    const model = learnedTrendProbability(states.slice(0, index)).probabilities;
     const prediction = model[0] >= model[1] ? 0 : 1;
     backtestTotal += 1;
     if (prediction === states[index]) backtestSuccess += 1;
@@ -416,6 +553,11 @@ export function analyzeBinaryTrend(draws: DrawRecord[], kind: BinaryTrendKind): 
     backtestTotal,
     backtestSuccess,
     backtestRate: rate(backtestSuccess, backtestTotal),
-    explanation: "近30期频率与当前状态的转移概率加权，并用历史滚动窗口验证；仅用于走势研究，不代表下一期必然结果。",
+    trainingSamples: learned.trainingSamples,
+    confidence: Number((Math.abs(probabilities[0] - probabilities[1]) * 100).toFixed(2)),
+    modelWeights: learned.weights
+      .map((item) => ({ label: item.label, weight: Number((item.weight * 100).toFixed(1)) }))
+      .sort((a, b) => b.weight - a.weight),
+    explanation: "自适应模型会从历史数据学习近期频率、时间衰减、1至3阶走势和连开状态，并按滚动预测误差自动调整各模型权重；不是固定格式，仅用于走势研究。",
   };
 }
