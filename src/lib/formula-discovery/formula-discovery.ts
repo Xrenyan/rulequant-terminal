@@ -19,10 +19,11 @@ export type FormulaDiscoveryInput = {
   trainRatio?: number;
   minTrainingRate?: number;
   minValidationRate?: number;
+  combinationLimitPerTerm?: number;
 };
 
 const DEFAULT_CATEGORIES: RuleCategory[] = ["kill_zodiac", "kill_tail", "kill_sum", "kill_head", "kill_segment", "kill_element"];
-const DEFAULT_VARIABLES = ["尾(平1)", "尾(平2)", "合(平3)", "段(平4)", "头(平5)", "特码合", "总数尾", "期尾"];
+const DEFAULT_VARIABLES = ["平1尾", "平2尾", "平2五行值", "平3合", "平4头", "平4波色值", "平5段", "平6尾", "特码合", "特码五行值", "总数尾", "期尾"];
 const discoveryCache = new Map<string, FormulaDiscoveryCandidate[]>();
 
 function discoveryCacheKey(input: FormulaDiscoveryInput): string {
@@ -35,6 +36,7 @@ function discoveryCacheKey(input: FormulaDiscoveryInput): string {
     trainRatio: input.trainRatio ?? 0.7,
     minTrainingRate: input.minTrainingRate ?? 50,
     minValidationRate: input.minValidationRate ?? 50,
+    combinationLimitPerTerm: input.combinationLimitPerTerm ?? 80,
     config: input.config,
   });
 }
@@ -153,6 +155,11 @@ function combinations(items: string[], maxTerms: number, exactTerms?: number): s
   return output;
 }
 
+function spreadSample<T>(items: T[], limit: number): T[] {
+  if (items.length <= limit) return items;
+  return Array.from({ length: limit }, (_, index) => items[Math.floor((index * items.length) / limit)]);
+}
+
 function makeRule(category: RuleCategory, formula: string, index: number): RuleRecord {
   const now = new Date().toISOString();
   return {
@@ -256,9 +263,10 @@ export function discoverFormulaCandidates(input: FormulaDiscoveryInput): Formula
   const issueIndex = new Map(sortedDraws.map((draw, index) => [draw.issue, index]));
   const candidates: FormulaDiscoveryCandidate[] = [];
   const targetPoolSize = Math.max(input.limit ?? 20, 20) * 2;
+  const combinationLimit = Math.max(20, Math.min(input.combinationLimitPerTerm ?? 80, 160));
 
   for (let termCount = 2; termCount <= maxTerms; termCount += 1) {
-    const formulas = combinations(variablePool, termCount, termCount).map((items) => items.join(" + "));
+    const formulas = spreadSample(combinations(variablePool, termCount, termCount), combinationLimit).map((items) => items.join(" + "));
     const rules = categories.flatMap((category) => formulas.map((formula, index) => ({ ...makeRule(category, formula, index + termCount * 1000), enabled: true })));
     const batchResults = runBacktest({ draws: sortedDraws, rules, config: input.config }).ruleResults;
 

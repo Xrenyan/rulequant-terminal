@@ -268,9 +268,12 @@ async function main() {
   const localDraws = Array.isArray(localState.draws)
     ? localState.draws
     : readJsonIfExists(path.join(root, "data", "sample-draws.json"), []);
-  const localRules = Array.isArray(localState.rules)
-    ? localState.rules
-    : readJsonIfExists(path.join(root, "data", "sample-rules.json"), []);
+  const bundledRules = readJsonIfExists(path.join(root, "data", "sample-rules.json"), []);
+  const localRules = mergeByKey(
+    Array.isArray(bundledRules) ? bundledRules : [],
+    Array.isArray(localState.rules) ? localState.rules : [],
+    (rule) => String(rule.id ?? ""),
+  );
   let state = localState;
   try {
     const response = await fetch(`${endpoint}${endpoint.includes("?") ? "&" : "?"}t=${Date.now()}`, {

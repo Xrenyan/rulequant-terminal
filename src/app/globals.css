@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --background: #040814;
+  --background: #05080d;
   --foreground: #eef5ff;
+  --rq-panel: rgba(12, 17, 24, 0.82);
+  --rq-panel-strong: rgba(15, 21, 30, 0.94);
+  --rq-border: rgba(255, 255, 255, 0.085);
+  --rq-muted: #8b9ab0;
 }
 
 html {
@@ -20,10 +24,7 @@ html {
 body {
   min-height: 100vh;
   overflow-x: hidden;
-  background:
-    radial-gradient(circle at 12% 8%, rgba(34, 211, 238, 0.18), transparent 30%),
-    radial-gradient(circle at 88% 6%, rgba(139, 92, 246, 0.18), transparent 28%),
-    linear-gradient(135deg, #030712 0%, #07111f 48%, #040814 100%);
+  background: linear-gradient(135deg, #05080d 0%, #071017 52%, #080b12 100%);
   color: var(--foreground);
   font-family: "Inter", "Microsoft YaHei", "PingFang SC", ui-sans-serif, system-ui, sans-serif;
   letter-spacing: 0;
@@ -35,10 +36,10 @@ body::before {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: linear-gradient(to bottom, rgba(0,0,0,0.78), transparent 78%);
+    linear-gradient(rgba(255,255,255,0.024) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent 82%);
 }
 
 * {
@@ -70,12 +71,37 @@ option {
   align-items: stretch;
 }
 
+.rq-heavy-list > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 190px;
+}
+
+.rq-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(103, 232, 249, 0.22) transparent;
+}
+
+.rq-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.rq-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(103, 232, 249, 0.18);
+}
+
+:focus-visible {
+  outline: 2px solid rgba(103, 232, 249, 0.62);
+  outline-offset: 2px;
+}
+
 @media (max-width: 640px) {
   .rq-content {
     padding: 0.875rem 0.75rem calc(8.25rem + env(safe-area-inset-bottom));
   }
 
   .rq-content section {
-    border-radius: 0.875rem;
+    border-radius: 0.5rem;
   }
 }

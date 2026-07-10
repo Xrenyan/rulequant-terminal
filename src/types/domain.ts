@@ -470,6 +470,7 @@ export type ReferenceObservationItem = {
   hitTop18: boolean;
   hitZodiac7: boolean;
   hitZodiac9: boolean;
+  hitNumberRank: number;
   ruleCount: number;
   signalCount: number;
 };

@@ -39,7 +39,7 @@ export function DataTable<T>({ data, columns, dense = false }: DataTableProps<T>
   });
 
   return (
-    <div className="max-w-full overflow-hidden rounded-xl border border-white/[0.10] bg-white/[0.035] shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+    <div className="max-w-full overflow-hidden rounded-lg border border-white/[0.10] bg-white/[0.035] shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
       <div className="flex flex-col gap-3 border-b border-white/[0.08] bg-black/20 p-3 sm:flex-row sm:items-center sm:justify-between">
         <input
           value={globalFilter}
@@ -52,7 +52,7 @@ export function DataTable<T>({ data, columns, dense = false }: DataTableProps<T>
           <span className="shrink-0">显示 {table.getFilteredRowModel().rows.length} / {data.length}</span>
         </div>
       </div>
-      <div className="max-h-[560px] overflow-auto [-webkit-overflow-scrolling:touch]">
+      <div className="rq-scrollbar max-h-[560px] overflow-auto [-webkit-overflow-scrolling:touch]">
         <table className="w-full min-w-[640px] border-collapse text-left text-xs sm:min-w-[760px] sm:text-sm">
           <thead className="sticky top-0 z-10 bg-[#0b0f1a]/95 backdrop-blur">
             {table.getHeaderGroups().map((headerGroup) => (

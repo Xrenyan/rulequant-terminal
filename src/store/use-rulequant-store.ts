@@ -110,6 +110,26 @@ function mergeManualDraws(baseDraws: DrawRecord[], localDraws: DrawRecord[]) {
 }
 
 const userCreatedRuleSources = new Set<RuleSourceType>(["manual", "txt_import", "system_recommended", "copied"]);
+const SELECTED_RULE_STORAGE_KEY = "rulequant:selectedRuleId";
+
+function readSelectedRuleId() {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem(SELECTED_RULE_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeSelectedRuleId(ruleId: string) {
+  if (typeof window === "undefined") return;
+  try {
+    if (ruleId) window.localStorage.setItem(SELECTED_RULE_STORAGE_KEY, ruleId);
+    else window.localStorage.removeItem(SELECTED_RULE_STORAGE_KEY);
+  } catch {
+    // IndexedDB remains the primary rule store when localStorage is unavailable.
+  }
+}
 
 function timestampValue(value?: string) {
   const time = Date.parse(value ?? "");
@@ -177,6 +197,7 @@ function buildHydratedState(input: {
   persisted: PersistedRuleQuantState;
   cloud?: RuleQuantCloudState | null;
   current: Pick<RuleQuantState, "draws" | "rules" | "selectedRuleId">;
+  preferredSelectedRuleId?: string;
 }) {
   const cloudDraws = input.cloud?.draws ?? [];
   const cloudRules = input.cloud?.rules ?? [];
@@ -195,7 +216,8 @@ function buildHydratedState(input: {
   const nextLogs = cloudLogs.length ? trimLogs([...cloudLogs, ...(input.persisted.logs ?? [])]) : trimLogs(input.persisted.logs ?? []);
   const nextBackups = cloudBackups.length ? trimBackups([...cloudBackups, ...(input.persisted.backups ?? [])]) : trimBackups(input.persisted.backups ?? []);
   const nextReferenceHistory = cloudReferenceHistory.length ? trimReferenceHistory([...cloudReferenceHistory, ...(input.persisted.referenceHistory ?? [])]) : trimReferenceHistory(input.persisted.referenceHistory ?? []);
-  const selectedRuleId = nextRules.some((rule) => rule.id === input.current.selectedRuleId) ? input.current.selectedRuleId : nextRules[0]?.id ?? "";
+  const requestedRuleId = input.preferredSelectedRuleId || input.current.selectedRuleId;
+  const selectedRuleId = nextRules.some((rule) => rule.id === requestedRuleId) ? requestedRuleId : nextRules[0]?.id ?? "";
 
   return {
     draws: sortDraws(nextDraws),
@@ -277,11 +299,12 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
   selectedRuleId: seedRules[0]?.id ?? "",
   hydrate: async () => {
     const persisted = await loadPersistedState();
-    set(buildHydratedState({ persisted, current: get() }));
+    const preferredSelectedRuleId = readSelectedRuleId();
+    set(buildHydratedState({ persisted, current: get(), preferredSelectedRuleId }));
 
     const cloud = await loadCloudStateFromApi();
     if (cloud) {
-      set(buildHydratedState({ persisted, cloud, current: get() }));
+      set(buildHydratedState({ persisted, cloud, current: get(), preferredSelectedRuleId: readSelectedRuleId() }));
     }
   },
   persist: async () => {
@@ -482,6 +505,7 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
       ruleBackups: trimBackups([backup, ...get().ruleBackups]),
       operationLogs: trimLogs([log, ...get().operationLogs]),
     });
+    writeSelectedRuleId(result.rule.id);
     await get().persist();
     return result;
   },
@@ -663,7 +687,10 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
     });
     await get().persist();
   },
-  setSelectedRule: (ruleId) => set({ selectedRuleId: ruleId }),
+  setSelectedRule: (ruleId) => {
+    writeSelectedRuleId(ruleId);
+    set({ selectedRuleId: ruleId });
+  },
   upsertSample: async (sample) => {
     const samples = get().samples.filter((item) => item.id !== sample.id);
     set({ samples: [sample, ...samples] });

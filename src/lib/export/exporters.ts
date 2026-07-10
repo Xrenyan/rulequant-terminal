@@ -1,5 +1,13 @@
-import * as XLSX from "xlsx";
 import type { BacktestResult, CandidatePoolReport, DrawRecord, ReferenceHistoryItem, RuleQuantConfig, RuleRecord, SampleCheckResult } from "@/types/domain";
+
+type XlsxModule = typeof import("xlsx");
+
+let xlsxPromise: Promise<XlsxModule> | undefined;
+
+function loadXlsx() {
+  xlsxPromise ??= import("xlsx");
+  return xlsxPromise;
+}
 
 type ReferenceHistoryExportItem = ReferenceHistoryItem & {
   actualNextIssue?: string;
@@ -27,7 +35,8 @@ export function exportJson(data: unknown, filename: string) {
   downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" }), filename);
 }
 
-export function exportDrawsCsv(draws: DrawRecord[]) {
+export async function exportDrawsCsv(draws: DrawRecord[]) {
+  const XLSX = await loadXlsx();
   const worksheet = XLSX.utils.json_to_sheet(draws);
   const csv = XLSX.utils.sheet_to_csv(worksheet);
   downloadBlob(new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" }), "rulequant-draws.csv");
@@ -40,7 +49,7 @@ function displayLength(value: unknown): number {
   return String(value).replace(/\r?\n/g, " ").length;
 }
 
-function worksheetFromRows(rows: unknown[]) {
+function worksheetFromRows(XLSX: XlsxModule, rows: unknown[]) {
   const normalizedRows = rows as Record<string, unknown>[];
   const worksheet = XLSX.utils.json_to_sheet(normalizedRows);
   const keys = Array.from(normalizedRows.reduce((set, row) => {
@@ -57,10 +66,11 @@ function worksheetFromRows(rows: unknown[]) {
   return worksheet;
 }
 
-export function exportWorkbook(sheets: Record<string, unknown[]>, filename: string) {
+export async function exportWorkbook(sheets: Record<string, unknown[]>, filename: string) {
+  const XLSX = await loadXlsx();
   const workbook = XLSX.utils.book_new();
   Object.entries(sheets).forEach(([name, rows]) => {
-    XLSX.utils.book_append_sheet(workbook, worksheetFromRows(rows), name.slice(0, 31));
+    XLSX.utils.book_append_sheet(workbook, worksheetFromRows(XLSX, rows), name.slice(0, 31));
   });
   const array = XLSX.write(workbook, { bookType: "xlsx", type: "array", compression: true });
   downloadBlob(new Blob([array], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), filename);

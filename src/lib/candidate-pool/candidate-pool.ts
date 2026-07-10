@@ -217,6 +217,7 @@ export function buildReferenceObservation(input: GenerateCandidatePoolInput & { 
     const top18Numbers = report.topNumbers18.map((candidate) => candidate.number);
     const top7Zodiacs = report.topZodiacs7.map((candidate) => candidate.zodiac);
     const top9Zodiacs = report.topZodiacs9.map((candidate) => candidate.zodiac);
+    const hitNumberRank = Math.max(1, report.allNumbers.findIndex((candidate) => candidate.number === targetDraw.special) + 1);
 
     return [{
       issue: targetDraw.issue,
@@ -233,6 +234,7 @@ export function buildReferenceObservation(input: GenerateCandidatePoolInput & { 
       hitTop18: top18Numbers.includes(targetDraw.special),
       hitZodiac7: top7Zodiacs.includes(attributes.zodiac),
       hitZodiac9: top9Zodiacs.includes(attributes.zodiac),
+      hitNumberRank,
       ruleCount: report.ruleCount,
       signalCount: report.signalCount,
     }];
