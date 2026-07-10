@@ -170,6 +170,9 @@ type ManualDrawKey = typeof MANUAL_DRAW_KEYS[number];
 
 function staticCloudStateUrls() {
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+  if (typeof window !== "undefined" && window.location.hostname.endsWith("github.io") && basePath) {
+    return [`${basePath}/static-cloud-state.json`];
+  }
   return Array.from(new Set([
     basePath ? `${basePath}/static-cloud-state.json` : "",
     "/static-cloud-state.json",

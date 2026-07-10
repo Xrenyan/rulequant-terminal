@@ -240,11 +240,7 @@ async function loadCloudStateFromApi(): Promise<RuleQuantCloudState | null> {
   const isGithubPagesHost = window.location.hostname.endsWith("github.io");
   const endpoints = (
     isGithubPagesHost
-      ? [
-          `${staticBasePath}/static-cloud-state.json`,
-          "/static-cloud-state.json",
-          "../static-cloud-state.json",
-        ]
+      ? [`${staticBasePath}/static-cloud-state.json`]
       : [
           "/api/cloud/state",
           REMOTE_CLOUD_STATE_ENDPOINT,

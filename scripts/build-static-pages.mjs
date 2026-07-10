@@ -22,6 +22,22 @@ function restoreApiDir() {
   }
 }
 
+function addStaticPrefetchCompatibilityFiles() {
+  const outDir = path.join(root, "out");
+  if (!fs.existsSync(outDir)) return;
+
+  for (const routeEntry of fs.readdirSync(outDir, { withFileTypes: true })) {
+    if (!routeEntry.isDirectory()) continue;
+    const routeDir = path.join(outDir, routeEntry.name);
+    for (const entry of fs.readdirSync(routeDir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !entry.name.startsWith("__next.")) continue;
+      const source = path.join(routeDir, entry.name, "__PAGE__.txt");
+      if (!fs.existsSync(source)) continue;
+      fs.copyFileSync(source, path.join(routeDir, `${entry.name}.__PAGE__.txt`));
+    }
+  }
+}
+
 try {
   restoreApiDir();
   if (fs.existsSync(apiDir)) {
@@ -34,7 +50,7 @@ try {
   fs.rmSync(path.join(root, ".next"), { recursive: true, force: true, maxRetries: 8, retryDelay: 500 });
   fs.rmSync(path.join(root, "out"), { recursive: true, force: true, maxRetries: 8, retryDelay: 500 });
 
-  const result = spawnSync(process.execPath, [nextBin, "build", "--turbopack"], {
+  const result = spawnSync(process.execPath, [nextBin, "build", "--webpack"], {
     cwd: root,
     stdio: "inherit",
     env: {
@@ -49,6 +65,7 @@ try {
   });
 
   if (result.error) throw result.error;
+  addStaticPrefetchCompatibilityFiles();
   const exitStatus = result.status ?? result.signal ?? 1;
   if (exitStatus && hasCompleteStaticOutput()) {
     console.warn(`Next.js exited with ${exitStatus} after static output was generated; continuing with verified out/ files.`);
