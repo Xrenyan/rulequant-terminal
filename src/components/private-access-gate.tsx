@@ -15,6 +15,10 @@ function shouldBypassForLocalDevelopment() {
   if (typeof window === "undefined") return false;
   if (process.env.NEXT_PUBLIC_RULEQUANT_ACCESS_GATE === "off") return true;
 
+  // GitHub Pages is the friend-facing build. It must open from a normal link
+  // in mobile and in-app browsers without relying on query parameters.
+  if (window.location.hostname.endsWith("github.io")) return true;
+
   const localHostnames = new Set(["localhost", "127.0.0.1", "::1"]);
   return localHostnames.has(window.location.hostname) && process.env.NEXT_PUBLIC_RULEQUANT_LOCAL_GATE !== "on";
 }
