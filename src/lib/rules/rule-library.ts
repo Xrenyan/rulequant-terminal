@@ -56,7 +56,7 @@ function normalizedPattern(pattern?: number[]): number[] {
   return (pattern ?? []).map(Number).filter((item) => Number.isFinite(item));
 }
 
-export function buildRuleSignature(rule: Pick<RuleRecord, "category" | "target" | "orderMode" | "formula" | "normalizer" | "positionPattern" | "verifyOffset">): string {
+export function buildRuleSignature(rule: Pick<RuleRecord, "category" | "target" | "orderMode" | "formula" | "normalizer" | "positionPattern" | "verifyOffset" | "anchorIssue" | "anchorPatternIndex" | "positionMeaning" | "periodSpan">): string {
   return [
     rule.category,
     rule.target,
@@ -64,6 +64,10 @@ export function buildRuleSignature(rule: Pick<RuleRecord, "category" | "target" 
     compact(rule.formula).replace(/\s+/g, ""),
     compact(rule.normalizer),
     normalizedPattern(rule.positionPattern).join(","),
+    compact(rule.anchorIssue),
+    String(rule.anchorPatternIndex ?? 0),
+    compact(rule.positionMeaning),
+    String(rule.periodSpan ?? 1),
     String(rule.verifyOffset ?? 1),
   ].join("|");
 }

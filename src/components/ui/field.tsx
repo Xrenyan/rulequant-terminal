@@ -1,7 +1,7 @@
 import { forwardRef, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
-const base = "min-w-0 w-full rounded-md border border-white/10 bg-white/[0.05] px-3 text-sm text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.045)] outline-none backdrop-blur-xl transition placeholder:text-slate-600 hover:border-white/15 focus:border-cyan-200/45 focus:bg-white/[0.075] focus:ring-2 focus:ring-cyan-300/10";
+const base = "rq-field min-w-0 w-full border px-3 text-sm outline-none transition";
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cn(base, "h-10 max-sm:h-11", className)} {...props} />;
@@ -16,5 +16,5 @@ export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectE
 }
 
 export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) {
-  return <label className={cn("mb-1 block text-xs font-medium leading-5 text-slate-400", className)} {...props} />;
+  return <label className={cn("rq-label mb-1 block text-xs font-medium leading-5", className)} {...props} />;
 }

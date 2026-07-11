@@ -199,7 +199,11 @@ function mergeRulesWithSeedRules(rules: RuleRecord[]) {
 
 type PersistedRuleQuantState = Awaited<ReturnType<typeof loadPersistedState>>;
 
-function buildHydratedState(input: {
+function uniqueById<T extends { id: string }>(items: T[]): T[] {
+  return [...new Map(items.map((item) => [item.id, item])).values()];
+}
+
+export function buildHydratedState(input: {
   persisted: PersistedRuleQuantState;
   cloud?: RuleQuantCloudState | null;
   current: Pick<RuleQuantState, "draws" | "rules" | "selectedRuleId">;
@@ -219,9 +223,9 @@ function buildHydratedState(input: {
   const nextRules = mergeRulesWithSeedRules(mergeLocalRules(baseRules, localRules));
   const nextSamples = cloudSamples.length ? cloudSamples : input.persisted.samples.length ? input.persisted.samples : seedSampleCases;
   const nextConfig = normalizeConfigForCurrentRules(input.cloud?.config ?? input.persisted.config ?? seedConfig);
-  const nextLogs = cloudLogs.length ? trimLogs([...cloudLogs, ...(input.persisted.logs ?? [])]) : trimLogs(input.persisted.logs ?? []);
-  const nextBackups = cloudBackups.length ? trimBackups([...cloudBackups, ...(input.persisted.backups ?? [])]) : trimBackups(input.persisted.backups ?? []);
-  const nextReferenceHistory = cloudReferenceHistory.length ? trimReferenceHistory([...cloudReferenceHistory, ...(input.persisted.referenceHistory ?? [])]) : trimReferenceHistory(input.persisted.referenceHistory ?? []);
+  const nextLogs = trimLogs(uniqueById([...cloudLogs, ...(input.persisted.logs ?? [])]));
+  const nextBackups = trimBackups(uniqueById([...cloudBackups, ...(input.persisted.backups ?? [])]));
+  const nextReferenceHistory = trimReferenceHistory(uniqueById([...cloudReferenceHistory, ...(input.persisted.referenceHistory ?? [])]));
   const requestedRuleId = input.preferredSelectedRuleId || input.current.selectedRuleId;
   const selectedRuleId = nextRules.some((rule) => rule.id === requestedRuleId) ? requestedRuleId : nextRules[0]?.id ?? "";
 
@@ -257,33 +261,29 @@ async function loadCloudStateFromApi(): Promise<RuleQuantCloudState | null> {
         ]
   ).filter((endpoint, index, list) => endpoint && list.indexOf(endpoint) === index);
 
-  let bestState: RuleQuantCloudState | null = null;
-  let bestIssue = 0;
-
-  for (const endpoint of endpoints) {
+  const states = await Promise.all(endpoints.map(async (endpoint) => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 1500);
     try {
       const url = endpoint.includes("?") ? `${endpoint}&t=${Date.now()}` : `${endpoint}?t=${Date.now()}`;
-      const response = await fetch(url, { cache: "no-store" });
-      if (!response.ok) continue;
+      const response = await fetch(url, { cache: "no-store", signal: controller.signal });
+      if (!response.ok) return null;
       const state = (await response.json()) as RuleQuantCloudState;
-      if (!state.meta?.enabled) continue;
-      const metaIssue = state.meta.latestIssue && /^\d+$/.test(state.meta.latestIssue) ? Number(state.meta.latestIssue) : 0;
-      const drawIssue = Math.max(
-        0,
-        ...((state.draws ?? [])
-          .map((draw) => (/^\d+$/.test(draw.issue) ? Number(draw.issue) : 0))
-          .filter(Number.isFinite)),
-      );
-      const stateIssue = Math.max(metaIssue, drawIssue);
-      if (!bestState || stateIssue > bestIssue) {
-        bestState = state;
-        bestIssue = stateIssue;
-      }
+      return state.meta?.enabled ? state : null;
     } catch {
-      continue;
+      return null;
+    } finally {
+      window.clearTimeout(timeoutId);
     }
-  }
-  return bestState;
+  }));
+
+  return states.filter((state): state is RuleQuantCloudState => Boolean(state)).sort((a, b) => {
+    const latestIssue = (state: RuleQuantCloudState) => Math.max(
+      /^\d+$/.test(state.meta.latestIssue ?? "") ? Number(state.meta.latestIssue) : 0,
+      ...((state.draws ?? []).map((draw) => (/^\d+$/.test(draw.issue) ? Number(draw.issue) : 0)).filter(Number.isFinite)),
+    );
+    return latestIssue(b) - latestIssue(a);
+  })[0] ?? null;
 }
 
 export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
@@ -301,14 +301,9 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
   hasHydrated: false,
   selectedRuleId: seedRules[0]?.id ?? "",
   hydrate: async () => {
-    const persisted = await loadPersistedState();
+    const [persisted, cloud] = await Promise.all([loadPersistedState(), loadCloudStateFromApi()]);
     const preferredSelectedRuleId = readSelectedRuleId();
-    set(buildHydratedState({ persisted, current: get(), preferredSelectedRuleId }));
-
-    const cloud = await loadCloudStateFromApi();
-    if (cloud) {
-      set(buildHydratedState({ persisted, cloud, current: get(), preferredSelectedRuleId: readSelectedRuleId() }));
-    }
+    set(buildHydratedState({ persisted, cloud, current: get(), preferredSelectedRuleId }));
   },
   persist: async () => {
     const state = get();

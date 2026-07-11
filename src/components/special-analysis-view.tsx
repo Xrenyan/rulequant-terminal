@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, RefreshCw, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Crosshair, RefreshCw, XCircle } from "lucide-react";
 import { analyzeBinaryTrend, analyzeSpecialRule, buildPositionNineGridTriggers, drawNumbers, DRAW_POSITION_LABELS, SPECIAL_RULE_SPECS, type BinaryTrendReport, type SpecialRuleDetail, type SpecialRuleId } from "@/lib/special-analysis/special-analysis";
 import { getNumberAttributes } from "@/lib/engine/attributes";
 import type { DrawRecord, RuleQuantConfig } from "@/types/domain";
@@ -39,6 +39,7 @@ function ZodiacNumberNineGrid({ draws, config }: { draws: DrawRecord[]; config: 
     );
   }
 
+  const selectedIndex = Math.max(0, triggers.findIndex((trigger) => trigger.triggerDraw.issue === selected.triggerDraw.issue));
   const positionLabel = DRAW_POSITION_LABELS[selected.positionIndex];
   const previousSpecialZodiac = getNumberAttributes(selected.previousSpecial, config).zodiac;
   const rows = [
@@ -47,72 +48,50 @@ function ZodiacNumberNineGrid({ draws, config }: { draws: DrawRecord[]; config: 
     { label: "下一期", draw: selected.nextDraw },
   ];
 
+  const goToTrigger = (index: number) => setSelectedIssue(triggers[Math.min(Math.max(index, 0), triggers.length - 1)].triggerDraw.issue);
+
   return (
-    <Panel className="p-4 sm:p-5">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2"><Badge tone="cyan">位置触发九宫格</Badge><Badge tone="yellow">肖码同格</Badge></div>
-          <h3 className="mt-3 font-semibold text-white">上期的特码出现在本期哪个位置，就围绕该位置取三列</h3>
-          <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">平1取平1、平2、平3；特码取平5、平6、特码；中间位置取前一列、本列、后一列。触发期固定显示在九宫格中间一行。</p>
+    <Panel className="rq-nine-grid-workbench p-4 sm:p-5">
+      <div className="rq-nine-grid-toolbar">
+        <div><p className="rq-eyebrow">位置触发九宫盘</p><h3>三期 · 三列关系观察</h3><p>以触发位置为中心读取相邻三列，肖与号码保持在同一格。</p></div>
+        <div className="rq-nine-grid-nav">
+          <Button size="icon" disabled={selectedIndex === 0} onClick={() => goToTrigger(selectedIndex - 1)} aria-label="上一个触发"><ChevronLeft className="h-4 w-4" /></Button>
+          <Select value={selected.triggerDraw.issue} onChange={(event) => setSelectedIssue(event.target.value)} aria-label="选择九宫格触发期">
+            {triggers.map((trigger) => <option key={trigger.triggerDraw.issue} value={trigger.triggerDraw.issue}>{trigger.triggerDraw.issue}期 · {DRAW_POSITION_LABELS[trigger.positionIndex]}</option>)}
+          </Select>
+          <Button size="icon" disabled={selectedIndex >= triggers.length - 1} onClick={() => goToTrigger(selectedIndex + 1)} aria-label="下一个触发"><ChevronRight className="h-4 w-4" /></Button>
         </div>
-        <Select className="w-full lg:w-72" value={selected.triggerDraw.issue} onChange={(event) => setSelectedIssue(event.target.value)} aria-label="选择九宫格触发期">
-          {triggers.map((trigger) => (
-            <option key={trigger.triggerDraw.issue} value={trigger.triggerDraw.issue}>
-              {trigger.triggerDraw.issue}期 · 上期特码在{DRAW_POSITION_LABELS[trigger.positionIndex]}
-            </option>
-          ))}
-        </Select>
       </div>
 
-      <div className="mt-4 rounded-lg border border-white/[0.08] bg-black/15 p-3 sm:p-4">
-        <div className="flex flex-col gap-2 border-b border-white/[0.07] pb-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="font-medium text-white">{selected.previousDraw.issue}期特码 {numberLabel(selected.previousSpecial, config)}，在 {selected.triggerDraw.issue}期出现在{positionLabel}</p>
-            <p className="mt-1 text-xs text-slate-500">当前显示第 {selected.columnIndexes[0] + 1} 至第 {selected.columnIndexes[2] + 1} 列位置窗口，共找到 {triggers.length} 次历史触发。</p>
-          </div>
-          <Badge tone="cyan">触发：{String(selected.previousSpecial).padStart(2, "0")} {previousSpecialZodiac}</Badge>
-        </div>
-
-        <div className="mt-3 grid grid-cols-[56px_repeat(3,minmax(0,1fr))] gap-2 sm:grid-cols-[76px_repeat(3,minmax(0,1fr))]">
-          <div />
-          {selected.columnIndexes.map((columnIndex) => (
-            <div key={columnIndex} className="flex min-h-9 items-center justify-center rounded-md border border-white/[0.07] bg-white/[0.035] px-1 text-center text-xs font-medium text-slate-300">
-              {DRAW_POSITION_LABELS[columnIndex]}
-            </div>
-          ))}
-
+      <div className="rq-nine-grid-layout">
+        <div className="rq-nine-board" role="grid" aria-label={`${selected.triggerDraw.issue}期九宫格`}>
+          <div className="rq-nine-board__corner" />
+          {selected.columnIndexes.map((columnIndex) => <div key={columnIndex} className="rq-nine-board__column">{DRAW_POSITION_LABELS[columnIndex]}</div>)}
           {rows.map((row, rowIndex) => (
             <div className="contents" key={row.label}>
-              <div className={cn("flex min-h-24 items-center justify-center rounded-md border px-1 text-center text-[11px] font-medium leading-4 sm:text-xs", rowIndex === 1 ? "border-cyan-300/30 bg-cyan-300/[0.08] text-cyan-100" : "border-white/[0.07] bg-white/[0.025] text-slate-400")}>
-                <span>{row.label}<br />{row.draw?.issue.slice(-3) ?? "待定"}期</span>
-              </div>
+              <div className={cn("rq-nine-board__time", rowIndex === 1 && "is-trigger")}><span>{row.label}</span><strong>{row.draw?.issue.slice(-3) ?? "—"}</strong></div>
               {selected.columnIndexes.map((columnIndex) => {
                 const number = row.draw ? drawNumbers(row.draw)[columnIndex] : undefined;
                 const attributes = number ? getNumberAttributes(number, config) : undefined;
                 const isAnchor = rowIndex === 1 && columnIndex === selected.positionIndex;
-                return (
-                  <div key={columnIndex} className={cn("flex min-h-24 min-w-0 flex-col items-center justify-center rounded-md border p-1.5 text-center sm:p-2", isAnchor ? "border-amber-200/60 bg-amber-300/14 text-amber-50 shadow-[0_0_26px_rgba(251,191,36,0.10)]" : rowIndex === 1 ? "border-cyan-300/24 bg-cyan-300/[0.07] text-cyan-50" : "border-white/[0.08] bg-black/20 text-slate-200")}>
-                    {number && attributes ? (
-                      <>
-                        <strong className="text-lg tabular-nums sm:text-xl">{String(number).padStart(2, "0")}</strong>
-                        <span className="mt-1 text-xs font-medium">{attributes.zodiac}</span>
-                        <span className="mt-0.5 text-[10px] text-slate-500">{attributes.color}{isAnchor ? " · 上期特码" : ""}</span>
-                      </>
-                    ) : (
-                      <span className="text-xs leading-5 text-slate-500">等待<br />下一期开奖</span>
-                    )}
-                  </div>
-                );
+                return <div key={columnIndex} className={cn("rq-nine-cell", rowIndex === 1 && "is-trigger-row", isAnchor && "is-anchor")}>
+                  {number && attributes ? <><strong>{String(number).padStart(2, "0")}</strong><span>{attributes.zodiac}</span><small><i className={`rq-color-dot rq-color-dot--${attributes.color}`} />{attributes.color}{isAnchor ? " · 定位" : ""}</small>{isAnchor && <Crosshair className="rq-nine-cell__anchor" />}</> : <span className="rq-nine-cell__empty">待开奖</span>}
+                </div>;
               })}
             </div>
           ))}
         </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-2 text-xs leading-5 text-slate-400 sm:grid-cols-3">
-          <div className="rounded-md border border-white/[0.07] bg-white/[0.025] px-3 py-2"><strong className="text-slate-200">在平1：</strong>取平1、平2、平3</div>
-          <div className="rounded-md border border-white/[0.07] bg-white/[0.025] px-3 py-2"><strong className="text-slate-200">在中间：</strong>取前一列、本列、后一列</div>
-          <div className="rounded-md border border-white/[0.07] bg-white/[0.025] px-3 py-2"><strong className="text-slate-200">在特码：</strong>取平5、平6、特码</div>
-        </div>
+        <aside className="rq-nine-inspector">
+          <div className="rq-nine-inspector__hero"><span>触发号码</span><strong>{String(selected.previousSpecial).padStart(2, "0")}</strong><b>{previousSpecialZodiac}</b></div>
+          <dl>
+            <div><dt>上期</dt><dd>{selected.previousDraw.issue} 期</dd></div>
+            <div><dt>本期位置</dt><dd>{positionLabel}</dd></div>
+            <div><dt>读取列</dt><dd>{selected.columnIndexes.map((index) => DRAW_POSITION_LABELS[index]).join(" · ")}</dd></div>
+            <div><dt>历史触发</dt><dd>{triggers.length} 次</dd></div>
+          </dl>
+          <p>平1取前三列，特码取后三列，中间位置读取前一列、本列、后一列。触发期固定在棋盘中间行。</p>
+        </aside>
       </div>
     </Panel>
   );
@@ -170,7 +149,7 @@ function ResultBoard({ detail }: { detail?: SpecialRuleDetail }) {
           )}
         >
           <strong className="text-xl tabular-nums">{cell.value}</strong>
-          <span className="mt-1 text-[11px] leading-4">{cell.label}</span>
+          <span className="mt-1 text-xs leading-4">{cell.label}</span>
         </div>
       ))}
     </div>
@@ -258,6 +237,7 @@ function DetailRow({ detail, config }: { detail: SpecialRuleDetail; config: Rule
 
 export function SpecialAnalysisView({ draws, config, dataSourceLabel, sourceLoading, onSync }: Props) {
   const [selectedId, setSelectedId] = useState<SpecialRuleId>("kill-color");
+  const [specialTab, setSpecialTab] = useState<"nine-grid" | "rules" | "trends" | "ledger">("nine-grid");
   const [visibleCount, setVisibleCount] = useState(30);
   const report = useMemo(() => analyzeSpecialRule(selectedId, draws, config), [selectedId, draws, config]);
   const sizeTrend = useMemo(() => analyzeBinaryTrend(draws, "size"), [draws]);
@@ -281,8 +261,18 @@ export function SpecialAnalysisView({ draws, config, dataSourceLabel, sourceLoad
         </div>
       </Panel>
 
-      <ZodiacNumberNineGrid draws={draws} config={config} />
+      <nav className="rq-workspace-tabs" aria-label="专项分析工作区">
+        {[
+          ["nine-grid", "九宫盘", "位置关系"],
+          ["rules", "专项规则", "概率与结果"],
+          ["trends", "大小单双", "走势学习"],
+          ["ledger", "逐期流水", `${report.details.length} 期`],
+        ].map(([key, label, hint]) => <button key={key} type="button" className={cn("rq-workspace-tab", specialTab === key && "rq-workspace-tab--active")} onClick={() => setSpecialTab(key as typeof specialTab)}><span>{label}</span><small>{hint}</small></button>)}
+      </nav>
 
+      {specialTab === "nine-grid" && <ZodiacNumberNineGrid draws={draws} config={config} />}
+
+      {specialTab === "rules" && <>
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-6">
         {SPECIAL_RULE_SPECS.map((spec) => (
           <button key={spec.id} type="button" onClick={() => { setSelectedId(spec.id); setVisibleCount(30); }} className={cn("min-h-20 rounded-lg border p-3 text-left transition", selectedId === spec.id ? "border-cyan-300/40 bg-cyan-300/12" : "border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.055]")}>
@@ -353,12 +343,16 @@ export function SpecialAnalysisView({ draws, config, dataSourceLabel, sourceLoad
           </div>
         </Panel>
       </div>
+      </>}
 
+      {specialTab === "trends" && (
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <TrendCard report={sizeTrend} />
         <TrendCard report={parityTrend} />
       </div>
+      )}
 
+      {specialTab === "ledger" && (
       <Panel className="p-4 sm:p-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div><h3 className="font-semibold text-white">逐期计算流水账</h3><p className="mt-1 text-xs text-slate-500">每一期变量、计算、输出、下一期开奖和对错都可以展开检查。</p></div>
@@ -369,6 +363,7 @@ export function SpecialAnalysisView({ draws, config, dataSourceLabel, sourceLoad
         </div>
         {report.details.length > visibleCount && <div className="mt-4 flex justify-center"><Button onClick={() => setVisibleCount((count) => count + 30)}>加载更早30期</Button></div>}
       </Panel>
+      )}
     </div>
   );
 }

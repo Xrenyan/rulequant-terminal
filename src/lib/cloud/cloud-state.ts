@@ -101,7 +101,10 @@ export function mergeUserCreatedCloudRules(input: {
     .filter(isUserCreatedCloudRule)
     .filter((rule) => !deletedRuleIds.has(rule.id))
     .forEach((rule) => {
-      if (!merged.has(rule.id)) merged.set(rule.id, rule);
+      const incoming = merged.get(rule.id);
+      const incomingUpdatedAt = Date.parse(incoming?.updatedAt ?? "") || 0;
+      const currentUpdatedAt = Date.parse(rule.updatedAt ?? "") || 0;
+      if (!incoming || currentUpdatedAt > incomingUpdatedAt) merged.set(rule.id, rule);
     });
   return [...merged.values()];
 }

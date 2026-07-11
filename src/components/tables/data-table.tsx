@@ -39,22 +39,27 @@ export function DataTable<T>({ data, columns, dense = false }: DataTableProps<T>
   });
 
   return (
-    <div className="max-w-full overflow-hidden rounded-lg border border-white/[0.10] bg-white/[0.035] shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
-      <div className="flex flex-col gap-3 border-b border-white/[0.08] bg-black/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="rq-data-table max-w-full overflow-hidden">
+      <div className="rq-data-table__toolbar flex flex-col gap-3 border-b p-3 sm:flex-row sm:items-center sm:justify-between">
         <input
           value={globalFilter}
           onChange={(event) => setGlobalFilter(event.target.value)}
           placeholder="搜索期号、公式、结果..."
-          className="h-10 w-full rounded-lg border border-white/10 bg-white/[0.055] px-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/10 sm:max-w-sm"
+          className="rq-field h-10 w-full border px-3 text-sm outline-none sm:max-w-sm"
         />
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 sm:justify-end">
           <span className="sm:hidden">横向滑动查看更多列</span>
           <span className="shrink-0">显示 {table.getFilteredRowModel().rows.length} / {data.length}</span>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="rq-button rq-button--secondary h-8 rounded-md border px-3 text-[13px] disabled:opacity-40">上一页</button>
+            <span className="min-w-16 text-center">第 {table.getState().pagination.pageIndex + 1}/{Math.max(table.getPageCount(), 1)} 页</span>
+            <button type="button" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="rq-button rq-button--secondary h-8 rounded-md border px-3 text-[13px] disabled:opacity-40">下一页</button>
+          </div>
         </div>
       </div>
       <div className="rq-scrollbar max-h-[560px] overflow-auto [-webkit-overflow-scrolling:touch]">
         <table className="w-full min-w-[640px] border-collapse text-left text-xs sm:min-w-[760px] sm:text-sm">
-          <thead className="sticky top-0 z-10 bg-[#0b0f1a]/95 backdrop-blur">
+          <thead className="rq-data-table__head sticky top-0 z-10 backdrop-blur">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
@@ -77,7 +82,7 @@ export function DataTable<T>({ data, columns, dense = false }: DataTableProps<T>
           </thead>
           <tbody>
             {table.getRowModel().rows.map((row) => (
-              <tr key={row.id} className="border-b border-white/[0.05] transition hover:bg-white/[0.035]">
+              <tr key={row.id} className="rq-data-table__row border-b transition">
                 {row.getVisibleCells().map((cell) => (
                   <td key={cell.id} className={cn("px-2 align-top text-slate-200 sm:px-3", dense ? "py-2" : "py-2.5 sm:py-3")}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -87,27 +92,6 @@ export function DataTable<T>({ data, columns, dense = false }: DataTableProps<T>
             ))}
           </tbody>
         </table>
-      </div>
-      <div className="flex flex-col gap-3 border-t border-white/[0.08] bg-black/20 px-3 py-2 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
-        <span className="leading-5">第 {table.getState().pagination.pageIndex + 1} / {Math.max(table.getPageCount(), 1)} 页，每页 20 条</span>
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-          <button
-            type="button"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-            className="rounded-md border border-white/10 bg-white/[0.06] px-3 py-1 text-slate-100 disabled:opacity-40"
-          >
-            上一页
-          </button>
-          <button
-            type="button"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-            className="rounded-md border border-white/10 bg-white/[0.06] px-3 py-1 text-slate-100 disabled:opacity-40"
-          >
-            下一页
-          </button>
-        </div>
       </div>
     </div>
   );

@@ -40,8 +40,13 @@ describe("formula discovery", () => {
       }),
       trainingRate: expect.any(Number),
       validationRate: expect.any(Number),
+      holdoutRate: expect.any(Number),
+      recentRate: expect.any(Number),
+      complexity: expect.any(Number),
+      stabilityGap: expect.any(Number),
       trainingResult: expect.objectContaining({ total: expect.any(Number) }),
       validationResult: expect.objectContaining({ total: expect.any(Number) }),
+      holdoutResult: expect.objectContaining({ total: expect.any(Number) }),
       total: expect.any(Number),
       successRate: expect.any(Number),
       currentStreak: expect.any(Number),
@@ -49,6 +54,31 @@ describe("formula discovery", () => {
     });
     expect(candidates[0].rule.formula.split("+").length).toBeLessThanOrEqual(3);
     expect(candidates[0].validationResult.total).toBeGreaterThan(0);
+    expect(candidates[0].holdoutResult.total).toBeGreaterThan(0);
     expect(candidates[0].validationRate + 25).toBeGreaterThanOrEqual(candidates[0].trainingRate);
+  });
+
+  it("runs every requested formula depth and supports D-order candidates", () => {
+    const candidates = discoverFormulaCandidates({
+      draws: seedDraws,
+      config: seedConfig,
+      limit: 18,
+      categories: ["kill_tail"],
+      variablePool: ["平1尾", "平2尾", "平3合", "特码合", "期尾"],
+      maxTerms: 4,
+      orderModes: ["D"],
+      formulaStyles: ["sum", "alternating"],
+      combinationLimitPerTerm: 20,
+      minTrainingRate: 0,
+      minValidationRate: 0,
+      minHoldoutRate: 0,
+      minRecentRate: 0,
+      maxTrainValidationGap: 100,
+    });
+
+    expect(candidates.length).toBeGreaterThan(0);
+    expect(candidates.every((candidate) => candidate.rule.orderMode === "D")).toBe(true);
+    expect(new Set(candidates.map((candidate) => candidate.complexity))).toEqual(new Set([2, 3, 4]));
+    expect(candidates.every((candidate) => candidate.holdoutResult.total > 0)).toBe(true);
   });
 });

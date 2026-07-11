@@ -121,4 +121,11 @@ describe("rule library unified add flow", () => {
     expect(result.rule.origin).toBe(original.id);
     expect(buildRuleSignature(result.rule)).toBe(buildRuleSignature(original));
   });
+
+  it("keeps cyclic position anchors in the duplicate signature", () => {
+    const first = baseRule({ positionPattern: [1, 2, 3], anchorIssue: "2026173", anchorPatternIndex: 0, positionMeaning: "1=平1", periodSpan: 1 });
+    const second = baseRule({ positionPattern: [1, 2, 3], anchorIssue: "2026174", anchorPatternIndex: 1, positionMeaning: "1=平1", periodSpan: 2 });
+
+    expect(buildRuleSignature(first)).not.toBe(buildRuleSignature(second));
+  });
 });

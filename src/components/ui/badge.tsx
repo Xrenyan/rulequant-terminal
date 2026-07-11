@@ -6,14 +6,14 @@ type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
 };
 
 const tones = {
-  cyan: "border-cyan-300/30 bg-cyan-300/10 text-cyan-100",
-  violet: "border-violet-300/30 bg-violet-300/10 text-violet-100",
-  green: "border-emerald-300/30 bg-emerald-300/10 text-emerald-100",
-  yellow: "border-amber-300/30 bg-amber-300/10 text-amber-100",
-  rose: "border-rose-300/30 bg-rose-300/10 text-rose-100",
-  slate: "border-white/10 bg-white/[0.06] text-slate-300",
+  cyan: "rq-badge--cyan",
+  violet: "rq-badge--violet",
+  green: "rq-badge--green",
+  yellow: "rq-badge--yellow",
+  rose: "rq-badge--rose",
+  slate: "rq-badge--slate",
 };
 
 export function Badge({ className, tone = "slate", ...props }: BadgeProps) {
-  return <span className={cn("inline-flex min-h-6 min-w-0 max-w-full items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-md border px-2 py-1 text-[12px] font-medium leading-none shadow-[inset_0_1px_0_rgba(255,255,255,0.055)]", tones[tone], className)} {...props} />;
+  return <span className={cn("rq-badge inline-flex min-h-6 min-w-0 max-w-full items-center justify-center whitespace-normal break-words border px-2 py-1 text-center text-[12px] font-medium leading-4", tones[tone], className)} {...props} />;
 }

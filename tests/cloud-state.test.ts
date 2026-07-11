@@ -89,6 +89,17 @@ describe("cloud state merge guards", () => {
     expect(merged.find((item) => item.id === "manual-rule")?.participatesInReference).toBe(true);
   });
 
+  it("keeps the newer version when cloud and local rules share an id", () => {
+    const merged = mergeUserCreatedCloudRules({
+      incomingRules: [rule({ id: "manual-rule", sourceType: "manual", name: "云端旧版", updatedAt: "2026-06-28T00:00:00.000Z" })],
+      currentRules: [rule({ id: "manual-rule", sourceType: "manual", name: "本机新版", updatedAt: "2026-06-29T00:00:00.000Z" })],
+      logs: [],
+    });
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0].name).toBe("本机新版");
+  });
+
   it("allows explicit user-created rule deletion to stay deleted", () => {
     const logs: OperationLog[] = [{
       id: "log-delete-rule",
