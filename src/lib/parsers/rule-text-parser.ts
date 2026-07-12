@@ -43,10 +43,12 @@ function categoryFromText(text: string, formula: string): RuleCategory {
   if (/杀三肖/.test(scope)) return "kill_three_as_nine";
   if (/杀一?合|合数/.test(scope)) return "kill_sum";
   if (/杀一?尾/.test(scope)) return "kill_tail";
+  if (/杀半头/.test(scope)) return "kill_half_head";
+  if (/杀一门|门数/.test(scope)) return "kill_door";
   if (/杀一?头/.test(scope)) return "kill_head";
   if (/杀一?行|五行/.test(scope) && !/[肖尾头合段]/.test(formula)) return "kill_element";
   if (/杀一?段/.test(scope)) return "kill_segment";
-  if (/波色|杀波|杀色/.test(scope) && /计算类型[:：]\s*(?:波色|杀波|杀色)/.test(scope)) return "kill_color";
+  if (/波色|杀一?波|杀色/.test(scope) && /计算类型[:：]\s*(?:波色|杀一?波|杀色)/.test(scope)) return "kill_color";
   return "kill_zodiac";
 }
 
@@ -60,6 +62,12 @@ function normalizerFor(category: RuleCategory): string {
       return "mod_10";
     case "kill_head":
       return "subtract_5_to_0_4";
+    case "kill_half_head":
+      return "half_head_digit";
+    case "kill_door":
+      return "subtract_5_to_1_5";
+    case "kill_color":
+      return "mod_3";
     case "kill_element":
       return "subtract_5_to_1_5";
     case "kill_segment":
@@ -94,6 +102,9 @@ function targetFor(category: RuleCategory): string {
       return "special_tail";
     case "kill_head":
       return "special_head";
+    case "kill_half_head":
+    case "kill_door":
+      return "special_number";
     case "kill_element":
       return "special_element";
     case "kill_segment":

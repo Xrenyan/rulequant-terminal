@@ -12,6 +12,8 @@ export type RuleCategory =
   | "kill_sum"
   | "kill_tail"
   | "kill_head"
+  | "kill_half_head"
+  | "kill_door"
   | "kill_element"
   | "kill_segment"
   | "seven_tail"

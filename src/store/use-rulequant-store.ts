@@ -301,9 +301,14 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
   hasHydrated: false,
   selectedRuleId: seedRules[0]?.id ?? "",
   hydrate: async () => {
-    const [persisted, cloud] = await Promise.all([loadPersistedState(), loadCloudStateFromApi()]);
+    const persisted = await loadPersistedState();
     const preferredSelectedRuleId = readSelectedRuleId();
-    set(buildHydratedState({ persisted, cloud, current: get(), preferredSelectedRuleId }));
+    set(buildHydratedState({ persisted, current: get(), preferredSelectedRuleId }));
+
+    // Network discovery must never block the first usable screen. Reconcile a
+    // fresher cloud snapshot after local data is already interactive.
+    const cloud = await loadCloudStateFromApi();
+    if (cloud) set(buildHydratedState({ persisted, cloud, current: get(), preferredSelectedRuleId: readSelectedRuleId() }));
   },
   persist: async () => {
     const state = get();

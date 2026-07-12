@@ -129,6 +129,51 @@ function unique<T>(items: T[]): T[] {
   return [...new Set(items)];
 }
 
+function modulo(value: number, divisor: number): number {
+  return ((Math.round(value) % divisor) + divisor) % divisor;
+}
+
+function moduloSteps(value: number, divisor: number, zeroBased = true): { value: number; steps: number[] } {
+  const rounded = Math.round(value);
+  const normalized = zeroBased ? modulo(rounded, divisor) : modulo(rounded - 1, divisor) + 1;
+  return { value: normalized, steps: rounded === normalized ? [rounded] : [rounded, normalized] };
+}
+
+const halfHeadByDigit: Record<number, { head: number; parity: "单" | "双"; label: string }> = {
+  0: { head: 4, parity: "双", label: "4头双" },
+  1: { head: 0, parity: "单", label: "0头单" },
+  2: { head: 0, parity: "双", label: "0头双" },
+  3: { head: 1, parity: "单", label: "1头单" },
+  4: { head: 1, parity: "双", label: "1头双" },
+  5: { head: 2, parity: "单", label: "2头单" },
+  6: { head: 2, parity: "双", label: "2头双" },
+  7: { head: 3, parity: "单", label: "3头单" },
+  8: { head: 3, parity: "双", label: "3头双" },
+  9: { head: 4, parity: "单", label: "4头单" },
+};
+
+function halfHeadNumbers(digit: number): { label: string; numbers: number[] } {
+  const target = halfHeadByDigit[digit];
+  const numbers = Array.from({ length: 49 }, (_, index) => index + 1).filter((number) => {
+    const head = Math.floor(number / 10);
+    const parity = number % 2 === 0 ? "双" : "单";
+    return head === target.head && parity === target.parity;
+  });
+  return { label: target.label, numbers };
+}
+
+function doorNumbers(door: number): number[] {
+  const ranges: Record<number, [number, number]> = {
+    1: [1, 9],
+    2: [10, 18],
+    3: [19, 27],
+    4: [28, 37],
+    5: [38, 49],
+  };
+  const [from, to] = ranges[door];
+  return Array.from({ length: to - from + 1 }, (_, index) => from + index);
+}
+
 function zodiacAtOffset(zodiac: string, offset: number, config: RuleQuantConfig): string {
   const index = config.zodiacOrder.indexOf(zodiac);
   if (index < 0) throw new Error(`未知生肖：${zodiac}`);
@@ -453,15 +498,18 @@ function calculateRuleUncached(
     }
     case "kill_color":
     case "include_color": {
-      const normalized = normalizeZodiacNumber(rawResult);
-      const color = getNumberAttributes(normalized.value, config).color;
+      const useColorValue = rule.category === "kill_color" || rule.normalizer === "mod_3" || rule.normalizer === "subtract_3_to_0_2";
+      const normalized = useColorValue ? moduloSteps(rawResult, 3) : normalizeZodiacNumber(rawResult);
+      const color = useColorValue
+        ? Object.entries(config.colorValues).find(([, value]) => value === normalized.value)?.[0] ?? String(normalized.value)
+        : getNumberAttributes(normalized.value, config).color;
       const actionLabel = rule.category === "kill_color" ? "杀波色" : "参考波色";
       return {
         rawResult,
         normalizerSteps: normalized.steps,
         finalResult: normalized.value,
         mappedResult: [color],
-        process: [...trace, ...reductionProcess(normalized.steps, 48), `${normalized.value} = ${color}`, `${actionLabel} ${color}`],
+        process: [...trace, ...reductionProcess(normalized.steps, useColorValue ? 3 : 48), `${normalized.value} = ${color}`, `${actionLabel} ${color}`],
         variables: formula.variables,
         expression: formula.expression,
         trace,
@@ -539,6 +587,36 @@ function calculateRuleUncached(
         finalResult: normalized.value,
         mappedResult: [normalized.value],
         process: [...trace, ...reductionProcess(normalized.steps, 5), `杀头 ${normalized.value}`],
+        variables: formula.variables,
+        expression: formula.expression,
+        trace,
+      };
+    }
+    case "kill_half_head": {
+      const normalized = moduloSteps(rawResult, 10);
+      const target = halfHeadNumbers(normalized.value);
+      return {
+        rawResult,
+        normalizerSteps: normalized.steps,
+        finalResult: normalized.value,
+        mappedResult: target.numbers,
+        secondaryMappedResult: [target.label],
+        process: [...trace, `${rawResult} 的个位数 = ${normalized.value}`, `${normalized.value} = ${target.label}`, `排除号码：${target.numbers.map((number) => String(number).padStart(2, "0")).join("、")}`],
+        variables: formula.variables,
+        expression: formula.expression,
+        trace,
+      };
+    }
+    case "kill_door": {
+      const normalized = moduloSteps(rawResult, 5, false);
+      const numbers = doorNumbers(normalized.value);
+      return {
+        rawResult,
+        normalizerSteps: normalized.steps,
+        finalResult: normalized.value,
+        mappedResult: numbers,
+        secondaryMappedResult: [`${normalized.value}门`],
+        process: [...trace, ...reductionProcess(normalized.steps, 5), `${normalized.value} = ${normalized.value}门`, `排除号码：${numbers.map((number) => String(number).padStart(2, "0")).join("、")}`],
         variables: formula.variables,
         expression: formula.expression,
         trace,
@@ -726,6 +804,9 @@ export function checkRuleSuccess(rule: RuleRecord, calculation: RuleCalculation,
       return !resultSet.includes(special.tail);
     case "kill_head":
       return !resultSet.includes(special.head);
+    case "kill_half_head":
+    case "kill_door":
+      return !resultSet.includes(special.number);
     case "kill_element":
       return !resultSet.includes(special.element);
     case "kill_segment":

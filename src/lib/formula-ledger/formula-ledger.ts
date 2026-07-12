@@ -124,6 +124,10 @@ function finalOutputLabel(rule: RuleRecord, mappedResult: Array<number | string>
       return `杀尾${value}`;
     case "kill_head":
       return `杀头${value}`;
+    case "kill_half_head":
+      return `杀半头号码 ${value}`;
+    case "kill_door":
+      return `杀一门号码 ${value}`;
     case "kill_element":
       return `杀${value}`;
     case "kill_segment":
@@ -167,6 +171,10 @@ function mappingLine(rule: RuleRecord, calculation: Pick<RuleCalculation, "final
       return `${finalResult} 对应尾数${mapped}`;
     case "kill_head":
       return `${finalResult} 对应头数${mapped}`;
+    case "kill_half_head":
+      return `${finalResult} 对应半头号码 ${mapped}`;
+    case "kill_door":
+      return `${finalResult} 对应门数号码 ${mapped}`;
     case "kill_segment":
       return `${finalResult} 对应段位${mapped}`;
     case "seven_tail":

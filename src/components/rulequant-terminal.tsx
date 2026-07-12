@@ -215,6 +215,8 @@ const categories: Array<{ value: RuleCategory; label: string }> = [
   { value: "kill_sum", label: "杀一合" },
   { value: "kill_tail", label: "杀一尾" },
   { value: "kill_head", label: "杀一头" },
+  { value: "kill_half_head", label: "杀半头" },
+  { value: "kill_door", label: "杀一门" },
   { value: "kill_element", label: "杀一行" },
   { value: "kill_segment", label: "杀一段" },
   { value: "seven_tail", label: "七尾" },

@@ -42,4 +42,14 @@ describe("rule text parser", () => {
       anchorPatternIndex: 6,
     });
   });
+
+  test.each([
+    ["杀半头", "平1头+平2头", "D", "kill_half_head", "half_head_digit", "special_number"],
+    ["杀一门", "平2尾+平3尾+特码合+特码五行值+期数尾", "L", "kill_door", "subtract_5_to_1_5", "special_number"],
+    ["杀一波", "平1+平2五行值+平4头+平4波色值+平5段+特码尾", "L", "kill_color", "mod_3", "special_color"],
+  ])("parses %s TXT into the unified rule library shape", (type, formula, orderMode, category, normalizer, target) => {
+    const result = parseRuleTextFile(`计算类型：${type}\n公式：${formula}\n号码顺序：${orderMode}序`, `${type}.txt`);
+    expect(result.errors).toEqual([]);
+    expect(result.rules[0]).toMatchObject({ category, formula, orderMode, normalizer, target, sourceType: "txt_import" });
+  });
 });

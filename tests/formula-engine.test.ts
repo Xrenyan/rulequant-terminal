@@ -461,4 +461,39 @@ describe("formula engine", () => {
     calculateRule(rule, draw, defaultConfig, { periodIndex: 1 });
     expect(getFormulaEngineCacheSize()).toBe(2);
   });
+
+  test("calculates corrected half-head, color-value and door rules", () => {
+    const baseRule: RuleRecord = {
+      id: "special-category-rule",
+      name: "专项规则",
+      category: "kill_half_head",
+      orderMode: "L",
+      formula: "6",
+      normalizer: "half_head_digit",
+      target: "special_number",
+      verifyMode: "next_special",
+      positionPattern: [],
+      periodSpan: 1,
+      enabled: true,
+      tags: [],
+      description: "",
+      sourceFile: "unit",
+      examples: [],
+      createdAt: "2026-07-12T00:00:00.000Z",
+      updatedAt: "2026-07-12T00:00:00.000Z",
+    };
+
+    const halfHead = calculateRule(baseRule, draw, defaultConfig);
+    expect(halfHead.secondaryMappedResult).toEqual(["2头双"]);
+    expect(halfHead.mappedResult).toEqual([20, 22, 24, 26, 28]);
+
+    const color = calculateRule({ ...baseRule, id: "color-value-rule", category: "kill_color", formula: "5", normalizer: "mod_3", target: "special_color" }, draw, defaultConfig);
+    expect(color.finalResult).toBe(2);
+    expect(color.mappedResult).toEqual(["绿"]);
+
+    const door = calculateRule({ ...baseRule, id: "door-rule", category: "kill_door", formula: "11", normalizer: "subtract_5_to_1_5" }, draw, defaultConfig);
+    expect(door.finalResult).toBe(1);
+    expect(door.secondaryMappedResult).toEqual(["1门"]);
+    expect(door.mappedResult).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
 });
