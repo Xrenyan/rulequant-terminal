@@ -50,13 +50,13 @@ function HistoricalGridCard({ occurrence }: { occurrence: HistoricalNineGridOccu
       <div className="mt-3 grid grid-cols-[54px_repeat(3,minmax(0,1fr))] gap-1.5">
         <span />
         {occurrence.columnIndexes.map((index) => (
-          <span key={index} className="pb-1 text-center text-[11px] text-slate-500">{DRAW_POSITION_LABELS[index]}</span>
+          <span key={index} className="pb-1 text-center text-xs text-slate-500">{DRAW_POSITION_LABELS[index]}</span>
         ))}
         {rowOffsets.map((rowOffset) => {
           const cells = occurrence.cells.filter((cell) => cell.rowOffset === rowOffset);
           return (
             <div className="contents" key={rowOffset}>
-              <span className={cn("flex items-center justify-center text-[11px] tabular-nums", rowOffset === 0 ? "font-semibold text-cyan-200" : "text-slate-500")}>{cells[0]?.issue.slice(-3)}</span>
+              <span className={cn("flex items-center justify-center text-xs tabular-nums", rowOffset === 0 ? "font-semibold text-cyan-200" : "text-slate-500")}>{cells[0]?.issue.slice(-3)}</span>
               {cells.map((cell) => (
                 <div key={`${cell.issue}-${cell.positionIndex}`} className={cn("relative flex min-h-16 flex-col items-center justify-center rounded-lg border text-center", cell.isAnchor ? "border-cyan-300/55 bg-cyan-300/15" : rowOffset === 0 ? "border-white/[0.12] bg-white/[0.05]" : "border-white/[0.07] bg-black/10")}>
                   <strong className="text-base text-white tabular-nums">{String(cell.number).padStart(2, "0")}</strong>
@@ -85,9 +85,9 @@ function BacktestCard({ title, report, mode, config, compact = false }: { title:
       <div className="mt-4 grid grid-cols-3 gap-2">
         {report.topRates.map((item) => (
           <div key={item.top} className="rounded-lg border border-white/[0.08] bg-white/[0.035] p-3 text-center">
-            <span className="text-[11px] text-slate-500">Top {item.top}</span>
+            <span className="text-xs text-slate-500">Top {item.top}</span>
             <strong className="mt-1 block text-lg text-white tabular-nums">{item.rate}%</strong>
-            <small className="text-[11px] text-slate-500">{item.success}/{report.total}</small>
+            <small className="text-xs text-slate-500">{item.success}/{report.total}</small>
           </div>
         ))}
       </div>
@@ -114,8 +114,9 @@ function BacktestCard({ title, report, mode, config, compact = false }: { title:
 
 function NineGridWorkspace({ draws, config }: { draws: DrawRecord[]; config: RuleQuantConfig }) {
   const [mode, setMode] = useState<HistoricalNineGridMode>("zodiac");
+  const [section, setSection] = useState<"ranking" | "backtest" | "evidence">("ranking");
   const [showAllRankings, setShowAllRankings] = useState(false);
-  const [visibleGridCount, setVisibleGridCount] = useState(8);
+  const [visibleGridCount, setVisibleGridCount] = useState(4);
   const report = useMemo(() => analyzeHistoricalNineGrid(draws, config, mode), [draws, config, mode]);
 
   if (!report) {
@@ -152,35 +153,41 @@ function NineGridWorkspace({ draws, config }: { draws: DrawRecord[]; config: Rul
         </div>
       </Panel>
 
-      <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,.65fr)]">
-        <Panel className="p-4 sm:p-5">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div><h3 className="font-semibold text-white">{mode === "zodiac" ? "生肖频次排行" : "49码频次排行"}</h3><p className="mt-1 text-xs text-slate-500">排名来自全部历史九宫格，定位格也会计入并单独标明。</p></div>
-            <Badge tone="slate">显示 {rankingItems.length}/{report.rankings.length}</Badge>
-          </div>
-          <div className={cn("mt-4 grid gap-2", mode === "zodiac" ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" : "grid-cols-2 sm:grid-cols-3 xl:grid-cols-4")}>
-            {rankingItems.map((item) => (
-              <div key={item.key} className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.035] p-3">
-                <div className="absolute inset-x-0 bottom-0 h-1 bg-white/[0.03]"><i className="block h-full bg-cyan-300/55" style={{ width: `${Math.max(3, item.count / maxCount * 100)}%` }} /></div>
-                <div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold text-cyan-200">#{item.rank}</span><span className="text-[11px] text-slate-500">{item.share}%</span></div>
-                <div className="mt-2 flex items-baseline gap-2"><strong className="text-xl text-white tabular-nums">{item.label}</strong>{mode === "number" ? <span className="text-sm text-slate-400">{item.zodiac}</span> : null}</div>
-                <p className="mt-2 text-xs text-slate-500">出现 {item.count} 格 · 定位 {item.anchorCount} 次</p>
-              </div>
-            ))}
-          </div>
-          {mode === "number" ? <div className="mt-4 flex justify-center"><Button onClick={() => setShowAllRankings((value) => !value)}>{showAllRankings ? "收起到 Top18" : "查看完整49码排行"}</Button></div> : null}
-        </Panel>
-        <div className="space-y-4">
-          <BacktestCard title={`同${mode === "number" ? `号码${String(report.anchorNumber).padStart(2, "0")}` : `生肖${report.anchorZodiac}`}历史验证`} report={report.conditionedBacktest} mode={mode} config={config} />
-          <BacktestCard title="全量逐期滚动验证" report={report.overallBacktest} mode={mode} config={config} compact />
-        </div>
-      </div>
+      <nav className="rq-workspace-tabs rq-nine-section-tabs" aria-label="九宫格分析内容">
+        <button type="button" className={cn("rq-workspace-tab", section === "ranking" && "rq-workspace-tab--active")} onClick={() => setSection("ranking")}><span>频次排行</span><small>生肖与49码</small></button>
+        <button type="button" className={cn("rq-workspace-tab", section === "backtest" && "rq-workspace-tab--active")} onClick={() => setSection("backtest")}><span>回测验证</span><small>同锚点与滚动验证</small></button>
+        <button type="button" className={cn("rq-workspace-tab", section === "evidence" && "rq-workspace-tab--active")} onClick={() => setSection("evidence")}><span>历史九宫格</span><small>逐次查看证据</small></button>
+      </nav>
 
-      <Panel className="p-4 sm:p-5">
+      {section === "ranking" ? <Panel className="p-4 sm:p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div><h3 className="font-semibold text-white">{mode === "zodiac" ? "生肖频次排行" : "49码频次排行"}</h3><p className="mt-1 text-xs text-slate-500">排名来自全部历史九宫格，定位格也会计入并单独标明。</p></div>
+          <Badge tone="slate">显示 {rankingItems.length}/{report.rankings.length}</Badge>
+        </div>
+        <div className={cn("mt-4 grid gap-2", mode === "zodiac" ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" : "grid-cols-2 sm:grid-cols-3 xl:grid-cols-4") }>
+          {rankingItems.map((item) => (
+            <div key={item.key} className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.035] p-3">
+              <div className="absolute inset-x-0 bottom-0 h-1 bg-white/[0.03]"><i className="block h-full bg-cyan-300/55" style={{ width: `${Math.max(3, item.count / maxCount * 100)}%` }} /></div>
+              <div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold text-cyan-200">#{item.rank}</span><span className="text-xs text-slate-500">{item.share}%</span></div>
+              <div className="mt-2 flex items-baseline gap-2"><strong className="text-xl text-white tabular-nums">{item.label}</strong>{mode === "number" ? <span className="text-sm text-slate-400">{item.zodiac}</span> : null}</div>
+              <p className="mt-2 text-xs text-slate-500">出现 {item.count} 格 · 定位 {item.anchorCount} 次</p>
+            </div>
+          ))}
+        </div>
+        {mode === "number" ? <div className="mt-4 flex justify-center"><Button onClick={() => setShowAllRankings((value) => !value)}>{showAllRankings ? "收起到 Top18" : "查看完整49码排行"}</Button></div> : null}
+      </Panel> : null}
+
+      {section === "backtest" ? <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <BacktestCard title={`同${mode === "number" ? `号码${String(report.anchorNumber).padStart(2, "0")}` : `生肖${report.anchorZodiac}`}历史验证`} report={report.conditionedBacktest} mode={mode} config={config} />
+        <BacktestCard title="全量逐期滚动验证" report={report.overallBacktest} mode={mode} config={config} compact />
+      </div> : null}
+
+      {section === "evidence" ? <Panel className="p-4 sm:p-5">
         <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="font-semibold text-white">历史九宫格证据</h3><p className="mt-1 text-xs text-slate-500">平1取自己和右边两列，特码取左边两列和自己，中间位置取左、中、右三列。</p></div><Badge tone="slate">显示 {Math.min(visibleGridCount, report.occurrences.length)}/{report.occurrences.length}</Badge></div>
         <div className="mt-4 grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">{visibleOccurrences.map((occurrence) => <HistoricalGridCard key={occurrence.id} occurrence={occurrence} />)}</div>
-        {report.occurrences.length > visibleGridCount ? <div className="mt-4 flex justify-center"><Button onClick={() => setVisibleGridCount((count) => count + 8)}>再看8个九宫格</Button></div> : null}
-      </Panel>
+        {report.occurrences.length > visibleGridCount ? <div className="mt-4 flex justify-center"><Button onClick={() => setVisibleGridCount((count) => count + 4)}>再看4个九宫格</Button></div> : null}
+      </Panel> : null}
+
     </div>
   );
 }
@@ -214,7 +221,7 @@ export function SpecialAnalysisView({ draws, config, dataSourceLabel, sourceLoad
         </div>
       </Panel>
 
-      <nav className="rq-workspace-tabs" aria-label="专项分析工作区">
+      <nav className="rq-workspace-tabs rq-special-tabs" aria-label="专项分析工作区">
         <button type="button" className={cn("rq-workspace-tab", tab === "nine-grid" && "rq-workspace-tab--active")} onClick={() => setTab("nine-grid")}><span>九宫格</span><small>历史锚点排行</small></button>
         <button type="button" className={cn("rq-workspace-tab", tab === "trends" && "rq-workspace-tab--active")} onClick={() => setTab("trends")}><span>大小单双</span><small>近20-30期走势</small></button>
       </nav>

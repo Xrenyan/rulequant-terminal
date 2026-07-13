@@ -80,6 +80,8 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 let exportersPromise: ReturnType<typeof importExporters> | undefined;
+const formulaDiscoveryCache = new Map<string, FormulaDiscoveryCandidate[]>();
+const FORMULA_DISCOVERY_CACHE_LIMIT = 6;
 
 function importExporters() {
   return import("@/lib/export/exporters");
@@ -728,6 +730,46 @@ function ComputationPendingPanel({ title, desc }: { title: string; desc: string 
   );
 }
 
+function FormulaDiscoveryPendingPanel({
+  depth,
+  elapsedSeconds,
+  preparing,
+}: {
+  depth: "balanced" | "deep" | "advanced";
+  elapsedSeconds: number;
+  preparing: boolean;
+}) {
+  const stages = ["生成候选组合", "训练期筛选", "验证期复核", "留出期检查", "稳定性排序"];
+  const activeStage = preparing ? 0 : Math.min(4, Math.max(1, Math.floor(elapsedSeconds / 2) + 1));
+  const depthLabel = depth === "balanced" ? "稳健组合" : depth === "deep" ? "深度组合" : "高级组合";
+
+  return (
+    <Panel className="rq-discovery-pending p-5" aria-live="polite" aria-busy="true">
+      <div className="flex items-start gap-3">
+        <span className="rq-progress-spinner" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="rq-eyebrow">{depthLabel}</p>
+              <h3 className="font-semibold text-white">正在后台筛选公式</h3>
+            </div>
+            <Badge tone="cyan">{preparing ? "准备中" : `${elapsedSeconds} 秒`}</Badge>
+          </div>
+          <p className="mt-2 text-sm text-slate-500">页面可以继续操作；计算在线程中进行，完成后会自动显示候选，不需要重复点击。</p>
+          <ol className="rq-progress-steps mt-4">
+            {stages.map((stage, index) => (
+              <li key={stage} className={cn(index < activeStage && "is-done", index === activeStage && "is-active")}>
+                <span>{index < activeStage ? "✓" : index + 1}</span>
+                <strong>{stage}</strong>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
 function NumberTile({ number, special = false, config }: { number: number; special?: boolean; config: RuleQuantConfig }) {
   const label = numberWithZodiac(number, config).split(" ");
   return (
@@ -738,6 +780,82 @@ function NumberTile({ number, special = false, config }: { number: number; speci
       <span className="font-mono text-[15px] leading-none">{padNumber(number)}</span>
       <span className="mt-1 text-xs leading-none text-slate-300">{label[1] ?? ""}</span>
     </span>
+  );
+}
+
+function DrawHistoryMobileList({ draws, config }: { draws: ReturnType<typeof normalizeDraw>[]; config: RuleQuantConfig }) {
+  const [query, setQuery] = useState("");
+  const [visibleCount, setVisibleCount] = useState(10);
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredDraws = useMemo(() => {
+    if (!normalizedQuery) return draws;
+    return draws.filter((draw) => [
+      draw.issue,
+      draw.date,
+      draw.n1,
+      draw.n2,
+      draw.n3,
+      draw.n4,
+      draw.n5,
+      draw.n6,
+      draw.special,
+      ...draw.lOrder.map((number) => getNumberAttributes(number, config).zodiac),
+    ].join(" ").toLowerCase().includes(normalizedQuery));
+  }, [config, draws, normalizedQuery]);
+  const visibleDraws = filteredDraws.slice(0, visibleCount);
+
+  return (
+    <div className="rq-mobile-draws md:hidden">
+      <div className="rq-mobile-draws__toolbar">
+        <Input
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setVisibleCount(10);
+          }}
+          placeholder="搜索期号、号码或生肖"
+          aria-label="搜索开奖记录"
+        />
+        <span>显示 {visibleDraws.length}/{filteredDraws.length}</span>
+      </div>
+      <div className="rq-mobile-draws__list">
+        {visibleDraws.map((draw) => {
+          const values = [draw.n1, draw.n2, draw.n3, draw.n4, draw.n5, draw.n6, draw.special];
+          return (
+            <article key={draw.issue} className="rq-mobile-draw-card">
+              <header>
+                <div>
+                  <strong>{draw.issue}期</strong>
+                  <span>{draw.date || "日期未记录"}</span>
+                </div>
+                <Badge tone={isManualDrawRecord(draw) ? "cyan" : draw.sourceUrl ? "green" : "slate"}>{isManualDrawRecord(draw) ? "人工录入" : draw.sourceUrl ? "网站/云端" : "本地"}</Badge>
+              </header>
+              <div className="rq-draw-number-strip" aria-label={`${draw.issue}期开奖`}>
+                {values.map((number, index) => {
+                  const zodiac = getNumberAttributes(number, config).zodiac;
+                  return (
+                    <span key={`${draw.issue}-${index}`} className={cn(index === 6 && "is-special")}>
+                      <small>{index === 6 ? "特" : index + 1}</small>
+                      <strong>{padNumber(number)}</strong>
+                      <em>{zodiac}</em>
+                    </span>
+                  );
+                })}
+              </div>
+              <details>
+                <summary>查看 L序 / D序</summary>
+                <p><b>L序</b>{draw.lOrder.map((number) => numberWithZodiac(number, config)).join("  ")}</p>
+                <p><b>D序</b>{draw.dOrder.map((number) => numberWithZodiac(number, config)).join("  ")}</p>
+              </details>
+            </article>
+          );
+        })}
+        {!visibleDraws.length && <div className="rq-empty-copy">没有找到匹配的开奖记录。</div>}
+      </div>
+      {visibleCount < filteredDraws.length && (
+        <Button className="mt-3 w-full" onClick={() => setVisibleCount((count) => count + 10)}>再看10期</Button>
+      )}
+    </div>
   );
 }
 
@@ -919,7 +1037,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const sourceAutoFetchedAt = useRef(0);
   const referenceAutoSavedSignature = useRef("");
   const [candidateTab, setCandidateTab] = useState<"numbers8" | "numbers12" | "numbers18" | "numbers16" | "numbers49" | "zodiacs12" | "zodiacs9" | "zodiacs8" | "zodiacs7">("numbers8");
-  const [candidateWorkspaceTab, setCandidateWorkspaceTab] = useState<"results" | "evidence" | "history" | "operations">("results");
+  const [candidateWorkspaceTab, setCandidateWorkspaceTab] = useState<"results" | "evidence" | "history" | "combo" | "operations">("results");
   const [rulesWorkspaceTab, setRulesWorkspaceTab] = useState<"library" | "health" | "reconcile">("library");
   const [candidateFocus, setCandidateFocus] = useState<CandidateFocus>(null);
   const [referenceGeneratedAt, setReferenceGeneratedAt] = useState("");
@@ -932,6 +1050,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const [discoveryStatus, setDiscoveryStatus] = useState("");
   const [discoveryDepth, setDiscoveryDepth] = useState<"balanced" | "deep" | "advanced">("balanced");
   const [discoveryResult, setDiscoveryResult] = useState<{ key: string; candidates: FormulaDiscoveryCandidate[] }>({ key: "", candidates: [] });
+  const [discoveryRefreshId, setDiscoveryRefreshId] = useState(0);
+  const [discoveryElapsedSeconds, setDiscoveryElapsedSeconds] = useState(0);
   const [ruleLibraryStatus, setRuleLibraryStatus] = useState("");
   const [lastCalculationAt, setLastCalculationAt] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("rulequant:lastCalculationAt") ?? ""));
   const [lastSyncAt, setLastSyncAt] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("rulequant:lastSyncAt") ?? ""));
@@ -1100,7 +1220,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     });
     return sortRulesForManagement(filtered, ruleResultMap, ruleSort);
   }, [rules, ruleFilter, ruleLibraryFilter, ruleResultMap, ruleSort]);
-  const rulePageSize = 8;
+  const rulePageSize = 7;
   const rulePageCount = Math.max(1, Math.ceil(visibleRules.length / rulePageSize));
   const safeRulePage = Math.min(rulePage, rulePageCount - 1);
   const pagedRules = visibleRules.slice(safeRulePage * rulePageSize, (safeRulePage + 1) * rulePageSize);
@@ -1211,20 +1331,41 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     return buildFormulaLedger(selectedRuleResult, { draws: activeDraws, config });
   }, [activeView, selectedRuleResult, activeDraws, config]);
   const selectedRuleValidation = selectedRule ? ruleValidationById.get(selectedRule.id) : undefined;
-  const discoveryRequestKey = useMemo(() => `${discoveryDepth}|${activeDraws.length}|${activeDraws.at(-1)?.issue ?? ""}|${JSON.stringify(config)}`, [activeDraws, config, discoveryDepth]);
+  const discoveryRequestKey = useMemo(() => `${discoveryDepth}|${activeDraws.length}|${activeDraws.at(-1)?.issue ?? ""}|${JSON.stringify(config)}|${discoveryRefreshId}`, [activeDraws, config, discoveryDepth, discoveryRefreshId]);
+  const cachedDiscoveryCandidates = formulaDiscoveryCache.get(discoveryRequestKey);
   const discoveryCandidates = useMemo(
-    () => discoveryResult.key === discoveryRequestKey ? discoveryResult.candidates : [],
-    [discoveryRequestKey, discoveryResult],
+    () => discoveryResult.key === discoveryRequestKey ? discoveryResult.candidates : cachedDiscoveryCandidates ?? [],
+    [cachedDiscoveryCandidates, discoveryRequestKey, discoveryResult],
   );
-  const discoveryLoading = activeView === "formula-discovery" && isFormulaDiscoveryReady && discoveryResult.key !== discoveryRequestKey;
+  const discoveryLoading = activeView === "formula-discovery" && isFormulaDiscoveryReady && !cachedDiscoveryCandidates && discoveryResult.key !== discoveryRequestKey;
+
+  useEffect(() => {
+    if (!discoveryLoading) return undefined;
+    const startedAt = performance.now();
+    const updateElapsed = () => setDiscoveryElapsedSeconds(Math.max(1, Math.round((performance.now() - startedAt) / 1000)));
+    const intervalId = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [discoveryLoading, discoveryRequestKey]);
 
   useEffect(() => {
     if (activeView !== "formula-discovery" || !isFormulaDiscoveryReady) return;
+    const cached = formulaDiscoveryCache.get(discoveryRequestKey);
+    if (cached) return;
     let cancelled = false;
     const worker = new Worker(new URL("../workers/formula-discovery.worker.ts", import.meta.url));
     worker.onmessage = (event: MessageEvent<{ ok: boolean; candidates?: FormulaDiscoveryCandidate[]; error?: string }>) => {
       if (cancelled) return;
-      if (event.data.ok) setDiscoveryResult({ key: discoveryRequestKey, candidates: event.data.candidates ?? [] });
+      if (event.data.ok) {
+        const candidates = event.data.candidates ?? [];
+        formulaDiscoveryCache.set(discoveryRequestKey, candidates);
+        while (formulaDiscoveryCache.size > FORMULA_DISCOVERY_CACHE_LIMIT) {
+          const oldestKey = formulaDiscoveryCache.keys().next().value;
+          if (typeof oldestKey !== "string") break;
+          formulaDiscoveryCache.delete(oldestKey);
+        }
+        setDiscoveryResult({ key: discoveryRequestKey, candidates });
+        setDiscoveryStatus(`筛选完成：生成 ${candidates.length} 条候选，已缓存本次结果。`);
+      }
       else setDiscoveryStatus(`筛选失败：${event.data.error ?? "后台计算异常"}`);
       worker.terminate();
     };
@@ -2154,22 +2295,28 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-500">本地算法按 60% 训练期、20% 验证期、20% 独立留出期筛选，并比较最近表现与稳定差。推荐结果只代表历史筛选，不接入大模型，也不代表未来一定有效；确认加入公式库后才参与综合参考。</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <Button size="sm" variant={discoveryDepth === "balanced" ? "primary" : "secondary"} onClick={() => setDiscoveryDepth("balanced")}>稳健组合 · 2-3项</Button>
-                      <Button size="sm" variant={discoveryDepth === "deep" ? "primary" : "secondary"} onClick={() => setDiscoveryDepth("deep")}>深度组合 · 2-4项</Button>
-                      <Button size="sm" variant={discoveryDepth === "advanced" ? "primary" : "secondary"} onClick={() => setDiscoveryDepth("advanced")}>高级组合 · 2-5项</Button>
-                      <Badge tone="cyan">{discoveryLoading ? "后台筛选中" : `已生成 ${discoveryCandidates.length} 条候选`}</Badge>
+                      <Button size="sm" variant={discoveryDepth === "balanced" ? "primary" : "secondary"} onClick={() => { setDiscoveryElapsedSeconds(0); setDiscoveryDepth("balanced"); }}>稳健组合 · 2-3项</Button>
+                      <Button size="sm" variant={discoveryDepth === "deep" ? "primary" : "secondary"} onClick={() => { setDiscoveryElapsedSeconds(0); setDiscoveryDepth("deep"); }}>深度组合 · 2-4项</Button>
+                      <Button size="sm" variant={discoveryDepth === "advanced" ? "primary" : "secondary"} onClick={() => { setDiscoveryElapsedSeconds(0); setDiscoveryDepth("advanced"); }}>高级组合 · 2-5项</Button>
+                      <Button size="sm" disabled={discoveryLoading} onClick={() => {
+                        setDiscoveryElapsedSeconds(0);
+                        setDiscoveryStatus("");
+                        setDiscoveryFocusId("");
+                        setDiscoveryRefreshId((value) => value + 1);
+                      }}><RefreshCw className={cn("h-4 w-4", discoveryLoading && "animate-spin")} />重新筛选</Button>
+                      <Badge tone="cyan">{discoveryLoading ? `后台筛选中 · ${discoveryElapsedSeconds}秒` : `已生成 ${discoveryCandidates.length} 条候选`}</Badge>
                     </div>
                   </div>
                   {discoveryStatus && (
                     <div className={cn("mt-4 rounded-lg border p-3 text-sm", discoveryStatus.includes("失败") ? "border-rose-300/25 bg-rose-300/10 text-rose-100" : "border-emerald-300/25 bg-emerald-300/10 text-emerald-100")}>
                       {discoveryStatus}
-                      {!discoveryStatus.includes("失败") && <Link href="/rules" className="ml-3 text-cyan-100 underline-offset-4 hover:underline">去公式管理查看</Link>}
+                      {(discoveryStatus.includes("已加入公式库") || discoveryStatus.includes("已在公式库")) && <Link href="/rules" className="ml-3 text-cyan-100 underline-offset-4 hover:underline">去公式管理查看</Link>}
                     </div>
                   )}
                 </Panel>
                 <div className="rq-discovery-layout grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
                   {isFormulaDiscoveryPreparing || discoveryLoading ? (
-                    <ComputationPendingPanel title="正在准备公式筛选" desc="先完成页面响应，再运行训练期/验证期筛选，避免打开页面时卡住。" />
+                    <FormulaDiscoveryPendingPanel depth={discoveryDepth} elapsedSeconds={discoveryElapsedSeconds} preparing={isFormulaDiscoveryPreparing} />
                   ) : (
                     <div className="rq-discovery-list grid grid-cols-1 gap-3">
                       {discoveryCandidates.map((candidate) => {
@@ -2278,7 +2425,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     </div>
                   </div>
                 )}
-                <DataTable data={[...normalizedDraws].reverse()} columns={drawColumns} dense />
+                <DrawHistoryMobileList draws={[...normalizedDraws].reverse()} config={config} />
+                <div className="hidden md:block">
+                  <DataTable data={[...normalizedDraws].reverse()} columns={drawColumns} dense />
+                </div>
               </Panel>
             )}
 
@@ -2613,11 +2763,12 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   </div>
                 </Panel>
 
-                <nav className="rq-workspace-tabs" aria-label="综合参考工作区">
+                <nav className="rq-workspace-tabs rq-candidate-workspace-tabs" aria-label="综合参考工作区">
                   {[
                     ["results", "本期结果", "号码与生肖排序"],
                     ["evidence", "公式依据", `${candidateReport.signalCount} 条证据`],
                     ["history", "历史复盘", `${resolvedReferenceHistory.length} 次保存`],
+                    ["combo", "自选公式组合", `${selectedComboRuleIds.length || Math.min(6, referenceRuleCount)} 条已选`],
                     ["operations", "运行状态", exceptionRules.length ? `${exceptionRules.length} 条异常` : "状态正常"],
                   ].map(([key, label, hint]) => (
                     <button key={key} type="button" className={cn("rq-workspace-tab", candidateWorkspaceTab === key && "rq-workspace-tab--active")} onClick={() => setCandidateWorkspaceTab(key as typeof candidateWorkspaceTab)}>
@@ -2626,7 +2777,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   ))}
                 </nav>
 
-                {(candidateWorkspaceTab === "history" || candidateWorkspaceTab === "operations") && (
+                {(candidateWorkspaceTab === "history" || candidateWorkspaceTab === "combo" || candidateWorkspaceTab === "operations") && (
                   <section className="rq-workspace-panel rq-scrollbar">
                 {candidateWorkspaceTab === "operations" && <>
                 <div className="rq-summary-rail rq-card-grid grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -2711,6 +2862,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                 {candidateWorkspaceTab === "operations" && <>
                 {exceptionRules.length > 0 && <FormulaExceptionPanel items={exceptionRules} calculableCount={calculableRuleCount} />}
                 <FormulaHealthPanel rows={ruleHealthRows} onToggleReserve={(ruleId) => void store.toggleReferenceParticipation(ruleId)} compact />
+                </>}
+                {candidateWorkspaceTab === "combo" && <>
                 <ManualCombinationPanel
                   rules={rules}
                   selectedRuleIds={selectedComboRuleIds}
@@ -2904,7 +3057,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
             )}
 
             {activeView === "reports" && (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="rq-export-grid">
                 <ExportTile icon={Database} title="开奖数据" desc="导出 CSV / Excel 格式的当前验证开奖数据" action={() => exportDrawsCsv(activeDraws)} />
                 <ExportTile icon={Layers3} title="规则库 JSON" desc="导出当前规则对象，可用于备份或迁移" action={() => exportJson(rules, "rulequant-rules.json")} />
                 <ExportTile icon={FileDown} title="全部公式 Word" desc="一键导出当前设备全部公式，包含新增公式、统一字体、总览和逐条详情" action={() => exportRuleLibraryWord(rules)} />
@@ -4074,28 +4227,28 @@ function ManualCombinationPanel({
   }
 
   return (
-    <Panel className="p-5">
-      <div className="flex items-start justify-between gap-4">
+    <Panel className="rq-manual-combination p-5">
+      <div className="rq-section-heading">
         <div>
           <h3 className="font-semibold text-white">手动公式组合查看号码</h3>
           <p className="mt-1 text-sm text-slate-500">手动勾选几条公式，单独查看这组公式合并后的参考号码和生肖。</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button size="sm" onClick={() => setSelectedRuleIds(availableRules.slice(0, 10).map((rule) => rule.id))}>选择前10条</Button>
           <Button size="sm" onClick={() => setSelectedRuleIds([])}>清空</Button>
         </div>
       </div>
-      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className="grid max-h-64 gap-2 overflow-auto pr-1">
+      <div className="rq-manual-combination__layout">
+        <div className="rq-manual-rule-list rq-scrollbar">
           {availableRules.map((rule) => (
-            <label key={rule.id} className="flex cursor-pointer items-center gap-3 rounded-md border border-white/[0.08] bg-white/[0.03] p-3 text-sm text-slate-300 hover:bg-white/[0.06]">
+            <label key={rule.id} className="rq-manual-rule-option">
               <input type="checkbox" checked={selectedRuleIds.includes(rule.id)} onChange={() => toggle(rule.id)} />
               <span className="min-w-0 flex-1 truncate">{rule.name}</span>
               <Badge tone="slate">{categoryLabel(rule.category)}</Badge>
             </label>
           ))}
         </div>
-        <div className="rounded-lg border border-white/[0.08] bg-black/20 p-4">
+        <div className="rq-manual-result">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-white">组合结果</p>
             <Badge tone="cyan">使用 {report.ruleCount} 条</Badge>
@@ -4103,7 +4256,7 @@ function ManualCombinationPanel({
           <p className="mt-3 text-xs text-slate-500">号码 Top 18</p>
           <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6 xl:grid-cols-9">
             {report.topNumbers18.map((item) => (
-              <span key={item.number} className="flex h-9 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.05] px-1 font-mono text-xs text-white">
+              <span key={item.number} className="rq-manual-number">
                 {candidateNumberLabel(item)}
               </span>
             ))}
@@ -4482,11 +4635,13 @@ function CandidateEvidencePanel({ candidate }: { candidate?: CandidateNumber | C
 
 function ExportTile({ icon: Icon, title, desc, action }: { icon: typeof Database; title: string; desc: string; action: () => void }) {
   return (
-    <Panel className="p-5">
-      <Icon className="h-6 w-6 text-cyan-200" />
-      <h3 className="mt-4 font-semibold text-white">{title}</h3>
-      <p className="mt-2 min-h-10 text-sm text-slate-500">{desc}</p>
-      <Button className="mt-5" onClick={action}><Download className="h-4 w-4" />导出</Button>
+    <Panel className="rq-export-tile">
+      <div className="rq-export-tile__icon"><Icon aria-hidden="true" /></div>
+      <div className="min-w-0">
+        <h3 className="font-semibold text-white">{title}</h3>
+        <p className="mt-1 text-sm text-slate-500">{desc}</p>
+      </div>
+      <Button className="rq-export-tile__action" onClick={action}><Download className="h-4 w-4" />导出</Button>
     </Panel>
   );
 }
