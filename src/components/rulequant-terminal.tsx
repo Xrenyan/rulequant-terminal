@@ -130,6 +130,10 @@ function exportReferenceHistoryWord(records: ResolvedReferenceHistoryItem[]) {
   void loadExporters().then((module) => module.exportReferenceHistoryWord(records));
 }
 
+function exportRuleLibraryWord(rules: RuleRecord[]) {
+  void loadExporters().then((module) => module.exportRuleLibraryWord(rules));
+}
+
 function exportHtmlReport(result: BacktestResult, rules: RuleRecord[], config: RuleQuantConfig) {
   void loadExporters().then((module) => module.exportHtmlReport(result, rules, config));
 }
@@ -182,6 +186,16 @@ function staticCloudStateUrls() {
     "/static-cloud-state.json",
     "../static-cloud-state.json",
   ].filter(Boolean)));
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 const viewLabels: Record<ViewKey, string> = {
@@ -621,6 +635,7 @@ function FormulaLibraryBackupPanel({
         </span>
       </div>
       <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <Button variant="primary" onClick={() => exportRuleLibraryWord(rules)}><FileDown className="h-4 w-4" />一键下载全部公式</Button>
         <Button onClick={() => exportJson({ exportedAt: new Date().toISOString(), rules }, "rulequant-rules-backup.json")}><Download className="h-4 w-4" />导出公式库 JSON</Button>
         <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-white/10 bg-white/[0.06] px-4 text-sm text-slate-100 hover:bg-white/[0.09]">
           <Upload className="h-4 w-4" />导入 JSON / TXT
@@ -903,7 +918,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const [sourceLoading, setSourceLoading] = useState(false);
   const sourceAutoFetchedAt = useRef(0);
   const referenceAutoSavedSignature = useRef("");
-  const [candidateTab, setCandidateTab] = useState<"numbers8" | "numbers12" | "numbers18" | "numbers16" | "zodiacs9" | "zodiacs8" | "zodiacs7">("numbers8");
+  const [candidateTab, setCandidateTab] = useState<"numbers8" | "numbers12" | "numbers18" | "numbers16" | "numbers49" | "zodiacs12" | "zodiacs9" | "zodiacs8" | "zodiacs7">("numbers8");
   const [candidateWorkspaceTab, setCandidateWorkspaceTab] = useState<"results" | "evidence" | "history" | "operations">("results");
   const [rulesWorkspaceTab, setRulesWorkspaceTab] = useState<"library" | "health" | "reconcile">("library");
   const [candidateFocus, setCandidateFocus] = useState<CandidateFocus>(null);
@@ -973,7 +988,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const isCloudData = Boolean(cloudStateMeta?.enabled && cloudStateMeta.recordCount);
   const hasSharedDraws = hasLiveDraws || isCloudData || websiteDraws.length > 0 || hasManualDraws;
   const isStaticShareHost = typeof window !== "undefined" && (window.location.hostname.endsWith("github.io") || process.env.NEXT_PUBLIC_STATIC_EXPORT === "true");
-  const hasCloudAdminToken = typeof window !== "undefined" && Boolean(window.localStorage.getItem("rulequant:adminToken") || process.env.NEXT_PUBLIC_RULEQUANT_ADMIN_TOKEN);
+  const hasCloudAdminToken = typeof window !== "undefined" && Boolean(window.localStorage.getItem("rulequant:adminToken"));
   const showCloudPublishControls = hasCloudAdminToken || !isStaticShareHost;
   const cloudSyncAt = cloudStateMeta?.updatedAt ? new Date(cloudStateMeta.updatedAt).toLocaleString("zh-CN", { hour12: false }) : "";
   const staticSnapshotAt = isStaticShareHost && hasSharedDraws ? (cloudSyncAt || latestRawDraw?.date || "静态快照") : "";
@@ -1276,12 +1291,12 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         persist: false,
       };
       const request = async (url: string) => {
-        const response = await fetch(`${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`, {
+        const response = await fetchWithTimeout(`${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
           cache: "no-store",
-        });
+        }, 10000);
         const data = (await response.json()) as UrlImportResponse;
         if (!response.ok) throw new Error(data.errors?.[0] ?? "网址数据抓取失败");
         return data;
@@ -1290,7 +1305,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         let lastError = "";
         for (const url of staticCloudStateUrls()) {
           try {
-            const response = await fetch(`${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`, { cache: "no-store" });
+            const response = await fetchWithTimeout(`${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`, { cache: "no-store" }, 8000);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const state = (await response.json()) as { draws?: DrawRecord[]; meta?: UrlImportResponse["state"] };
             if (!Array.isArray(state.draws) || !state.draws.length) throw new Error("static snapshot missing draws");
@@ -1323,6 +1338,18 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         }
       }
 
+      if (!(data.records?.length) && !isGithubPagesHost) {
+        try {
+          const snapshot = await requestStaticSnapshot();
+          data = {
+            ...snapshot,
+            errors: [...(data.errors ?? []), "实时开奖源暂时不可用，已自动使用最近一次完整网站快照。"],
+          };
+        } catch {
+          // The original error below keeps the current local library intact.
+        }
+      }
+
       const fetchedRecords = data.records ?? [];
       if (!fetchedRecords.length) {
         throw new Error("网站本次没有返回有效开奖记录，已保留现有开奖库");
@@ -1349,8 +1376,11 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       clearCandidatePoolCache();
       setReferenceRunId((current) => current + 1);
       const changed = latestFetched?.issue && latestFetched.issue !== currentLatest?.issue;
+      const usedSnapshotFallback = data.errors?.some((message) => message.includes("备用") || message.includes("快照"));
       setSourceStatus(
-        changed
+        usedSnapshotFallback
+          ? `实时开奖源暂时不可用，已使用备用快照 ${latestFetched?.issue ?? "-"} 期，共 ${fetchedRecords.length} 条记录；现有数据未丢失。`
+          : changed
           ? `已同步到最新 ${latestFetched.issue} 期，共 ${fetchedRecords.length} 条记录，页面已重新计算。`
           : `已检查配置的开奖源，当前仍为 ${latestFetched?.issue ?? "-"} 期，共 ${fetchedRecords.length} 条记录。`,
       );
@@ -1385,7 +1415,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   }
 
   async function handlePublishCloudState() {
-    if (typeof window !== "undefined" && !window.localStorage.getItem("rulequant:adminToken") && !process.env.NEXT_PUBLIC_RULEQUANT_ADMIN_TOKEN) {
+    if (typeof window !== "undefined" && !window.localStorage.getItem("rulequant:adminToken")) {
       const token = window.prompt("云端设置了管理员密钥。请输入管理员发布密钥；如果没有，直接取消，本机数据仍会保留。");
       if (!token?.trim()) return;
       window.localStorage.setItem("rulequant:adminToken", token.trim());
@@ -2325,11 +2355,12 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                         <Badge tone="green">参与参考 {referenceRuleCount}</Badge>
                       </div>
                     </div>
-                    <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:flex-wrap xl:w-auto xl:justify-end">
+                    <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap xl:w-auto xl:justify-end">
                       <Link href="/formula-editor?mode=new" className="rq-link-button rq-link-button--primary h-9 min-w-0 whitespace-nowrap px-3 text-[13px] sm:h-10 sm:min-w-[116px] sm:px-4 sm:text-sm">
                         <Plus className="h-4 w-4" />新增规则
                       </Link>
                       <Button onClick={() => selectedRule && void store.duplicateRule(selectedRule.id)}>复制公式</Button>
+                      <Button onClick={() => exportRuleLibraryWord(rules)}><FileDown className="h-4 w-4" />下载全部公式</Button>
                       <Link href="/one-click" className="inline-flex h-9 min-w-0 items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/[0.055] px-3 text-[13px] text-white hover:bg-white/[0.09] sm:h-10 sm:min-w-[104px] sm:px-4 sm:text-sm">试算公式</Link>
                     </div>
                   </div>
@@ -2714,6 +2745,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                               const key = `zodiacs${count}` as typeof candidateTab;
                               return <Button key={count} size="sm" variant={candidateTab === key ? "primary" : "ghost"} onClick={() => setCandidateTab(key)}>Top {count}</Button>;
                             })}
+                            {candidateTab.startsWith("numbers")
+                              ? <Button size="sm" variant={candidateTab === "numbers49" ? "primary" : "ghost"} onClick={() => setCandidateTab("numbers49")}>全量49</Button>
+                              : <Button size="sm" variant={candidateTab === "zodiacs12" ? "primary" : "ghost"} onClick={() => setCandidateTab("zodiacs12")}>全部12肖</Button>}
                           </div>
                         </div>
                       </div>
@@ -2724,6 +2758,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       {candidateTab === "numbers12" && <CandidateNumberList items={candidateReport.topNumbers12} focus={candidateFocus} onFocus={setCandidateFocus} compact />}
                       {candidateTab === "numbers18" && <CandidateNumberList items={candidateReport.topNumbers18} focus={candidateFocus} onFocus={setCandidateFocus} />}
                       {candidateTab === "numbers16" && <CandidateNumberList items={candidateReport.topNumbers16} focus={candidateFocus} onFocus={setCandidateFocus} />}
+                      {candidateTab === "numbers49" && <CandidateNumberList items={candidateReport.allNumbers} focus={candidateFocus} onFocus={setCandidateFocus} compact />}
+                      {candidateTab === "zodiacs12" && <CandidateZodiacList items={candidateReport.allZodiacs} focus={candidateFocus} onFocus={setCandidateFocus} />}
                       {candidateTab === "zodiacs9" && <CandidateZodiacList items={candidateReport.topZodiacs9} focus={candidateFocus} onFocus={setCandidateFocus} />}
                       {candidateTab === "zodiacs8" && <CandidateZodiacList items={candidateReport.topZodiacs8} focus={candidateFocus} onFocus={setCandidateFocus} />}
                       {candidateTab === "zodiacs7" && <CandidateZodiacList items={candidateReport.topZodiacs7} focus={candidateFocus} onFocus={setCandidateFocus} />}
@@ -2871,6 +2907,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <ExportTile icon={Database} title="开奖数据" desc="导出 CSV / Excel 格式的当前验证开奖数据" action={() => exportDrawsCsv(activeDraws)} />
                 <ExportTile icon={Layers3} title="规则库 JSON" desc="导出当前规则对象，可用于备份或迁移" action={() => exportJson(rules, "rulequant-rules.json")} />
+                <ExportTile icon={FileDown} title="全部公式 Word" desc="一键导出当前设备全部公式，包含新增公式、统一字体、总览和逐条详情" action={() => exportRuleLibraryWord(rules)} />
                 <ExportTile icon={Settings2} title="配置 JSON" desc="导出生肖、波色、五行和归一化配置" action={() => exportJson(config, "rulequant-config.json")} />
                 <ExportTile icon={BarChart3} title="回测 Excel" desc="导出每期计算过程、输出和验证结果" action={() => exportBacktestExcel(backtest)} />
                 <ExportTile icon={Activity} title="候选池 Excel" desc="导出 Top 号码、Top 生肖和规则信号明细" action={() => exportCandidatePoolExcel(candidateReport)} />
@@ -3885,7 +3922,7 @@ function CandidateNumberList({ items, focus, onFocus, compact = false }: { items
             <span className="rq-candidate-rank">{String(index + 1).padStart(2, "0")}</span>
             <span className="rq-candidate-number">{padNumber(item.number)}</span>
             <span className="rq-candidate-zodiac">{item.zodiac}</span>
-            <span className="rq-candidate-votes"><b>支持 {item.supportCount}</b><i>反对 {item.opposeCount}</i></span>
+            <span className="rq-candidate-votes"><em>{item.score.toFixed(2)}分</em><b>支持 {item.supportCount}</b><i>反对 {item.opposeCount}</i></span>
           </button>
         );
       })}
@@ -3910,7 +3947,7 @@ function CandidateZodiacList({ items, focus, onFocus }: { items: CandidateZodiac
             <span className="rq-candidate-rank">{String(index + 1).padStart(2, "0")}</span>
             <strong>{item.zodiac}</strong>
             <span className="rq-zodiac-numbers">{item.numbers.map(candidateNumberLabel).join("  ")}</span>
-            <span className="rq-candidate-votes"><b>+{item.supportCount}</b><i>-{item.opposeCount}</i></span>
+            <span className="rq-candidate-votes"><em>{item.score.toFixed(2)}分</em><b>+{item.supportCount}</b><i>-{item.opposeCount}</i></span>
           </button>
         );
       })}

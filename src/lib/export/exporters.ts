@@ -35,6 +35,132 @@ export function exportJson(data: unknown, filename: string) {
   downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" }), filename);
 }
 
+const ruleSourceLabels: Record<string, string> = {
+  user_provided: "用户提供公式",
+  manual: "人工新增公式",
+  system_recommended: "系统推荐公式",
+  txt_import: "TXT 导入公式",
+  copied: "复制公式",
+  example: "示例公式",
+};
+
+const ruleCategoryLabels: Record<string, string> = {
+  kill_zodiac: "杀一肖",
+  include_zodiac: "选生肖",
+  kill_color: "杀一波",
+  include_color: "参考波色",
+  kill_parity: "杀单双",
+  include_parity: "参考单双",
+  kill_size: "杀大小",
+  include_size: "参考大小",
+  kill_sum: "杀一合",
+  kill_tail: "杀一尾",
+  kill_head: "杀一头",
+  kill_half_head: "杀半头",
+  kill_door: "杀一门",
+  kill_element: "杀一行",
+  kill_segment: "杀一段",
+  seven_tail: "七尾",
+  six_zodiac: "取六肖",
+  eight_zodiac: "八肖",
+  eight_zodiac_two_period: "八肖管两期",
+  nine_zodiac: "九肖",
+  kill_three_as_nine: "杀三肖 / 九肖",
+  custom_set: "自定义集合",
+};
+
+export function buildRuleLibraryWordHtml(rules: RuleRecord[]) {
+  const generatedAt = new Date().toLocaleString("zh-CN", { hour12: false });
+  const enabledCount = rules.filter((rule) => rule.enabled).length;
+  const referenceCount = rules.filter((rule) => rule.enabled && rule.participatesInReference !== false).length;
+  const manualCount = rules.filter((rule) => rule.sourceType === "manual").length;
+  const txtCount = rules.filter((rule) => rule.sourceType === "txt_import").length;
+  const recommendedCount = rules.filter((rule) => rule.sourceType === "system_recommended").length;
+  const overviewRows = rules.map((rule, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td>${escapeHtml(rule.name)}</td>
+      <td>${escapeHtml(ruleCategoryLabels[rule.category] ?? rule.category)}</td>
+      <td>${escapeHtml(rule.orderMode)}序</td>
+      <td>${escapeHtml(ruleSourceLabels[rule.sourceType ?? "user_provided"] ?? rule.sourceType ?? "用户提供公式")}</td>
+      <td>${rule.enabled ? "启用" : "停用"}</td>
+      <td>${rule.participatesInReference !== false ? "参与" : "不参与"}</td>
+    </tr>`).join("");
+  const detailSections = rules.map((rule, index) => {
+    const sourceLabel = ruleSourceLabels[rule.sourceType ?? "user_provided"] ?? rule.sourceType ?? "用户提供公式";
+    const pattern = rule.positionPattern?.length ? rule.positionPattern.join(" → ") : "无固定取位循环";
+    const examples = rule.examples?.length ? rule.examples.map((item) => `<li>${escapeHtml(item)}</li>`).join("") : "<li>暂无手算样例</li>";
+    return `
+      <section class="rule-card">
+        <div class="rule-heading">
+          <span class="rule-index">${String(index + 1).padStart(2, "0")}</span>
+          <div><h2>${escapeHtml(rule.name)}</h2><p>${escapeHtml(ruleCategoryLabels[rule.category] ?? rule.category)} · ${escapeHtml(rule.orderMode)}序 · ${escapeHtml(sourceLabel)}</p></div>
+        </div>
+        <div class="status-row">
+          <span>${rule.enabled ? "已启用" : "已停用"}</span>
+          <span>${rule.participatesInReference !== false ? "参与综合参考" : "不参与综合参考"}</span>
+          <span>${rule.canCompute === false ? "计算异常" : "可计算"}</span>
+          <span>${escapeHtml(rule.verifyStatus ?? "unchecked")}</span>
+        </div>
+        <h3>公式</h3>
+        <div class="formula">${escapeHtml(rule.formula)}</div>
+        <table class="property-table"><tbody>
+          <tr><th>归一化</th><td>${escapeHtml(rule.normalizer || "auto")}</td><th>目标</th><td>${escapeHtml(rule.target)}</td></tr>
+          <tr><th>取位循环</th><td colspan="3">${escapeHtml(pattern)}</td></tr>
+          <tr><th>锚点期号</th><td>${escapeHtml(rule.anchorIssue ?? "无")}</td><th>锚点位置</th><td>${escapeHtml(rule.anchorPatternIndex ?? "无")}</td></tr>
+          <tr><th>管期</th><td>${rule.periodSpan || 1}期</td><th>验证偏移</th><td>${rule.verifyOffset || 1}期</td></tr>
+          <tr><th>来源文件</th><td colspan="3">${escapeHtml(rule.sourceFile || rule.origin || "未记录")}</td></tr>
+        </tbody></table>
+        <h3>规则说明</h3><p class="description">${escapeHtml(rule.description || "暂无说明")}</p>
+        <h3>样例</h3><ul>${examples}</ul>
+      </section>`;
+  }).join("");
+
+  return `<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>RuleQuant 全部公式</title>
+<style>
+  @page { size: A4; margin: 16mm; }
+  body { margin: 0; color: #172033; background: #fff; font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif; font-size: 11pt; line-height: 1.65; }
+  h1 { margin: 0; color: #10213d; font-size: 25pt; letter-spacing: 0; }
+  h2 { margin: 0; color: #10213d; font-size: 16pt; }
+  h3 { margin: 13px 0 5px; color: #36506f; font-size: 10.5pt; }
+  .cover { padding: 12px 0 22px; border-bottom: 3px solid #3e70c9; }
+  .cover p { margin: 6px 0 0; color: #65758d; }
+  .notice { margin: 16px 0; padding: 10px 13px; border-left: 4px solid #2aa7a0; background: #edf9f8; color: #315b5a; }
+  .summary { width: 100%; margin: 16px 0 22px; border-collapse: separate; border-spacing: 7px; }
+  .summary td { width: 16.66%; padding: 10px; border: 1px solid #cfd9e7; background: #f5f8fc; text-align: center; }
+  .summary strong { display: block; color: #17345d; font-size: 18pt; }.summary span { color: #68788f; font-size: 9pt; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 6px 8px; border: 1px solid #cfd9e7; text-align: left; vertical-align: top; }
+  thead th { background: #17345d; color: #fff; font-weight: 600; }
+  .overview { font-size: 9pt; }.overview tr:nth-child(even) td { background: #f7f9fc; }
+  .section-title { margin: 26px 0 10px; color: #17345d; font-size: 18pt; page-break-after: avoid; }
+  .rule-card { margin: 0 0 18px; padding: 14px; border: 1px solid #c9d5e5; border-radius: 8px; page-break-inside: avoid; }
+  .rule-heading { display: table; width: 100%; }.rule-heading > * { display: table-cell; vertical-align: middle; }
+  .rule-index { width: 42px; color: #3e70c9; font-family: Consolas, monospace; font-size: 17pt; font-weight: 700; }
+  .rule-heading p { margin: 2px 0 0; color: #728198; font-size: 9.5pt; }
+  .status-row { margin: 10px 0; }.status-row span { display: inline-block; margin: 0 5px 5px 0; padding: 3px 8px; border: 1px solid #b8d9d5; background: #eef9f7; color: #256d66; font-size: 8.5pt; }
+  .formula { padding: 10px 12px; border: 1px solid #bfcce0; background: #f2f6fc; color: #0c5e78; font-family: Consolas, "Microsoft YaHei", monospace; font-size: 10.5pt; font-weight: 700; word-break: break-all; }
+  .property-table { font-size: 9pt; }.property-table th { width: 82px; background: #f1f5fa; color: #52647c; }.property-table td { color: #25364e; }
+  .description, ul { margin: 0; color: #42536b; } ul { padding-left: 20px; }
+  .footer { margin-top: 24px; padding-top: 10px; border-top: 1px solid #d7e0ec; color: #7d8999; font-size: 8.5pt; }
+</style></head><body>
+  <header class="cover"><h1>RuleQuant 全部公式</h1><p>统一公式库完整备查文档 · 导出时间：${escapeHtml(generatedAt)}</p></header>
+  <div class="notice">本文件包含导出设备当前已保存的全部公式，包括内置、人工新增、TXT 导入、系统推荐后加入和复制公式。仅用于历史公式研究与规则核对。</div>
+  <table class="summary"><tr><td><strong>${rules.length}</strong><span>全部公式</span></td><td><strong>${enabledCount}</strong><span>已启用</span></td><td><strong>${referenceCount}</strong><span>参与参考</span></td><td><strong>${manualCount}</strong><span>人工新增</span></td><td><strong>${txtCount}</strong><span>TXT导入</span></td><td><strong>${recommendedCount}</strong><span>系统推荐</span></td></tr></table>
+  <h2 class="section-title">公式总览</h2>
+  <table class="overview"><thead><tr><th>序号</th><th>公式名称</th><th>类型</th><th>序列</th><th>来源</th><th>状态</th><th>综合参考</th></tr></thead><tbody>${overviewRows}</tbody></table>
+  <h2 class="section-title">逐条公式详情</h2>${detailSections || "<p>当前公式库为空。</p>"}
+  <p class="footer">RuleQuant 公式库导出 · 文档中的状态以导出时设备保存内容为准。</p>
+</body></html>`;
+}
+
+export function exportRuleLibraryWord(rules: RuleRecord[]) {
+  const html = buildRuleLibraryWordHtml(rules);
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  downloadBlob(new Blob([`\ufeff${html}`], { type: "application/msword;charset=utf-8" }), `RuleQuant-全部公式-${rules.length}条-${date}.doc`);
+}
+
 export async function exportDrawsCsv(draws: DrawRecord[]) {
   const XLSX = await loadXlsx();
   const worksheet = XLSX.utils.json_to_sheet(draws);

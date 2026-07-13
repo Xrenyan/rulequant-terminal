@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { PrivateAccessGate } from "@/components/private-access-gate";
+import { NetworkResilience } from "@/components/network-resilience";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -41,6 +42,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full">
+        <NetworkResilience />
         <PrivateAccessGate>{children}</PrivateAccessGate>
       </body>
     </html>

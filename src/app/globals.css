@@ -448,6 +448,7 @@ option { background: var(--rq-panel-strong); color: var(--rq-text); }
 .rq-candidate-number { color: var(--rq-text); font: 750 24px/1 var(--font-mono); }
 .rq-candidate-zodiac { color: var(--rq-text-soft); font-size: 15px; font-weight: 700; }
 .rq-candidate-votes { display: flex; justify-content: flex-end; gap: 8px; font: 700 12px var(--font-mono); }
+.rq-candidate-votes em { color: var(--rq-accent); font-style: normal; }
 .rq-candidate-votes b { color: var(--rq-good); }.rq-candidate-votes i { color: var(--rq-bad); font-style: normal; }
 .rq-zodiac-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .rq-zodiac-tile { position: relative; display: grid; grid-template-columns: 28px 44px minmax(0, 1fr) auto; align-items: center; gap: 9px; min-height: 70px; border: 1px solid var(--rq-border); border-radius: 12px; padding: 10px 12px; background: var(--rq-panel-soft); color: var(--rq-text); text-align: left; }
@@ -583,6 +584,7 @@ option { background: var(--rq-panel-strong); color: var(--rq-text); }
   .rq-segmented-control { flex: 1 1 auto; overflow-x: auto; }
   .rq-segmented-control .rq-button { flex: 1 0 auto; }
   .rq-candidate-tile { min-height: 64px; grid-template-columns: 26px 46px minmax(28px, 1fr) auto; }
+  .rq-candidate-votes { flex-wrap: wrap; gap: 3px 7px; }
   .rq-zodiac-grid { grid-template-columns: 1fr; }
   .rq-master-detail { min-height: 0; }
   .rq-master-pane__head { min-height: 58px; align-items: stretch; flex-direction: column; }

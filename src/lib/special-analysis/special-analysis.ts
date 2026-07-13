@@ -187,7 +187,16 @@ function buildHistoricalRanking(occurrences: HistoricalNineGridOccurrence[], mod
       };
     })
     .sort((a, b) => b.count - a.count || a.sourceIndex - b.sourceIndex)
-    .map(({ sourceIndex: _sourceIndex, ...item }, index) => ({ ...item, rank: index + 1 }));
+    .map((item, index) => ({
+      rank: index + 1,
+      key: item.key,
+      label: item.label,
+      number: item.number,
+      zodiac: item.zodiac,
+      count: item.count,
+      anchorCount: item.anchorCount,
+      share: item.share,
+    }));
 }
 
 function summarizeBacktest(rows: HistoricalNineGridBacktestRow[], mode: HistoricalNineGridMode): HistoricalNineGridBacktest {

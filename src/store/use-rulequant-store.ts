@@ -263,7 +263,7 @@ async function loadCloudStateFromApi(): Promise<RuleQuantCloudState | null> {
 
   const states = await Promise.all(endpoints.map(async (endpoint) => {
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 1500);
+    const timeoutId = window.setTimeout(() => controller.abort(), isGithubPagesHost ? 5000 : 1800);
     try {
       const url = endpoint.includes("?") ? `${endpoint}&t=${Date.now()}` : `${endpoint}?t=${Date.now()}`;
       const response = await fetch(url, { cache: "no-store", signal: controller.signal });
@@ -322,13 +322,13 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
       referenceHistory: state.referenceHistory,
     });
     if (typeof window !== "undefined") {
-      const token = window.localStorage.getItem("rulequant:adminToken") || process.env.NEXT_PUBLIC_RULEQUANT_ADMIN_TOKEN || "";
+      const token = window.localStorage.getItem("rulequant:adminToken") || "";
       if (token) void get().publishCloudState("auto");
     }
   },
   publishCloudState: async (reason = "manual") => {
     if (typeof window === "undefined") return;
-    const token = window.localStorage.getItem("rulequant:adminToken") || process.env.NEXT_PUBLIC_RULEQUANT_ADMIN_TOKEN || "";
+    const token = window.localStorage.getItem("rulequant:adminToken") || "";
     const endpoint = window.location.hostname.endsWith("github.io") || process.env.NEXT_PUBLIC_STATIC_EXPORT === "true" ? REMOTE_CLOUD_STATE_ENDPOINT : "/api/cloud/state";
     const state = get();
     set({ cloudPublishStatus: "publishing", cloudPublishMessage: "正在发布到云端..." });
