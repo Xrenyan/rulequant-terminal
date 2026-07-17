@@ -65,15 +65,43 @@ export const db = new RuleQuantDatabase();
 
 let persistenceQueue: Promise<void> = Promise.resolve();
 
+const STORAGE_READ_TIMEOUT_MS = 1_500;
+
+function resolveWithin<T>(promise: Promise<T>, fallback: T, timeoutMs = STORAGE_READ_TIMEOUT_MS): Promise<T> {
+  return new Promise((resolve) => {
+    let completed = false;
+    const timeoutId = globalThis.setTimeout(() => {
+      if (completed) return;
+      completed = true;
+      resolve(fallback);
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        if (completed) return;
+        completed = true;
+        globalThis.clearTimeout(timeoutId);
+        resolve(value);
+      },
+      () => {
+        if (completed) return;
+        completed = true;
+        globalThis.clearTimeout(timeoutId);
+        resolve(fallback);
+      },
+    );
+  });
+}
+
 function enqueuePersistence(task: () => Promise<void>) {
   persistenceQueue = persistenceQueue.catch(() => undefined).then(task);
   return persistenceQueue;
 }
 
 export async function loadPersistedState() {
-  const backupRules = mergeRuleSnapshots(readRuleLibrarySnapshot(), await readRuleLibraryCacheSnapshot());
-  try {
-    const [draws, rules, samples, config, logs, backups, referenceHistory] = await Promise.all([
+  const localSnapshotRules = readRuleLibrarySnapshot();
+  const cacheRulesPromise = resolveWithin(readRuleLibraryCacheSnapshot(), [] as RuleRecord[]);
+  const databaseRowsPromise = resolveWithin(Promise.all([
       db.draws.toArray(),
       db.rules.toArray(),
       db.samples.toArray(),
@@ -81,19 +109,25 @@ export async function loadPersistedState() {
       db.logs.orderBy("timestamp").reverse().toArray(),
       db.backups.orderBy("createdAt").reverse().toArray(),
       db.referenceHistory.orderBy("savedAt").reverse().toArray(),
-    ]);
+    ]), null);
+
+  const [cacheRules, databaseRows] = await Promise.all([cacheRulesPromise, databaseRowsPromise]);
+  const backupRules = mergeRuleSnapshots(localSnapshotRules, cacheRules);
+
+  if (databaseRows) {
+    const [draws, rules, samples, config, logs, backups, referenceHistory] = databaseRows;
     return { draws, rules: mergeRuleSnapshots(rules, backupRules), samples, config: config?.value, logs, backups, referenceHistory };
-  } catch {
-    return {
-      draws: [] as DrawRecord[],
-      rules: backupRules,
-      samples: [] as SampleCase[],
-      config: undefined,
-      logs: [] as OperationLog[],
-      backups: [] as RuleLibraryBackup[],
-      referenceHistory: [] as ReferenceHistoryItem[],
-    };
   }
+
+  return {
+    draws: [] as DrawRecord[],
+    rules: backupRules,
+    samples: [] as SampleCase[],
+    config: undefined,
+    logs: [] as OperationLog[],
+    backups: [] as RuleLibraryBackup[],
+    referenceHistory: [] as ReferenceHistoryItem[],
+  };
 }
 
 export async function persistAll(input: {

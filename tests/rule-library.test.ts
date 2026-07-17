@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addRuleToLibrary, addRulesToLibrary, buildRuleSignature, normalizeRuleDraft } from "@/lib/rules/rule-library";
+import { addRuleToLibrary, addRulesToLibrary, buildRuleSignature, canonicalFormulaForSignature, normalizeRuleDraft } from "@/lib/rules/rule-library";
 import { canRuleParticipateInReference } from "@/lib/rules/rule-validation";
 import type { RuleRecord } from "@/types/domain";
 
@@ -125,6 +125,28 @@ describe("rule library unified add flow", () => {
   it("keeps cyclic position anchors in the duplicate signature", () => {
     const first = baseRule({ positionPattern: [1, 2, 3], anchorIssue: "2026173", anchorPatternIndex: 0, positionMeaning: "1=平1", periodSpan: 1 });
     const second = baseRule({ positionPattern: [1, 2, 3], anchorIssue: "2026174", anchorPatternIndex: 1, positionMeaning: "1=平1", periodSpan: 2 });
+
+    expect(buildRuleSignature(first)).not.toBe(buildRuleSignature(second));
+  });
+
+  it("treats position meaning as a description rather than calculation logic", () => {
+    const first = baseRule({ positionPattern: [1, 2, 3], positionMeaning: "1=平1，2=平2，3=平3" });
+    const second = baseRule({ positionPattern: [1, 2, 3], positionMeaning: "按第1到第3位循环" });
+
+    expect(buildRuleSignature(first)).toBe(buildRuleSignature(second));
+  });
+
+  it("deduplicates formula aliases and addition order by calculation meaning", () => {
+    const first = baseRule({ formula: "尾(落1) + 特号合 + 期数尾 + 平2波" });
+    const second = baseRule({ formula: "平2波色值 + 平1尾 + 特码合 + 期尾" });
+
+    expect(canonicalFormulaForSignature(first.formula)).toBe(canonicalFormulaForSignature(second.formula));
+    expect(buildRuleSignature(first)).toBe(buildRuleSignature(second));
+  });
+
+  it("does not deduplicate formulas when subtraction changes the calculation", () => {
+    const first = baseRule({ formula: "平1尾 - 平2尾" });
+    const second = baseRule({ formula: "平2尾 - 平1尾" });
 
     expect(buildRuleSignature(first)).not.toBe(buildRuleSignature(second));
   });

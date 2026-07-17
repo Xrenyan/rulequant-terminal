@@ -56,19 +56,65 @@ function normalizedPattern(pattern?: number[]): number[] {
   return (pattern ?? []).map(Number).filter((item) => Number.isFinite(item));
 }
 
-export function buildRuleSignature(rule: Pick<RuleRecord, "category" | "target" | "orderMode" | "formula" | "normalizer" | "positionPattern" | "verifyOffset" | "anchorIssue" | "anchorPatternIndex" | "positionMeaning" | "periodSpan">): string {
+function canonicalAttribute(attribute: string) {
+  switch (attribute) {
+    case "合数":
+      return "合";
+    case "合数尾":
+      return "合尾";
+    case "波":
+    case "波色":
+    case "波色值":
+      return "波色值";
+    case "行":
+    case "五行":
+    case "五行值":
+      return "五行值";
+    case "奇偶":
+      return "单双";
+    default:
+      return attribute;
+  }
+}
+
+export function canonicalFormulaForSignature(formula: string): string {
+  let normalized = compact(formula)
+    .normalize("NFKC")
+    .replace(/([1-7])\uFE0F?\u20E3/g, "$1")
+    .replace(/[，、；;]/g, "+")
+    .replace(/\s+/g, "")
+    .replace(/落([1-6])/g, "平$1")
+    .replace(/(?:落7|平7|特号)/g, "特码")
+    .replace(/(^|[+\-*/(])特(?=$|[+\-*/)])/g, "$1特码")
+    .replace(/特(?=(?:头|尾|合|合数|合尾|合数尾|段|波|波色|波色值|行|五行|五行值|单双|奇偶|大小|位))/g, "特码")
+    .replace(/期(?:号|数)尾/g, "期尾")
+    .replace(
+      /(合数尾|合尾|合数|合|波色值|波色|波|五行值|五行|行|头|尾|段|单双|奇偶|大小|位)\((平[1-6]|特码)\)/g,
+      (_, attribute: string, position: string) => `${position}${canonicalAttribute(attribute)}`,
+    )
+    .replace(
+      /(平[1-6]|特码)(合数尾|合尾|合数|合|波色值|波色|波|五行值|五行|行|头|尾|段|单双|奇偶|大小|位)/g,
+      (_, position: string, attribute: string) => `${position}${canonicalAttribute(attribute)}`,
+    );
+
+  if (normalized.includes("+") && !/[\-*/]/.test(normalized)) {
+    normalized = normalized.split("+").filter(Boolean).sort((a, b) => a.localeCompare(b, "zh-CN", { numeric: true })).join("+");
+  }
+  return normalized;
+}
+
+export function buildRuleSignature(rule: Pick<RuleRecord, "category" | "target" | "orderMode" | "formula" | "normalizer" | "positionPattern" | "verifyOffset" | "anchorIssue" | "anchorPatternIndex" | "periodSpan">): string {
   return [
     rule.category,
     rule.target,
     rule.orderMode,
-    compact(rule.formula).replace(/\s+/g, ""),
+    canonicalFormulaForSignature(rule.formula),
     compact(rule.normalizer),
     normalizedPattern(rule.positionPattern).join(","),
     compact(rule.anchorIssue),
     String(rule.anchorPatternIndex ?? 0),
-    compact(rule.positionMeaning),
     String(rule.periodSpan ?? 1),
-    String(rule.verifyOffset ?? 1),
+    String(rule.verifyOffset ?? rule.periodSpan ?? 1),
   ].join("|");
 }
 

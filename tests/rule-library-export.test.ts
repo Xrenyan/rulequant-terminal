@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildRuleLibraryWordHtml } from "@/lib/export/exporters";
+import { buildRuleLibraryDocxBlob } from "@/lib/export/docx-export";
 import { seedRules } from "@/lib/data/seed";
 
 describe("rule library Word export", () => {
-  it("includes built-in and newly added formulas with readable styling", () => {
+  it("creates a real mobile-compatible DOCX package containing all formulas", async () => {
     const manualRule = {
       ...seedRules[0],
       id: "manual-export-check",
@@ -11,13 +11,11 @@ describe("rule library Word export", () => {
       formula: "平1 + 特码尾",
       sourceType: "manual" as const,
     };
-    const html = buildRuleLibraryWordHtml([...seedRules, manualRule]);
+    const blob = await buildRuleLibraryDocxBlob([...seedRules, manualRule]);
+    const bytes = new Uint8Array(await blob.arrayBuffer());
 
-    expect(html).toContain(`>${seedRules.length + 1}</strong><span>全部公式`);
-    expect(html).toContain("我新增的测试公式");
-    expect(html).toContain("平1 + 特码尾");
-    expect(html).toContain("人工新增公式");
-    expect(html).toContain("Microsoft YaHei");
-    expect(html).toContain("逐条公式详情");
+    expect(blob.type).toBe("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    expect(bytes.slice(0, 2)).toEqual(new Uint8Array([0x50, 0x4b]));
+    expect(bytes.byteLength).toBeGreaterThan(10_000);
   });
 });

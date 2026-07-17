@@ -6,7 +6,7 @@ describe("seed rules", () => {
   test("all bundled rules can run through the backtest engine", () => {
     const result = runBacktest({ draws: seedDraws, rules: seedRules, config: seedConfig });
 
-    expect(result.ruleResults).toHaveLength(seedRules.length);
+    expect(result.ruleResults).toHaveLength(seedRules.filter((rule) => rule.enabled).length);
     expect(result.ruleResults.every((item) => item.details.length > 0)).toBe(true);
   });
 });

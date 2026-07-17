@@ -1,7 +1,6 @@
-const CACHE_NAME = "rulequant-runtime-v4";
+const CACHE_NAME = "rulequant-runtime-v5";
 const scopeUrl = new URL(self.registration.scope);
 const dashboardUrl = new URL("dashboard/", scopeUrl).toString();
-const stateUrl = new URL("static-cloud-state.json", scopeUrl).toString();
 
 async function precacheShell() {
   const cache = await caches.open(CACHE_NAME);
@@ -14,7 +13,6 @@ async function precacheShell() {
     .filter((url) => url.origin === scopeUrl.origin && url.pathname.includes("/_next/static/"))
     .map((url) => url.toString());
   await Promise.allSettled([...new Set(assetUrls)].map((url) => cache.add(url)));
-  await Promise.allSettled([cache.add(stateUrl)]);
 }
 
 self.addEventListener("install", (event) => {
@@ -40,6 +38,12 @@ async function networkFirst(request, fallbackUrl, cacheKey = request) {
   }
 }
 
+async function freshState(request) {
+  // Draw data must never be served as "latest" from the service-worker cache.
+  // IndexedDB already preserves the last usable records when the network fails.
+  return fetch(new Request(request, { cache: "no-store" }));
+}
+
 async function staleWhileRevalidate(request) {
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(request);
@@ -63,7 +67,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (url.pathname.endsWith("/static-cloud-state.json")) {
-    event.respondWith(networkFirst(request, stateUrl, stateUrl));
+    event.respondWith(freshState(request));
     return;
   }
   if (url.pathname.includes("/_next/static/") || /\.(?:css|js|txt|woff2?|png|jpg|jpeg|webp|svg|ico)$/.test(url.pathname)) {

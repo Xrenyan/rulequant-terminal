@@ -45,6 +45,107 @@ function mergeByKey(localItems, remoteItems, getKey) {
   return [...merged.values()];
 }
 
+function canonicalRuleAttribute(attribute) {
+  switch (attribute) {
+    case "合数":
+      return "合";
+    case "合数尾":
+      return "合尾";
+    case "波":
+    case "波色":
+    case "波色值":
+      return "波色值";
+    case "行":
+    case "五行":
+    case "五行值":
+      return "五行值";
+    case "奇偶":
+      return "单双";
+    default:
+      return attribute;
+  }
+}
+
+function canonicalRuleFormula(value) {
+  let formula = String(value ?? "")
+    .trim()
+    .normalize("NFKC")
+    .replace(/([1-7])\uFE0F?\u20E3/g, "$1")
+    .replace(/[，、；;]/g, "+")
+    .replace(/\s+/g, "")
+    .replace(/落([1-6])/g, "平$1")
+    .replace(/(?:落7|平7|特号)/g, "特码")
+    .replace(/(^|[+\-*/(])特(?=$|[+\-*/)])/g, "$1特码")
+    .replace(/特(?=(?:头|尾|合|合数|合尾|合数尾|段|波|波色|波色值|行|五行|五行值|单双|奇偶|大小|位))/g, "特码")
+    .replace(/期(?:号|数)尾/g, "期尾")
+    .replace(
+      /(合数尾|合尾|合数|合|波色值|波色|波|五行值|五行|行|头|尾|段|单双|奇偶|大小|位)\((平[1-6]|特码)\)/g,
+      (_, attribute, position) => `${position}${canonicalRuleAttribute(attribute)}`,
+    )
+    .replace(
+      /(平[1-6]|特码)(合数尾|合尾|合数|合|波色值|波色|波|五行值|五行|行|头|尾|段|单双|奇偶|大小|位)/g,
+      (_, position, attribute) => `${position}${canonicalRuleAttribute(attribute)}`,
+    );
+
+  if (formula.includes("+") && !/[\-*/]/.test(formula)) {
+    formula = formula.split("+").filter(Boolean).sort((a, b) => a.localeCompare(b, "zh-CN", { numeric: true })).join("+");
+  }
+  return formula;
+}
+
+function ruleSignature(rule) {
+  return [
+    rule.category ?? rule.type ?? "",
+    rule.target ?? "",
+    rule.orderMode ?? rule.orderType ?? "",
+    canonicalRuleFormula(rule.formula ?? rule.expression),
+    String(rule.normalizer ?? rule.normalizeMode ?? "").trim(),
+    (rule.positionPattern ?? []).map(Number).filter(Number.isFinite).join(","),
+    String(rule.anchorIssue ?? "").trim(),
+    String(rule.anchorPatternIndex ?? 0),
+    String(rule.periodSpan ?? 1),
+    String(rule.verifyOffset ?? rule.periodSpan ?? 1),
+  ].join("|");
+}
+
+function ruleSourcePriority(rule) {
+  return {
+    user_provided: 50,
+    manual: 40,
+    txt_import: 30,
+    system_recommended: 20,
+    copied: 10,
+    example: 0,
+  }[rule.sourceType ?? ""] ?? 0;
+}
+
+function mergeRuleLibraries(libraries, preferredRuleIds = new Set()) {
+  const byId = new Map();
+  libraries.forEach((rules) => (Array.isArray(rules) ? rules : []).forEach((rule) => {
+    if (rule?.id) byId.set(String(rule.id), rule);
+  }));
+
+  const unique = [];
+  const signatureIndexes = new Map();
+  for (const rule of byId.values()) {
+    const signature = ruleSignature(rule);
+    const duplicateIndex = signatureIndexes.get(signature);
+    if (duplicateIndex === undefined) {
+      signatureIndexes.set(signature, unique.length);
+      unique.push(rule);
+      continue;
+    }
+    const existing = unique[duplicateIndex];
+    const shouldReplace =
+      ruleSourcePriority(rule) > ruleSourcePriority(existing)
+      || (ruleSourcePriority(rule) === ruleSourcePriority(existing)
+        && preferredRuleIds.has(String(rule.id))
+        && !preferredRuleIds.has(String(existing.id)));
+    if (shouldReplace) unique[duplicateIndex] = rule;
+  }
+  return unique;
+}
+
 function decodeHtml(value) {
   return String(value ?? "")
     .replace(/&nbsp;/gi, " ")
@@ -269,10 +370,10 @@ async function main() {
     ? localState.draws
     : readJsonIfExists(path.join(root, "data", "sample-draws.json"), []);
   const bundledRules = readJsonIfExists(path.join(root, "data", "sample-rules.json"), []);
-  const localRules = mergeByKey(
-    Array.isArray(bundledRules) ? bundledRules : [],
-    Array.isArray(localState.rules) ? localState.rules : [],
-    (rule) => String(rule.id ?? ""),
+  const bundledRuleIds = new Set((Array.isArray(bundledRules) ? bundledRules : []).map((rule) => String(rule.id ?? "")));
+  const localRules = mergeRuleLibraries(
+    [Array.isArray(localState.rules) ? localState.rules : [], Array.isArray(bundledRules) ? bundledRules : []],
+    bundledRuleIds,
   );
   let state = localState;
   try {
@@ -330,10 +431,10 @@ async function main() {
       (draw) => String(draw.issue ?? ""),
     ),
   );
-  const mergedRules = mergeByKey(localRules, state.rules, (rule) => {
-    if (rule.id) return `id:${rule.id}`;
-    return `signature:${rule.type ?? ""}|${rule.target ?? ""}|${rule.orderType ?? ""}|${rule.expression ?? ""}|${rule.normalizeMode ?? ""}`;
-  });
+  const mergedRules = mergeRuleLibraries(
+    [Array.isArray(state.rules) ? state.rules : [], localRules, Array.isArray(bundledRules) ? bundledRules : []],
+    bundledRuleIds,
+  );
   const localLatest = latestIssue(localDraws);
   const cloudLatest = latestIssue(cloudDraws);
   const sourceLatest = latestIssue(sourceDraws);

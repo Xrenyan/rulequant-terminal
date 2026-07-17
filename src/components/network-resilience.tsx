@@ -10,9 +10,12 @@ export function NetworkResilience() {
     const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
     const workerUrl = `${basePath}/sw.js`;
     const scope = `${basePath || ""}/`;
-    void navigator.serviceWorker.register(workerUrl, { scope }).catch(() => {
-      // The app remains fully usable without offline caching.
-    });
+    void navigator.serviceWorker
+      .register(workerUrl, { scope, updateViaCache: "none" })
+      .then((registration) => registration.update())
+      .catch(() => {
+        // The app remains fully usable without offline shell caching.
+      });
   }, []);
 
   return null;

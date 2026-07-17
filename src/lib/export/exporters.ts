@@ -1,4 +1,5 @@
 import type { BacktestResult, CandidatePoolReport, DrawRecord, ReferenceHistoryItem, RuleQuantConfig, RuleRecord, SampleCheckResult } from "@/types/domain";
+import { buildReferenceHistoryDocxBlob, buildRuleLibraryDocxBlob } from "@/lib/export/docx-export";
 
 type XlsxModule = typeof import("xlsx");
 
@@ -25,10 +26,16 @@ function downloadBlob(blob: Blob, filename: string) {
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
+  link.rel = "noopener";
+  link.style.display = "none";
   document.body.appendChild(link);
   link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  // Mobile browsers may still be reading the object URL after click().
+  // Revoking synchronously creates a file that appears downloaded but cannot open.
+  window.setTimeout(() => {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, 60_000);
 }
 
 export function exportJson(data: unknown, filename: string) {
@@ -155,10 +162,10 @@ export function buildRuleLibraryWordHtml(rules: RuleRecord[]) {
 </body></html>`;
 }
 
-export function exportRuleLibraryWord(rules: RuleRecord[]) {
-  const html = buildRuleLibraryWordHtml(rules);
+export async function exportRuleLibraryWord(rules: RuleRecord[]) {
+  const blob = await buildRuleLibraryDocxBlob(rules);
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  downloadBlob(new Blob([`\ufeff${html}`], { type: "application/msword;charset=utf-8" }), `RuleQuant-全部公式-${rules.length}条-${date}.doc`);
+  downloadBlob(blob, `RuleQuant-全部公式-${rules.length}条-${date}.docx`);
 }
 
 export async function exportDrawsCsv(draws: DrawRecord[]) {
@@ -557,67 +564,9 @@ export function exportReferenceHistoryText(records: ReferenceHistoryExportItem[]
   downloadBlob(new Blob([`\ufeff${lines.join("\r\n")}`], { type: "text/plain;charset=utf-8" }), "rulequant-reference-history.txt");
 }
 
-export function exportReferenceHistoryWord(records: ReferenceHistoryExportItem[]) {
-  const sections = records.map((record) => {
-    const numberRows = record.topNumbers18.map((item, index) => `
-      <tr>
-        <td>${index + 1}</td>
-        <td>${padNumber(item.number)}</td>
-        <td>${escapeHtml(item.zodiac)}</td>
-        <td>${item.score}</td>
-        <td>${item.supportCount}</td>
-        <td>${item.opposeCount}</td>
-        <td>${record.actualSpecial === item.number ? "命中" : ""}</td>
-      </tr>`).join("");
-    const zodiacRows = record.topZodiacs9.map((item, index) => `
-      <tr>
-        <td>${index + 1}</td>
-        <td>${escapeHtml(item.zodiac)}</td>
-        <td>${escapeHtml(item.numbers.map((number) => `${padNumber(number.number)} ${number.zodiac}`).join("、"))}</td>
-        <td>${item.score}</td>
-        <td>${record.actualZodiac === item.zodiac ? "命中" : ""}</td>
-      </tr>`).join("");
-    return `
-      <section class="record">
-        <h2>${escapeHtml(record.baseIssue ?? "-")}期综合推荐记录</h2>
-        <p class="meta">保存时间：${escapeHtml(record.savedAt)}　生成时间：${escapeHtml(record.generatedAt)}</p>
-        <p class="meta">最新开奖：${escapeHtml(record.latestNumbers.map(padNumber).join("、"))}　参与公式：${record.ruleCount} 条　证据：${record.signalCount} 条</p>
-        <p class="meta">下期开奖：${escapeHtml(record.actualNextIssue ?? "待开奖")} ${record.actualSpecial ? `${padNumber(record.actualSpecial)} ${escapeHtml(record.actualZodiac ?? "")}` : ""}</p>
-        <div class="chips"><b>Top8</b> ${escapeHtml(historyNumberList(record.topNumbers8))}</div>
-        <div class="chips"><b>Top12</b> ${escapeHtml(historyNumberList(record.topNumbers12))}</div>
-        <div class="chips"><b>生肖Top7</b> ${escapeHtml(historyZodiacList(record.topZodiacs7))}</div>
-        <h3>号码 Top18 明细</h3>
-        <table><thead><tr><th>排名</th><th>号码</th><th>生肖</th><th>分数</th><th>支持</th><th>反对</th><th>命中</th></tr></thead><tbody>${numberRows}</tbody></table>
-        <h3>生肖 Top9 明细</h3>
-        <table><thead><tr><th>排名</th><th>生肖</th><th>对应号码</th><th>分数</th><th>命中</th></tr></thead><tbody>${zodiacRows}</tbody></table>
-      </section>`;
-  }).join("");
-  const html = `<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <title>RuleQuant 综合推荐历史记录</title>
-  <style>
-    body { font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; color: #111827; line-height: 1.55; padding: 28px; }
-    h1 { font-size: 26px; margin: 0 0 8px; }
-    h2 { font-size: 20px; margin: 24px 0 8px; color: #0f766e; }
-    h3 { font-size: 15px; margin: 18px 0 8px; }
-    .sub { color: #64748b; font-size: 12px; margin-bottom: 18px; }
-    .meta { font-size: 12px; color: #334155; margin: 4px 0; }
-    .chips { background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 6px; padding: 8px 10px; margin: 8px 0; font-size: 12px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
-    th { background: #0f172a; color: #fff; }
-    th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; }
-    .record { page-break-inside: avoid; margin-bottom: 28px; }
-  </style>
-</head>
-<body>
-  <h1>RuleQuant 综合推荐历史记录</h1>
-  <p class="sub">本报告用于公式研究和参考排序复盘，不代表一定正确。</p>
-  ${sections || "<p>暂无综合推荐历史记录。</p>"}
-</body>
-</html>`;
-  downloadBlob(new Blob([`\ufeff${html}`], { type: "application/msword;charset=utf-8" }), "rulequant-reference-history.doc");
+export async function exportReferenceHistoryWord(records: ReferenceHistoryExportItem[]) {
+  const blob = await buildReferenceHistoryDocxBlob(records);
+  downloadBlob(blob, "RuleQuant-综合推荐历史记录.docx");
 }
 
 export function exportHtmlReport(result: BacktestResult, rules: RuleRecord[], config: RuleQuantConfig) {

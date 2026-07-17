@@ -129,11 +129,15 @@ function exportReferenceHistoryText(records: ResolvedReferenceHistoryItem[]) {
 }
 
 function exportReferenceHistoryWord(records: ResolvedReferenceHistoryItem[]) {
-  void loadExporters().then((module) => module.exportReferenceHistoryWord(records));
+  void loadExporters()
+    .then((module) => module.exportReferenceHistoryWord(records))
+    .catch((error) => window.alert(`Word 文档生成失败：${error instanceof Error ? error.message : String(error)}`));
 }
 
 function exportRuleLibraryWord(rules: RuleRecord[]) {
-  void loadExporters().then((module) => module.exportRuleLibraryWord(rules));
+  void loadExporters()
+    .then((module) => module.exportRuleLibraryWord(rules))
+    .catch((error) => window.alert(`Word 文档生成失败：${error instanceof Error ? error.message : String(error)}`));
 }
 
 function exportHtmlReport(result: BacktestResult, rules: RuleRecord[], config: RuleQuantConfig) {
@@ -174,6 +178,7 @@ const mobileNavKeys: ViewKey[] = ["dashboard", "one-click", "candidate-pool", "r
 const mobileNavItems = navItems.filter((item) => mobileNavKeys.includes(item.key));
 const REMOTE_DRAW_IMPORT_ENDPOINT = "https://rulequant-terminal.vercel.app/api/import-draws-from-url";
 const AUTO_SYNC_INTERVAL_MS = 10 * 60 * 1000;
+const RESUME_SYNC_INTERVAL_MS = 60 * 1000;
 const MAX_RULE_LIBRARY_FILE_BYTES = 5 * 1024 * 1024;
 const MANUAL_DRAW_KEYS = ["n1", "n2", "n3", "n4", "n5", "n6", "special"] as const;
 type ManualDrawKey = typeof MANUAL_DRAW_KEYS[number];
@@ -1419,8 +1424,11 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   ];
 
   const fetchSourceDraws = useCallback(async (syncPreview = true, saveMode: "none" | "merge" | "replace" = "replace") => {
-    setSourceLoading(true);
-    setSourceStatus("正在同步配置的开奖源数据，请稍候...");
+    const isBackgroundCheck = !syncPreview && saveMode === "none";
+    if (!isBackgroundCheck) {
+      setSourceLoading(true);
+      setSourceStatus("正在同步配置的开奖源数据，请稍候...");
+    }
     try {
       const isGithubPagesHost = typeof window !== "undefined" && (window.location.hostname.endsWith("github.io") || process.env.NEXT_PUBLIC_STATIC_EXPORT === "true");
       const endpoint = "/api/import-draws-from-url";
@@ -1511,7 +1519,11 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       } else if (saveMode === "merge") {
         await store.importDraws(fetchedRecords);
       }
-      if (data.state?.latestIssue) {
+      // The automatic foreground check only needs the fetched snapshot. Rehydrating the
+      // complete store here repeats IndexedDB and cloud reads and keeps every page in a
+      // misleading "syncing" state for several seconds. Explicit sync actions still
+      // rehydrate after replacing or merging the draw library.
+      if (data.state?.latestIssue && saveMode !== "none") {
         await store.hydrate();
       }
       clearCandidatePoolCache();
@@ -1530,23 +1542,39 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       setImportErrors([message]);
       setSourceStatus(`同步失败：${message}`);
     } finally {
-      setSourceLoading(false);
+      if (!isBackgroundCheck) setSourceLoading(false);
     }
   }, [activeDraws, sourceUrl, sourceFromYear, sourceToYear, store]);
 
   useEffect(() => {
     if (!hasHydrated || sourceLoading || !WEBSITE_FIRST_VIEWS.has(activeView)) return;
 
-    const syncLatest = () => {
+    const syncLatest = (force = false) => {
       const now = Date.now();
-      if (now - sourceAutoFetchedAt.current < AUTO_SYNC_INTERVAL_MS) return;
+      const minimumGap = force ? RESUME_SYNC_INTERVAL_MS : AUTO_SYNC_INTERVAL_MS;
+      if (now - sourceAutoFetchedAt.current < minimumGap) return;
       sourceAutoFetchedAt.current = now;
       void fetchSourceDraws(false, "none");
     };
 
-    queueMicrotask(syncLatest);
-    const timer = window.setInterval(syncLatest, AUTO_SYNC_INTERVAL_MS);
-    return () => window.clearInterval(timer);
+    const syncAfterResume = () => syncLatest(true);
+    const syncWhenVisible = () => {
+      if (document.visibilityState === "visible") syncLatest(true);
+    };
+
+    queueMicrotask(() => syncLatest(true));
+    const timer = window.setInterval(() => syncLatest(), AUTO_SYNC_INTERVAL_MS);
+    window.addEventListener("pageshow", syncAfterResume);
+    window.addEventListener("focus", syncAfterResume);
+    window.addEventListener("online", syncAfterResume);
+    document.addEventListener("visibilitychange", syncWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("pageshow", syncAfterResume);
+      window.removeEventListener("focus", syncAfterResume);
+      window.removeEventListener("online", syncAfterResume);
+      document.removeEventListener("visibilitychange", syncWhenVisible);
+    };
   }, [activeView, fetchSourceDraws, hasHydrated, sourceLoading]);
 
   async function handleParseImport() {
@@ -3060,13 +3088,13 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
               <div className="rq-export-grid">
                 <ExportTile icon={Database} title="开奖数据" desc="导出 CSV / Excel 格式的当前验证开奖数据" action={() => exportDrawsCsv(activeDraws)} />
                 <ExportTile icon={Layers3} title="规则库 JSON" desc="导出当前规则对象，可用于备份或迁移" action={() => exportJson(rules, "rulequant-rules.json")} />
-                <ExportTile icon={FileDown} title="全部公式 Word" desc="一键导出当前设备全部公式，包含新增公式、统一字体、总览和逐条详情" action={() => exportRuleLibraryWord(rules)} />
+                <ExportTile icon={FileDown} title="全部公式 Word (.docx)" desc="导出手机和电脑都能打开的标准 Word 文档，包含新增公式、统一排版、总览和逐条详情" action={() => exportRuleLibraryWord(rules)} />
                 <ExportTile icon={Settings2} title="配置 JSON" desc="导出生肖、波色、五行和归一化配置" action={() => exportJson(config, "rulequant-config.json")} />
                 <ExportTile icon={BarChart3} title="回测 Excel" desc="导出每期计算过程、输出和验证结果" action={() => exportBacktestExcel(backtest)} />
                 <ExportTile icon={Activity} title="候选池 Excel" desc="导出 Top 号码、Top 生肖和规则信号明细" action={() => exportCandidatePoolExcel(candidateReport)} />
                 <ExportTile icon={FileDown} title="候选池 HTML" desc="生成可直接转发查看的规则共识候选池报告" action={() => exportCandidatePoolHtml(candidateReport)} />
                 <ExportTile icon={TableProperties} title="综合推荐历史 Excel" desc="分工作表导出总览、Top8、Top12、Top18 和生肖明细，便于筛选复盘" action={() => exportReferenceHistoryExcel(resolvedReferenceHistory)} />
-                <ExportTile icon={FileDown} title="综合推荐历史 Word" desc="导出排版好的 Word 兼容文档，包含字体、表格、命中标记和完整推荐记录" action={() => exportReferenceHistoryWord(resolvedReferenceHistory)} />
+                <ExportTile icon={FileDown} title="综合推荐历史 Word (.docx)" desc="导出手机和电脑通用的标准 Word 文档，包含表格、命中标记和完整推荐记录" action={() => exportReferenceHistoryWord(resolvedReferenceHistory)} />
                 <ExportTile icon={ClipboardCheck} title="综合推荐历史 TXT" desc="导出 UTF-8 文本文档，适合直接转发或保存，不会出现中文乱码" action={() => exportReferenceHistoryText(resolvedReferenceHistory)} />
                 <ExportTile icon={ClipboardCheck} title="样例校验" desc="导出手算样例对比和差异类型" action={() => exportSampleReport(sampleResults)} />
                 <ExportTile icon={FileDown} title="HTML 报告" desc="生成可直接打开的 HTML 回测报告" action={() => exportHtmlReport(backtest, rules, config)} />

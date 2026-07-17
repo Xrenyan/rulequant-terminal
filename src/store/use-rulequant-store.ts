@@ -11,6 +11,7 @@ import { trimReferenceHistory } from "@/lib/reference-history/reference-history"
 import {
   addRuleToLibrary as addRuleDraftToLibrary,
   addRulesToLibrary as addRuleDraftsToLibrary,
+  buildRuleSignature,
   normalizeRuleDraft,
   type AddRuleToLibraryResult,
   type AddRulesToLibraryResult,
@@ -110,6 +111,14 @@ function mergeManualDraws(baseDraws: DrawRecord[], localDraws: DrawRecord[]) {
   return [...merged.values()];
 }
 
+function mergeDrawLibraries(...libraries: DrawRecord[][]) {
+  const merged = new Map<string, DrawRecord>();
+  libraries.forEach((draws) => draws.forEach((draw) => {
+    if (draw.issue) merged.set(draw.issue, draw);
+  }));
+  return [...merged.values()];
+}
+
 const userCreatedRuleSources = new Set<RuleSourceType>(["manual", "txt_import", "system_recommended", "copied"]);
 const SELECTED_RULE_STORAGE_KEY = "rulequant:selectedRuleId";
 
@@ -147,17 +156,63 @@ function shouldPreferLocalRule(localRule: RuleRecord, baseRule: RuleRecord) {
   return timestampValue(localRule.updatedAt) > timestampValue(baseRule.updatedAt);
 }
 
+function preserveLocalRulePreferences(baseRule: RuleRecord, localRule: RuleRecord): RuleRecord {
+  return {
+    ...baseRule,
+    enabled: localRule.enabled,
+    participatesInReference: localRule.participatesInReference,
+    manuallyConfirmed: localRule.manuallyConfirmed,
+  };
+}
+
+function ruleSourcePriority(rule: Pick<RuleRecord, "sourceType">) {
+  switch (rule.sourceType ?? "user_provided") {
+    case "user_provided":
+      return 50;
+    case "manual":
+      return 40;
+    case "txt_import":
+      return 30;
+    case "system_recommended":
+      return 20;
+    case "copied":
+      return 10;
+    default:
+      return 0;
+  }
+}
+
 function mergeLocalRules(baseRules: RuleRecord[], localRules: RuleRecord[]) {
-  const merged = new Map(baseRules.map((rule) => [rule.id, rule]));
+  const merged = [...baseRules];
   localRules.forEach((localRule) => {
-    const current = merged.get(localRule.id);
-    if (!current) {
-      if (isUserCreatedRule(localRule)) merged.set(localRule.id, localRule);
+    const idIndex = merged.findIndex((rule) => rule.id === localRule.id);
+    if (idIndex >= 0) {
+      if (shouldPreferLocalRule(localRule, merged[idIndex])) merged[idIndex] = localRule;
+      else merged[idIndex] = preserveLocalRulePreferences(merged[idIndex], localRule);
       return;
     }
-    if (shouldPreferLocalRule(localRule, current)) merged.set(localRule.id, localRule);
+
+    const signature = buildRuleSignature(localRule);
+    const signatureIndex = merged.findIndex((rule) => buildRuleSignature(rule) === signature);
+    if (signatureIndex >= 0) {
+      const baseRule = merged[signatureIndex];
+      const isLocalOwnedRule = localRule.sourceType === "manual" || localRule.sourceType === "txt_import";
+      const shouldUseLocalDefinition = localRule.sourceType !== "copied" && (
+        isLocalOwnedRule ||
+        ruleSourcePriority(localRule) > ruleSourcePriority(baseRule) ||
+        (ruleSourcePriority(localRule) === ruleSourcePriority(baseRule) && shouldPreferLocalRule(localRule, baseRule))
+      );
+      if (shouldUseLocalDefinition) {
+        merged[signatureIndex] = localRule;
+      } else {
+        merged[signatureIndex] = preserveLocalRulePreferences(baseRule, localRule);
+      }
+      return;
+    }
+
+    if (isUserCreatedRule(localRule)) merged.push(localRule);
   });
-  return [...merged.values()];
+  return merged;
 }
 
 function normalizeRuleForLibrary(rule: RuleRecord, fallback?: RuleRecord): RuleRecord {
@@ -192,9 +247,22 @@ function normalizeConfigForCurrentRules(config?: RuleQuantConfig): RuleQuantConf
 
 function mergeRulesWithSeedRules(rules: RuleRecord[]) {
   const seedById = new Map(seedRules.map((rule) => [rule.id, rule]));
-  const existing = new Set(rules.map((rule) => rule.id));
-  const missingSeedRules = seedRules.filter((rule) => !existing.has(rule.id));
-  return [...rules, ...missingSeedRules].map((rule) => normalizeRuleForLibrary(rule, seedById.get(rule.id)));
+  const normalizedRules = rules.map((rule) => normalizeRuleForLibrary(rule, seedById.get(rule.id))).reduce<RuleRecord[]>((deduplicated, rule) => {
+    const signature = buildRuleSignature(rule);
+    const duplicateIndex = deduplicated.findIndex((item) => buildRuleSignature(item) === signature);
+    if (duplicateIndex < 0) {
+      deduplicated.push(rule);
+    } else if (ruleSourcePriority(rule) > ruleSourcePriority(deduplicated[duplicateIndex])) {
+      deduplicated[duplicateIndex] = rule;
+    }
+    return deduplicated;
+  }, []);
+  const existingIds = new Set(normalizedRules.map((rule) => rule.id));
+  const existingSignatures = new Set(normalizedRules.map(buildRuleSignature));
+  const missingSeedRules = seedRules.filter((rule) => {
+    return !existingIds.has(rule.id) && !existingSignatures.has(buildRuleSignature(rule));
+  });
+  return [...normalizedRules, ...missingSeedRules.map((rule) => normalizeRuleForLibrary(rule, rule))];
 }
 
 type PersistedRuleQuantState = Awaited<ReturnType<typeof loadPersistedState>>;
@@ -215,9 +283,11 @@ export function buildHydratedState(input: {
   const cloudLogs = input.cloud?.logs ?? [];
   const cloudBackups = input.cloud?.backups ?? [];
   const cloudReferenceHistory = input.cloud?.referenceHistory ?? [];
-  const baseDraws = cloudDraws.length ? cloudDraws : input.persisted.draws.length ? input.persisted.draws : seedDraws;
-  const localDraws = [...(input.persisted.draws ?? []), ...input.current.draws.filter(isManualDraw)];
-  const nextDraws = mergeManualDraws(baseDraws, localDraws);
+  // Merge by issue instead of replacing the local library with a remote snapshot.
+  // A stale mobile/service-worker response must never roll back a newer saved draw.
+  const localDraws = [...(input.persisted.draws ?? []), ...input.current.draws];
+  const mergedDraws = mergeDrawLibraries(input.persisted.draws ?? [], input.current.draws, cloudDraws);
+  const nextDraws = mergeManualDraws(mergedDraws.length ? mergedDraws : seedDraws, localDraws);
   const baseRules = cloudRules.length ? cloudRules : input.persisted.rules.length ? input.persisted.rules : seedRules;
   const localRules = [...(input.persisted.rules ?? []), ...input.current.rules.filter(isUserCreatedRule)];
   const nextRules = mergeRulesWithSeedRules(mergeLocalRules(baseRules, localRules));
