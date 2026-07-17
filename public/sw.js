@@ -1,5 +1,5 @@
-const CLEANUP_VERSION = "20260717-1";
-const CACHE_PREFIX = "rulequant-";
+const CLEANUP_VERSION = "20260717-2";
+const CACHE_PREFIX = "rulequant-runtime-";
 const REFRESH_PARAM = "rq_refresh";
 
 async function removeLegacyCaches() {

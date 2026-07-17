@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-const CACHE_CLEANUP_VERSION = "20260717-1";
+const CACHE_CLEANUP_VERSION = "20260717-2";
 const CACHE_CLEANUP_KEY = "rulequant:cache-cleanup-version";
 const REFRESH_PARAM = "rq_refresh";
 
@@ -11,7 +11,7 @@ async function removeLegacyCaches() {
   const keys = await window.caches.keys();
   await Promise.all(
     keys
-      .filter((key) => key.startsWith("rulequant-"))
+      .filter((key) => key.startsWith("rulequant-runtime-"))
       .map((key) => window.caches.delete(key)),
   );
 }
