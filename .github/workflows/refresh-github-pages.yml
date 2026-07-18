@@ -75,6 +75,20 @@ jobs:
                 reason = `live comparison failed: ${error instanceof Error ? error.message : String(error)}`;
               }
             }
+            if (!publish && process.env.TCB_PUBLIC_URL) {
+              try {
+                const root = process.env.TCB_PUBLIC_URL.replace(/\/$/, '');
+                const mirrorUrl = `${root}/rulequant-terminal-pages/static-cloud-state.json?t=${Date.now()}`;
+                const response = await fetch(mirrorUrl, { cache: 'no-store' });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const mirror = await response.json();
+                publish = hash(local) !== hash(mirror);
+                reason = publish ? 'CloudBase mirror is stale' : 'all configured hosts already match';
+              } catch (error) {
+                publish = true;
+                reason = `CloudBase comparison failed: ${error instanceof Error ? error.message : String(error)}`;
+              }
+            }
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `publish=${publish}\nreason=${reason}\n`);
             console.log(JSON.stringify({ publish, reason, latestIssue: local?.meta?.latestIssue, drawCount: local?.draws?.length ?? 0 }, null, 2));
           })().catch((error) => {
