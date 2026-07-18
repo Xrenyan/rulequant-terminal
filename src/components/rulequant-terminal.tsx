@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import {
   Activity,
   BarChart3,
@@ -29,9 +28,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { runBacktest } from "@/lib/backtest/run-backtest";
 import { runRuleCalculation, type RuleCalculation } from "@/lib/rule-engine/rule-engine";
 import { buildReferenceObservation, clearCandidatePoolCache, generateCandidatePool } from "@/lib/candidate-pool/candidate-pool";
 import type { FormulaDiscoveryCandidate } from "@/lib/formula-discovery/formula-discovery";
@@ -82,6 +80,48 @@ import { cn } from "@/lib/utils";
 let exportersPromise: ReturnType<typeof importExporters> | undefined;
 const formulaDiscoveryCache = new Map<string, FormulaDiscoveryCandidate[]>();
 const FORMULA_DISCOVERY_CACHE_LIMIT = 6;
+const backgroundBacktestCache = new Map<string, BacktestResult>();
+const BACKGROUND_BACKTEST_CACHE_LIMIT = 3;
+const candidatePoolReportCache = new Map<string, CandidatePoolReport>();
+const CANDIDATE_POOL_REPORT_CACHE_LIMIT = 3;
+
+function compactCandidateBacktest(backtest: BacktestResult): BacktestResult {
+  return {
+    generatedAt: backtest.generatedAt,
+    ruleResults: backtest.ruleResults.map((result) => ({
+      ...result,
+      details: [],
+      failedIssues: [],
+    })),
+  };
+}
+
+type CandidateReportWorkerInput = {
+  draws: DrawRecord[];
+  rules: RuleRecord[];
+  config: RuleQuantConfig;
+  backtest?: BacktestResult;
+  validationSummaries: RuleValidationSummary[];
+};
+
+function runCandidateReportWorker(input: CandidateReportWorkerInput): Promise<CandidatePoolReport> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL("../workers/candidate-pool.worker.ts", import.meta.url));
+    worker.onmessage = (event: MessageEvent<{ ok: boolean; report?: CandidatePoolReport; error?: string }>) => {
+      worker.terminate();
+      if (event.data.ok && event.data.report) {
+        resolve(event.data.report);
+        return;
+      }
+      reject(new Error(event.data.error ?? "综合参考生成失败"));
+    };
+    worker.onerror = (event) => {
+      worker.terminate();
+      reject(new Error(event.message || "综合参考暂时无法启动"));
+    };
+    worker.postMessage(input);
+  });
+}
 
 function importExporters() {
   return import("@/lib/export/exporters");
@@ -333,6 +373,9 @@ type UrlImportResponse = {
   recordCount?: number;
   state?: { latestIssue?: string; recordCount?: number; updatedAt?: string };
 };
+
+let lastAutomaticSourceCheckAt = 0;
+let sourceSessionSnapshot: { records: DrawRecord[]; summaries: UrlImportSummary[]; status: string } | undefined;
 
 type CandidateFocus = { type: "number"; value: number } | { type: "zodiac"; value: string } | null;
 
@@ -598,7 +641,7 @@ function FormulaExceptionPanel({
               </div>
               <p className="mt-3 text-xs leading-5 text-rose-100">{summary.reason}</p>
               <div className="mt-3 flex gap-2">
-                <Link href={`/formula-editor?ruleId=${encodeURIComponent(rule.id)}`} className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 bg-white/[0.06] px-3 text-xs text-slate-100 hover:bg-white/[0.09]">
+                <Link href={`/formula-editor?ruleId=${encodeURIComponent(rule.id)}`} className="inline-flex h-9 items-center justify-center rounded-md border border-white/10 bg-white/[0.06] px-3 text-xs text-slate-100 hover:bg-white/[0.09] max-sm:h-11">
                   编辑修复
                 </Link>
                 <Button size="sm" onClick={() => void useRuleQuantStore.getState().toggleReferenceParticipation(rule.id)}>
@@ -635,7 +678,7 @@ function FormulaLibraryBackupPanel({
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="font-semibold text-white">公式库备份</h2>
-          <p className="mt-1 text-sm text-slate-500">公式会同时保存到浏览器数据库和大容量备用存储，不限制固定条数；JSON 可用于跨设备恢复。</p>
+          <p className="mt-1 text-sm text-slate-500">公式会自动保存且不限制固定条数；更换设备时，可通过备份文件恢复。</p>
         </div>
         <span className="shrink-0">
           <Badge tone={latestBackup ? "green" : "yellow"}>{latestBackup ? `最近备份 ${formatLocalDateTime(latestBackup.createdAt)}` : "暂无备份"}</Badge>
@@ -643,9 +686,9 @@ function FormulaLibraryBackupPanel({
       </div>
       <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Button variant="primary" onClick={() => exportRuleLibraryWord(rules)}><FileDown className="h-4 w-4" />一键下载全部公式</Button>
-        <Button onClick={() => exportJson({ exportedAt: new Date().toISOString(), rules }, "rulequant-rules-backup.json")}><Download className="h-4 w-4" />导出公式库 JSON</Button>
+        <Button onClick={() => exportJson({ exportedAt: new Date().toISOString(), rules }, "rulequant-rules-backup.json")}><Download className="h-4 w-4" />导出公式库备份</Button>
         <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-white/10 bg-white/[0.06] px-4 text-sm text-slate-100 hover:bg-white/[0.09]">
-          <Upload className="h-4 w-4" />导入 JSON / TXT
+          <Upload className="h-4 w-4" />导入备份 / TXT
           <input className="hidden" type="file" accept=".json,.txt,application/json,text/plain" onChange={(event: ChangeEvent<HTMLInputElement>) => {
             onImport(event.target.files?.[0]);
             event.currentTarget.value = "";
@@ -714,7 +757,7 @@ function Metric({ label, value, hint, tone = "cyan" }: { label: string; value: s
     <div className="min-w-0 rounded-md border border-white/[0.065] bg-black/15 p-3">
       <div className="flex min-w-0 items-center justify-between gap-3">
         <p className="truncate text-xs leading-5 text-slate-500">{label}</p>
-        <Badge tone={tone}>{hint ?? "实时"}</Badge>
+        {hint ? <Badge tone={tone}>{hint}</Badge> : null}
       </div>
       <p className="mt-2 min-w-0 break-words font-mono text-[20px] font-semibold leading-tight text-white sm:text-[24px]">{value}</p>
     </div>
@@ -733,6 +776,28 @@ function ComputationPendingPanel({ title, desc }: { title: string; desc: string 
       </div>
     </Panel>
   );
+}
+
+function buildBackgroundBacktestKey(draws: DrawRecord[], rules: RuleRecord[], config: RuleQuantConfig) {
+  return JSON.stringify({
+    draws: draws.map((draw) => [draw.issue, draw.n1, draw.n2, draw.n3, draw.n4, draw.n5, draw.n6, draw.special]),
+    rules: rules.map((rule) => [
+      rule.id,
+      rule.updatedAt,
+      rule.enabled,
+      rule.category,
+      rule.orderMode,
+      rule.formula,
+      rule.normalizer,
+      rule.target,
+      rule.positionPattern,
+      rule.anchorIssue ?? "",
+      rule.anchorPatternIndex ?? "",
+      rule.periodSpan,
+      rule.verifyOffset ?? "",
+    ]),
+    config,
+  });
 }
 
 function FormulaDiscoveryPendingPanel({
@@ -756,11 +821,11 @@ function FormulaDiscoveryPendingPanel({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="rq-eyebrow">{depthLabel}</p>
-              <h3 className="font-semibold text-white">正在后台筛选公式</h3>
+              <h3 className="font-semibold text-white">正在筛选公式</h3>
             </div>
             <Badge tone="cyan">{preparing ? "准备中" : `${elapsedSeconds} 秒`}</Badge>
           </div>
-          <p className="mt-2 text-sm text-slate-500">页面可以继续操作；计算在线程中进行，完成后会自动显示候选，不需要重复点击。</p>
+          <p className="mt-2 text-sm text-slate-500">页面可以继续操作，完成后会自动显示候选，不需要重复点击。</p>
           <ol className="rq-progress-steps mt-4">
             {stages.map((stage, index) => (
               <li key={stage} className={cn(index < activeStage && "is-done", index === activeStage && "is-active")}>
@@ -769,6 +834,12 @@ function FormulaDiscoveryPendingPanel({
               </li>
             ))}
           </ol>
+          <div className="rq-discovery-skeleton mt-4" aria-hidden="true">
+            <div className="rq-discovery-skeleton__list">
+              {[0, 1, 2].map((item) => <span key={item}><i /><b /><em /></span>)}
+            </div>
+            <div className="rq-discovery-skeleton__detail"><i /><b /><b /><em /></div>
+          </div>
         </div>
       </div>
     </Panel>
@@ -1035,11 +1106,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const [sourceUrl, setSourceUrl] = useState("https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html");
   const [sourceFromYear, setSourceFromYear] = useState(String(new Date().getFullYear()));
   const [sourceToYear, setSourceToYear] = useState(String(new Date().getFullYear()));
-  const [sourceRecords, setSourceRecords] = useState<DrawRecord[]>([]);
-  const [sourceSummaries, setSourceSummaries] = useState<UrlImportSummary[]>([]);
-  const [sourceStatus, setSourceStatus] = useState("");
+  const [sourceRecords, setSourceRecords] = useState<DrawRecord[]>(() => sourceSessionSnapshot?.records ?? []);
+  const [sourceSummaries, setSourceSummaries] = useState<UrlImportSummary[]>(() => sourceSessionSnapshot?.summaries ?? []);
+  const [sourceStatus, setSourceStatus] = useState(() => sourceSessionSnapshot?.status ?? "");
   const [sourceLoading, setSourceLoading] = useState(false);
-  const sourceAutoFetchedAt = useRef(0);
   const referenceAutoSavedSignature = useRef("");
   const [candidateTab, setCandidateTab] = useState<"numbers8" | "numbers12" | "numbers18" | "numbers16" | "numbers49" | "zodiacs12" | "zodiacs9" | "zodiacs8" | "zodiacs7">("numbers8");
   const [candidateWorkspaceTab, setCandidateWorkspaceTab] = useState<"results" | "evidence" | "history" | "combo" | "operations">("results");
@@ -1051,6 +1121,20 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const [referenceStatus, setReferenceStatus] = useState("");
   const [oneClickCalculating, setOneClickCalculating] = useState(false);
   const [oneClickStatus, setOneClickStatus] = useState("");
+  const [pendingRoute, setPendingRoute] = useState("");
+  const [mobileNavCompact, setMobileNavCompact] = useState(false);
+  const [backgroundBacktestState, setBackgroundBacktestState] = useState<{
+    key: string;
+    result?: BacktestResult;
+    loading: boolean;
+    error: string;
+  }>({ key: "", loading: false, error: "" });
+  const [candidateReportState, setCandidateReportState] = useState<{
+    key: string;
+    report?: CandidatePoolReport;
+    loading: boolean;
+    error: string;
+  }>({ key: "", loading: false, error: "" });
   const [discoveryFocusId, setDiscoveryFocusId] = useState("");
   const [discoveryStatus, setDiscoveryStatus] = useState("");
   const [discoveryDepth, setDiscoveryDepth] = useState<"balanced" | "deep" | "advanced">("balanced");
@@ -1076,6 +1160,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const [ruleLibraryFilter, setRuleLibraryFilter] = useState<RuleLibraryFilter>("all");
   const [ruleSort, setRuleSort] = useState<RuleSortKey>("smart");
   const [rulePage, setRulePage] = useState(0);
+  const [mobileRuleToolsOpen, setMobileRuleToolsOpen] = useState(false);
   const [oneClickPage, setOneClickPage] = useState(0);
   const [selectedComboRuleIds, setSelectedComboRuleIds] = useState<string[]>([]);
   const [referenceArchiveIssue, setReferenceArchiveIssue] = useState("");
@@ -1085,6 +1170,35 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  useEffect(() => {
+    setPendingRoute("");
+    setMobileNavCompact(false);
+  }, [activeView]);
+
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+    let frameId = 0;
+
+    function handleScroll() {
+      if (frameId) return;
+      frameId = window.requestAnimationFrame(() => {
+        const nextScrollY = window.scrollY;
+        const scrollingDown = nextScrollY > lastScrollY + 3;
+        const scrollingUp = nextScrollY < lastScrollY - 5;
+        if (nextScrollY < 48 || scrollingUp) setMobileNavCompact(false);
+        else if (nextScrollY > 140 && scrollingDown) setMobileNavCompact(true);
+        lastScrollY = nextScrollY;
+        frameId = 0;
+      });
+    }
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (frameId) window.cancelAnimationFrame(frameId);
+    };
+  }, []);
 
   const selectedRule = rules.find((rule) => rule.id === selectedRuleId) ?? rules[0];
   const editorMode = searchParams.get("mode");
@@ -1145,37 +1259,98 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const shouldWarnStaleData = !websiteDraws.length && !(isStaticShareHost && hasSharedDraws);
   const latestNumbersLabel = drawNumbersWithZodiac(latestRawDraw, config);
   const isCandidatePoolReady = useDeferredViewReady(activeView === "candidate-pool");
+  const isCandidateHistoryReady = useDeferredViewReady(activeView === "candidate-pool" && candidateWorkspaceTab === "history", 120);
   const isFormulaDiscoveryReady = useDeferredViewReady(activeView === "formula-discovery");
+  const isOneClickReady = useDeferredViewReady(activeView === "one-click", 40);
   const isFormulaDiscoveryPreparing = activeView === "formula-discovery" && !isFormulaDiscoveryReady;
   const isCandidatePoolPreparing = activeView === "candidate-pool" && !isCandidatePoolReady;
-  const shouldBuildBacktest = activeView === "dashboard" || activeView === "rules" || activeView === "formula-detail" || activeView === "sample-check" || (activeView === "candidate-pool" && isCandidatePoolReady) || activeView === "backtest" || activeView === "reports";
-  const backtest = useMemo(() => {
-    if (!shouldBuildBacktest) return EMPTY_BACKTEST;
-    return runBacktest({ draws: activeDraws, rules, config });
-  }, [shouldBuildBacktest, activeDraws, rules, config]);
+  const isCandidateHistoryPreparing = activeView === "candidate-pool" && candidateWorkspaceTab === "history" && (!isCandidatePoolReady || !isCandidateHistoryReady);
+  const isOneClickPreparing = activeView === "one-click" && !isOneClickReady;
+  const usesBackgroundBacktest =
+    activeView === "dashboard" ||
+    activeView === "rules" ||
+    activeView === "formula-detail" ||
+    activeView === "sample-check" ||
+    activeView === "backtest" ||
+    activeView === "reports" ||
+    (activeView === "candidate-pool" && isCandidatePoolReady);
+  const backgroundBacktestKey = useMemo(
+    () => usesBackgroundBacktest ? buildBackgroundBacktestKey(activeDraws, rules, config) : "",
+    [usesBackgroundBacktest, activeDraws, rules, config],
+  );
+  useEffect(() => {
+    if (!usesBackgroundBacktest || !backgroundBacktestKey) return;
+
+    const cached = backgroundBacktestCache.get(backgroundBacktestKey);
+    if (cached) {
+      backgroundBacktestCache.delete(backgroundBacktestKey);
+      backgroundBacktestCache.set(backgroundBacktestKey, cached);
+      setBackgroundBacktestState({ key: backgroundBacktestKey, result: cached, loading: false, error: "" });
+      return;
+    }
+
+    const worker = new Worker(new URL("../workers/backtest.worker.ts", import.meta.url));
+    let disposed = false;
+    setBackgroundBacktestState({ key: backgroundBacktestKey, loading: true, error: "" });
+    worker.onmessage = (event: MessageEvent<{ ok: boolean; backtest?: BacktestResult; error?: string }>) => {
+      if (disposed) return;
+      if (!event.data.ok || !event.data.backtest) {
+        setBackgroundBacktestState({ key: backgroundBacktestKey, loading: false, error: event.data.error ?? "历史表现计算失败" });
+        return;
+      }
+      backgroundBacktestCache.set(backgroundBacktestKey, event.data.backtest);
+      while (backgroundBacktestCache.size > BACKGROUND_BACKTEST_CACHE_LIMIT) {
+        const oldestKey = backgroundBacktestCache.keys().next().value;
+        if (!oldestKey) break;
+        backgroundBacktestCache.delete(oldestKey);
+      }
+      setBackgroundBacktestState({ key: backgroundBacktestKey, result: event.data.backtest, loading: false, error: "" });
+    };
+    worker.onerror = () => {
+      if (!disposed) setBackgroundBacktestState({ key: backgroundBacktestKey, loading: false, error: "历史表现暂时无法整理，请刷新后重试" });
+    };
+    worker.postMessage({ draws: activeDraws, rules, config });
+    return () => {
+      disposed = true;
+      worker.terminate();
+    };
+  }, [usesBackgroundBacktest, activeDraws, rules, config, backgroundBacktestKey]);
+
+  const backgroundBacktest = backgroundBacktestState.key === backgroundBacktestKey ? backgroundBacktestState.result : undefined;
+  const isBackgroundBacktestCalculating = usesBackgroundBacktest && backgroundBacktestState.key === backgroundBacktestKey && backgroundBacktestState.loading;
+  const backgroundBacktestError = usesBackgroundBacktest && backgroundBacktestState.key === backgroundBacktestKey ? backgroundBacktestState.error : "";
+  const isRuleManagementCalculating = activeView === "rules" && isBackgroundBacktestCalculating;
+  const ruleManagementBacktestError = activeView === "rules" ? backgroundBacktestError : "";
+  const backtest = backgroundBacktest ?? EMPTY_BACKTEST;
   const selectedRuleResult = useMemo(() => backtest.ruleResults.find((item) => item.rule.id === selectedRule?.id) ?? backtest.ruleResults[0], [backtest, selectedRule?.id]);
-  const shouldBuildValidation = activeView === "dashboard" || activeView === "rules" || activeView === "formula-detail" || activeView === "sample-check" || (activeView === "candidate-pool" && isCandidatePoolReady);
+  const shouldBuildValidation = Boolean(backgroundBacktest) && (
+    activeView === "dashboard"
+    || activeView === "rules"
+    || activeView === "formula-detail"
+    || activeView === "sample-check"
+    || (activeView === "candidate-pool" && isCandidatePoolReady)
+  );
   const validationSampleResults = useMemo(() => {
     if (!shouldBuildValidation) return [];
-    return runSampleChecks({ cases: samples, draws: activeDraws, rules, config });
-  }, [shouldBuildValidation, samples, activeDraws, rules, config]);
+    return runSampleChecks({ cases: samples, draws: activeDraws, rules, config, backtest });
+  }, [shouldBuildValidation, samples, activeDraws, rules, config, backtest]);
   const ruleValidationSummaries = useMemo(() => (
     shouldBuildValidation ? buildRuleValidationSummaries({ rules, backtest, sampleResults: validationSampleResults }) : []
   ), [shouldBuildValidation, rules, backtest, validationSampleResults]);
   const ruleReconciliationRows = useMemo(() => (
-    activeView === "rules" ? buildRuleReconciliation({ sourceFiles: rawRuleFiles, rules, validationSummaries: ruleValidationSummaries }) : []
-  ), [activeView, rules, ruleValidationSummaries]);
+    activeView === "rules" && rulesWorkspaceTab === "reconcile" ? buildRuleReconciliation({ sourceFiles: rawRuleFiles, rules, validationSummaries: ruleValidationSummaries }) : []
+  ), [activeView, rulesWorkspaceTab, rules, ruleValidationSummaries]);
   const ruleValidationById = useMemo(() => new Map(ruleValidationSummaries.map((summary) => [summary.ruleId, summary])), [ruleValidationSummaries]);
   const enabledRuleCount = useMemo(() => rules.filter((rule) => rule.enabled).length, [rules]);
   const passedRuleCount = useMemo(() => ruleValidationSummaries.filter((summary) => summary.status === "checked").length, [ruleValidationSummaries]);
   const checkedSampleRuleCount = useMemo(() => ruleValidationSummaries.filter((summary) => summary.sampleCount > 0).length, [ruleValidationSummaries]);
   const uncheckedSampleRuleCount = useMemo(() => ruleValidationSummaries.filter((summary) => summary.status === "unchecked").length, [ruleValidationSummaries]);
   const calculableRuleCount = useMemo(() => {
-    if (!shouldBuildBacktest) {
+    if (!backtest.ruleResults.length) {
       return rules.filter((rule) => canRuleParticipateInReference(rule)).length;
     }
     return backtest.ruleResults.filter((result) => result.rule.enabled && !result.error && result.total > 0).length;
-  }, [backtest.ruleResults, rules, shouldBuildBacktest]);
+  }, [backtest.ruleResults, rules]);
   const referenceRuleCount = useMemo(() => rules.filter((rule) => canRuleParticipateInReference(rule, ruleValidationById.get(rule.id))).length, [rules, ruleValidationById]);
   const pendingRuleCount = useMemo(() => ruleValidationSummaries.filter((summary) => summary.status === "unchecked").length, [ruleValidationSummaries]);
   const excludedRuleCount = Math.max(enabledRuleCount - referenceRuleCount, 0);
@@ -1188,7 +1363,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     .filter(({ rule, summary }) => rule.enabled && !canRuleParticipateInReference(rule, summary)),
   [ruleValidationSummaries, rules]);
   const ruleHealthRows = useMemo(() => {
-    if (activeView === "dashboard") return [];
+    const needsHealthRows =
+      (activeView === "rules" && rulesWorkspaceTab === "health")
+      || (activeView === "candidate-pool" && candidateWorkspaceTab === "operations");
+    if (!needsHealthRows || !backtest.ruleResults.length) return [];
     const resultMap = new Map(backtest.ruleResults.map((result) => [result.rule.id, result]));
     return rules
       .filter((rule) => rule.enabled)
@@ -1197,7 +1375,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         const order = { reserve: 0, manual_reserve: 1, watch: 2, keep: 3 } as const;
         return order[a.status] - order[b.status] || b.wrongStreak - a.wrongStreak || (b.result?.successRate ?? 0) - (a.result?.successRate ?? 0);
       });
-  }, [activeView, backtest.ruleResults, rules]);
+  }, [activeView, backtest.ruleResults, candidateWorkspaceTab, rules, rulesWorkspaceTab]);
   const ruleResultMap = useMemo(() => new Map(backtest.ruleResults.map((result) => [result.rule.id, result])), [backtest.ruleResults]);
   const visibleRules = useMemo(() => {
     const filtered = rules.filter((rule) => {
@@ -1250,19 +1428,64 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       });
   }, [activeView, rules, latestDraw, latestPeriodIndex, config]);
   const researchDraws = activeDraws;
-  const shouldBuildCandidateReport = activeView === "dashboard" || (activeView === "candidate-pool" && isCandidatePoolReady) || activeView === "reports";
+  const shouldBuildCandidateReport = Boolean(backgroundBacktest) && (
+    activeView === "dashboard"
+    || (activeView === "candidate-pool" && isCandidatePoolReady)
+    || activeView === "reports"
+  );
   const candidateBacktest = backtest;
-  const candidateReport = useMemo(() => {
-    if (!shouldBuildCandidateReport) return EMPTY_CANDIDATE_REPORT;
-    void referenceRunId;
-    return generateCandidatePool({
+  const candidateReportKey = shouldBuildCandidateReport ? `${backgroundBacktestKey}:${referenceRunId}` : "";
+  useEffect(() => {
+    if (!shouldBuildCandidateReport || !candidateReportKey) return;
+    const cached = candidatePoolReportCache.get(candidateReportKey);
+    if (cached) {
+      candidatePoolReportCache.delete(candidateReportKey);
+      candidatePoolReportCache.set(candidateReportKey, cached);
+      setCandidateReportState({ key: candidateReportKey, report: cached, loading: false, error: "" });
+      return;
+    }
+    let disposed = false;
+    const worker = new Worker(new URL("../workers/candidate-pool.worker.ts", import.meta.url));
+    setCandidateReportState({ key: candidateReportKey, loading: true, error: "" });
+    worker.onmessage = (event: MessageEvent<{ ok: boolean; report?: CandidatePoolReport; error?: string }>) => {
+      if (disposed) return;
+      if (!event.data.ok || !event.data.report) {
+        setCandidateReportState({ key: candidateReportKey, loading: false, error: event.data.error ?? "综合参考生成失败" });
+        worker.terminate();
+        return;
+      }
+      candidatePoolReportCache.set(candidateReportKey, event.data.report);
+      while (candidatePoolReportCache.size > CANDIDATE_POOL_REPORT_CACHE_LIMIT) {
+        const oldestKey = candidatePoolReportCache.keys().next().value;
+        if (typeof oldestKey !== "string") break;
+        candidatePoolReportCache.delete(oldestKey);
+      }
+      startTransition(() => {
+        setCandidateReportState({ key: candidateReportKey, report: event.data.report, loading: false, error: "" });
+      });
+      worker.terminate();
+    };
+    worker.onerror = (event) => {
+      if (disposed) return;
+      setCandidateReportState({ key: candidateReportKey, loading: false, error: event.message || "综合参考暂时无法生成" });
+      worker.terminate();
+    };
+    worker.postMessage({
       draws: researchDraws,
       rules,
       config,
-      backtest: candidateBacktest,
+      backtest: compactCandidateBacktest(candidateBacktest),
       validationSummaries: ruleValidationSummaries,
     });
-  }, [shouldBuildCandidateReport, researchDraws, rules, config, candidateBacktest, ruleValidationSummaries, referenceRunId]);
+    return () => {
+      disposed = true;
+      worker.terminate();
+    };
+  }, [shouldBuildCandidateReport, candidateReportKey, researchDraws, rules, config, candidateBacktest, ruleValidationSummaries]);
+  const candidateReport = candidateReportState.key === candidateReportKey && candidateReportState.report ? candidateReportState.report : EMPTY_CANDIDATE_REPORT;
+  const isCandidateReportCalculating = shouldBuildCandidateReport && (candidateReportState.key !== candidateReportKey || candidateReportState.loading);
+  const candidateReportError = shouldBuildCandidateReport && candidateReportState.key === candidateReportKey ? candidateReportState.error : "";
+  const isCandidateReferencePreparing = isBackgroundBacktestCalculating || isCandidateReportCalculating;
   useEffect(() => {
     if (activeView !== "candidate-pool") return;
     if (!candidateReport.signalCount || !candidateReport.ruleCount) return;
@@ -1270,31 +1493,34 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     if (referenceAutoSavedSignature.current === signature) return;
     referenceAutoSavedSignature.current = signature;
     if (referenceHistory.some((record) => record.signature === signature)) return;
-    void store.saveReferenceHistory(buildReferenceHistoryItem({
-      report: candidateReport,
-      saveType: "auto",
-      dataSourceLabel,
-      recordCount: activeDraws.length,
-      note: "打开综合参考页自动保存",
-    }));
+    const saveTimer = window.setTimeout(() => {
+      void store.saveReferenceHistory(buildReferenceHistoryItem({
+        report: candidateReport,
+        saveType: "auto",
+        dataSourceLabel,
+        recordCount: activeDraws.length,
+        note: "生成综合参考结果后自动保存",
+      }));
+    }, 500);
+    return () => window.clearTimeout(saveTimer);
   }, [activeDraws.length, activeView, candidateReport, dataSourceLabel, referenceHistory, store]);
   const referenceObservation = useMemo(() => {
-    if (activeView !== "candidate-pool" || !isCandidatePoolReady) return EMPTY_REFERENCE_OBSERVATION;
+    if (activeView !== "candidate-pool" || candidateWorkspaceTab !== "history" || !isCandidatePoolReady || !isCandidateHistoryReady) return EMPTY_REFERENCE_OBSERVATION;
     void referenceRunId;
     return buildReferenceObservation({ draws: researchDraws, rules, config, validationSummaries: ruleValidationSummaries, window: 10 });
-  }, [activeView, isCandidatePoolReady, researchDraws, rules, config, ruleValidationSummaries, referenceRunId]);
+  }, [activeView, candidateWorkspaceTab, isCandidateHistoryReady, isCandidatePoolReady, researchDraws, rules, config, ruleValidationSummaries, referenceRunId]);
   const resolvedReferenceHistory = useMemo<ResolvedReferenceHistoryItem[]>(() => {
-    if (activeView !== "candidate-pool" && activeView !== "reports") return [];
+    if (activeView !== "reports" && !(activeView === "candidate-pool" && candidateWorkspaceTab === "history")) return [];
     return resolveReferenceHistoryOutcomes(referenceHistory, activeDraws, config);
-  }, [activeDraws, activeView, config, referenceHistory]);
+  }, [activeDraws, activeView, candidateWorkspaceTab, config, referenceHistory]);
   const manualComboRules = useMemo(() => {
     const selected = rules.filter((rule) => selectedComboRuleIds.includes(rule.id));
     return selected.length ? selected : rules.filter((rule) => canRuleParticipateInReference(rule, ruleValidationById.get(rule.id))).slice(0, 6);
   }, [rules, ruleValidationById, selectedComboRuleIds]);
   const manualComboReport = useMemo(() => {
-    if (activeView !== "candidate-pool" || !isCandidatePoolReady) return EMPTY_CANDIDATE_REPORT;
+    if (activeView !== "candidate-pool" || candidateWorkspaceTab !== "combo" || !isCandidatePoolReady) return EMPTY_CANDIDATE_REPORT;
     return generateCandidatePool({ draws: researchDraws, rules: manualComboRules, config, backtest: candidateBacktest, validationSummaries: ruleValidationSummaries });
-  }, [activeView, isCandidatePoolReady, researchDraws, manualComboRules, config, candidateBacktest, ruleValidationSummaries]);
+  }, [activeView, candidateWorkspaceTab, isCandidatePoolReady, researchDraws, manualComboRules, config, candidateBacktest, ruleValidationSummaries]);
   const manualDrawValidation = useMemo(() => {
     const values = MANUAL_DRAW_KEYS.map((key) => ({ key, value: Number(manualDraw[key]) }));
     const invalidKeys = new Set<ManualDrawKey>();
@@ -1323,10 +1549,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     return index >= 0 ? index : latestPeriodIndex;
   }, [activeDraws, latestPeriodIndex, selectedOneClickDraw.issue]);
   const oneClickResults = useMemo(() => {
-    if (activeView !== "one-click") return [];
+    if (activeView !== "one-click" || !isOneClickReady) return [];
     if (oneClickMode === "manual" && !manualDrawValidation.valid) return [];
     return buildOneClickFormulaResults({ draw: selectedOneClickDraw, rules, config, periodIndex: selectedOneClickPeriodIndex });
-  }, [activeView, config, manualDrawValidation.valid, oneClickMode, rules, selectedOneClickDraw, selectedOneClickPeriodIndex]);
+  }, [activeView, config, isOneClickReady, manualDrawValidation.valid, oneClickMode, rules, selectedOneClickDraw, selectedOneClickPeriodIndex]);
   const oneClickPageSize = 10;
   const oneClickPageCount = Math.max(1, Math.ceil(oneClickResults.length / oneClickPageSize));
   const safeOneClickPage = Math.min(oneClickPage, oneClickPageCount - 1);
@@ -1369,14 +1595,14 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
           formulaDiscoveryCache.delete(oldestKey);
         }
         setDiscoveryResult({ key: discoveryRequestKey, candidates });
-        setDiscoveryStatus(`筛选完成：生成 ${candidates.length} 条候选，已缓存本次结果。`);
+        setDiscoveryStatus(`筛选完成：生成 ${candidates.length} 条候选。`);
       }
-      else setDiscoveryStatus(`筛选失败：${event.data.error ?? "后台计算异常"}`);
+      else setDiscoveryStatus(`筛选失败：${event.data.error ?? "计算出现异常"}`);
       worker.terminate();
     };
     worker.onerror = (event) => {
       if (cancelled) return;
-      setDiscoveryStatus(`筛选失败：${event.message || "后台线程无法启动"}`);
+      setDiscoveryStatus(`筛选失败：${event.message || "筛选暂时无法启动"}`);
       setDiscoveryResult({ key: discoveryRequestKey, candidates: [] });
       worker.terminate();
     };
@@ -1510,8 +1736,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       setLastSyncAt(syncedAt);
       localStorage.setItem("rulequant:lastSyncAt", syncedAt);
       localStorage.setItem("rulequant:lastSyncedIssue", latestFetched?.issue ?? "");
+      const nextSummaries = data.years ?? [];
       setSourceRecords(fetchedRecords);
-      setSourceSummaries(data.years ?? []);
+      setSourceSummaries(nextSummaries);
       setImportErrors(data.errors ?? []);
       if (syncPreview) setPreviewDraws(fetchedRecords);
       if (saveMode === "replace") {
@@ -1530,13 +1757,15 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       setReferenceRunId((current) => current + 1);
       const changed = latestFetched?.issue && latestFetched.issue !== currentLatest?.issue;
       const usedSnapshotFallback = data.errors?.some((message) => message.includes("备用") || message.includes("快照"));
-      setSourceStatus(
+      const nextSourceStatus = (
         usedSnapshotFallback
           ? `实时开奖源暂时不可用，已使用备用快照 ${latestFetched?.issue ?? "-"} 期，共 ${fetchedRecords.length} 条记录；现有数据未丢失。`
           : changed
           ? `已同步到最新 ${latestFetched.issue} 期，共 ${fetchedRecords.length} 条记录，页面已重新计算。`
-          : `已检查配置的开奖源，当前仍为 ${latestFetched?.issue ?? "-"} 期，共 ${fetchedRecords.length} 条记录。`,
+          : `已检查配置的开奖源，当前仍为 ${latestFetched?.issue ?? "-"} 期，共 ${fetchedRecords.length} 条记录。`
       );
+      sourceSessionSnapshot = { records: fetchedRecords, summaries: nextSummaries, status: nextSourceStatus };
+      setSourceStatus(nextSourceStatus);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setImportErrors([message]);
@@ -1552,8 +1781,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     const syncLatest = (force = false) => {
       const now = Date.now();
       const minimumGap = force ? RESUME_SYNC_INTERVAL_MS : AUTO_SYNC_INTERVAL_MS;
-      if (now - sourceAutoFetchedAt.current < minimumGap) return;
-      sourceAutoFetchedAt.current = now;
+      if (now - lastAutomaticSourceCheckAt < minimumGap) return;
+      lastAutomaticSourceCheckAt = now;
       void fetchSourceDraws(false, "none");
     };
 
@@ -1562,7 +1791,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       if (document.visibilityState === "visible") syncLatest(true);
     };
 
-    queueMicrotask(() => syncLatest(true));
+    queueMicrotask(() => syncLatest(false));
     const timer = window.setInterval(() => syncLatest(), AUTO_SYNC_INTERVAL_MS);
     window.addEventListener("pageshow", syncAfterResume);
     window.addEventListener("focus", syncAfterResume);
@@ -1766,7 +1995,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     setReferenceStatus(`已保存 ${record.baseIssue ?? "-"} 期综合推荐档案：Top8/12/16/18、全量49号码、生肖Top7/8/9、全量12生肖和证据摘要都已入库。`);
   }
 
-  function saveReferenceArchiveForIssue(issue: string) {
+  async function saveReferenceArchiveForIssue(issue: string) {
     const targetIssue = issue.trim();
     if (!targetIssue) {
       setReferenceStatus("请选择要复盘保存的基准期号。");
@@ -1780,60 +2009,71 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     }
 
     setReferenceArchiveSaving(true);
-    window.setTimeout(async () => {
-      try {
-        const archiveDraws = sorted.slice(0, targetIndex + 1);
-        const archiveBacktest = runBacktest({ draws: archiveDraws, rules, config });
-        const archiveReport = generateCandidatePool({
-          draws: archiveDraws,
-          rules,
-          config,
-          backtest: archiveBacktest,
-          validationSummaries: ruleValidationSummaries,
-        });
+    setReferenceStatus(`正在复盘 ${targetIssue} 期及以前的数据…`);
+    try {
+      const archiveDraws = sorted.slice(0, targetIndex + 1);
+      const archiveReport = await runCandidateReportWorker({
+        draws: archiveDraws,
+        rules,
+        config,
+        validationSummaries: ruleValidationSummaries,
+      });
 
-        if (!archiveReport.ruleCount || !archiveReport.signalCount) {
-          setReferenceStatus("这期没有生成可保存的公式依据，请检查公式是否启用且可计算。");
-          return;
-        }
-
-        const record = buildReferenceHistoryItem({
-          report: archiveReport,
-          saveType: "manual",
-          dataSourceLabel,
-          recordCount: archiveDraws.length,
-          note: `历史复盘：按 ${archiveReport.latestIssue ?? targetIssue} 期及以前数据生成`,
-        });
-        await store.saveReferenceHistory(record);
-        await store.addOperationLog({
-          type: "generate_reference",
-          message: `历史复盘保存：${record.baseIssue ?? targetIssue} 期，${record.ruleCount} 条公式，${record.signalCount} 条依据`,
-          issue: record.baseIssue ?? targetIssue,
-          dataCount: archiveDraws.length,
-          formulaCount: record.ruleCount,
-          signalCount: record.signalCount,
-        });
-        setReferenceStatus(`已保存 ${record.baseIssue ?? targetIssue} 期历史预测复盘；如果下一期已开奖，档案会自动对比命中情况。`);
-      } finally {
-        setReferenceArchiveSaving(false);
+      if (!archiveReport.ruleCount || !archiveReport.signalCount) {
+        setReferenceStatus("这期没有生成可保存的公式依据，请检查公式是否启用且可计算。");
+        return;
       }
-    }, 0);
+
+      const record = buildReferenceHistoryItem({
+        report: archiveReport,
+        saveType: "manual",
+        dataSourceLabel,
+        recordCount: archiveDraws.length,
+        note: `历史复盘：按 ${archiveReport.latestIssue ?? targetIssue} 期及以前数据生成`,
+      });
+      await store.saveReferenceHistory(record);
+      await store.addOperationLog({
+        type: "generate_reference",
+        message: `历史复盘保存：${record.baseIssue ?? targetIssue} 期，${record.ruleCount} 条公式，${record.signalCount} 条依据`,
+        issue: record.baseIssue ?? targetIssue,
+        dataCount: archiveDraws.length,
+        formulaCount: record.ruleCount,
+        signalCount: record.signalCount,
+      });
+      setReferenceStatus(`已保存 ${record.baseIssue ?? targetIssue} 期历史预测复盘；如果下一期已开奖，档案会自动对比命中情况。`);
+    } catch (error) {
+      setReferenceStatus(`历史复盘失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setReferenceArchiveSaving(false);
+    }
   }
 
-  function handleRegenerateReference() {
+  async function handleRegenerateReference() {
+    if (!backgroundBacktest) {
+      setReferenceStatus("历史表现仍在整理，请稍候再重新生成。");
+      return;
+    }
     setReferenceCalculating(true);
-    window.setTimeout(() => {
+    setReferenceStatus("正在重新计算公式依据与候选排序…");
+    try {
       clearCandidatePoolCache();
-      const freshReport = generateCandidatePool({
+      candidatePoolReportCache.clear();
+      const nextRunId = referenceRunId + 1;
+      const nextReportKey = `${backgroundBacktestKey}:${nextRunId}`;
+      const freshReport = await runCandidateReportWorker({
         draws: researchDraws,
         rules,
         config,
-        backtest: candidateBacktest,
+        backtest: compactCandidateBacktest(candidateBacktest),
         validationSummaries: ruleValidationSummaries,
+      });
+      candidatePoolReportCache.set(nextReportKey, freshReport);
+      startTransition(() => {
+        setCandidateReportState({ key: nextReportKey, report: freshReport, loading: false, error: "" });
+        setReferenceRunId(nextRunId);
       });
       const generatedAt = new Date().toISOString();
       const calculatedAt = new Date(generatedAt).toLocaleString("zh-CN", { hour12: false });
-      setReferenceRunId((current) => current + 1);
       setReferenceGeneratedAt(generatedAt);
       setLastCalculationAt(calculatedAt);
       localStorage.setItem("rulequant:lastCalculationAt", calculatedAt);
@@ -1852,9 +2092,11 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       });
       setCandidateFocus(null);
       setReferenceStatus(`已使用 ${freshReport.latestIssue ?? "-"} 期数据，${freshReport.ruleCount} 条公式参与计算，生成 ${freshReport.signalCount} 条公式依据。`);
-      void saveReferenceReport(freshReport, "auto", "重新生成综合参考结果自动保存");
+    } catch (error) {
+      setReferenceStatus(`重新生成失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
       setReferenceCalculating(false);
-    }, 0);
+    }
   }
 
   function updateManualDraw(key: keyof DrawRecord, value: string) {
@@ -1971,7 +2213,16 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   }
 
   return (
-    <div className="rq-shell overflow-x-hidden text-slate-100">
+    <div
+      className="rq-shell overflow-x-hidden text-slate-100"
+      onClickCapture={(event) => {
+        const anchor = (event.target as HTMLElement).closest("a[href]") as HTMLAnchorElement | null;
+        if (!anchor || anchor.target === "_blank" || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        const nextUrl = new URL(anchor.href, window.location.href);
+        if (nextUrl.origin === window.location.origin && nextUrl.pathname !== window.location.pathname) setPendingRoute(nextUrl.pathname);
+      }}
+    >
+      {pendingRoute && <div className="rq-route-progress" role="status" aria-label="正在打开页面"><span /></div>}
       <div className="rq-shell-grid relative z-10 grid grid-cols-1 lg:grid-cols-[228px_1fr]">
         <aside className="rq-sidebar sticky top-0 hidden h-[calc(100vh-24px)] border-r p-4 lg:block">
           <Link href="/dashboard" className="rq-brand mb-6 flex items-center gap-3 rounded-xl border p-3">
@@ -2001,7 +2252,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
           </nav>
         </aside>
 
-        <nav className="rq-mobile-nav fixed inset-x-0 bottom-0 z-50 w-screen max-w-[100vw] overflow-hidden border-t px-2 pb-[calc(0.45rem+env(safe-area-inset-bottom))] pt-2 lg:hidden">
+        <nav className={cn("rq-mobile-nav fixed inset-x-0 bottom-0 z-50 w-screen max-w-[100vw] overflow-hidden border-t px-2 pb-[calc(0.45rem+env(safe-area-inset-bottom))] pt-2 lg:hidden", mobileNavCompact && "rq-mobile-nav--compact")}>
           <div className="grid min-w-0 grid-cols-4 gap-1">
             {mobileNavItems.map((item) => {
               const Icon = item.icon;
@@ -2041,13 +2292,16 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
             </div>
           </header>
 
-          <motion.div
-            key={activeView}
-            initial={false}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.22 }}
-            className="rq-content mx-auto w-full max-w-[1720px] p-3 sm:p-5 lg:p-6"
-          >
+          <div className="rq-content rq-view-enter mx-auto w-full max-w-[1720px] p-3 sm:p-5 lg:p-6">
+            {!(["rules", "dashboard", "candidate-pool"] as ViewKey[]).includes(activeView) && (isBackgroundBacktestCalculating || backgroundBacktestError) && (
+              <div className={cn("rq-analysis-status mb-4", isBackgroundBacktestCalculating && "is-loading", backgroundBacktestError && "is-error")} role="status" aria-live="polite">
+                {isBackgroundBacktestCalculating ? (
+                  <><span className="rq-progress-spinner" aria-hidden="true" /><div><strong>页面已打开，正在整理公式数据</strong><small>页面可以继续操作，历史表现和综合依据完成后会自动显示。</small></div></>
+                ) : (
+                  <><XCircle className="h-5 w-5" /><div><strong>公式数据暂未完成</strong><small>{backgroundBacktestError}</small></div></>
+                )}
+              </div>
+            )}
             {activeView === "dashboard" && (
               <div className="space-y-4">
                 <section className="rq-dashboard-intro">
@@ -2069,28 +2323,38 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                 <div className="rq-dashboard-metrics">
                   <div className="rq-dashboard-metric"><span>最新期号</span><strong>{latestRawDraw?.issue ?? "-"}</strong><small>{isUsingSyncedData ? "已使用最新同步数据" : "建议先同步"}</small></div>
                   <div className="rq-dashboard-metric"><span>全年记录</span><strong>{sourceRecords.length || activeDraws.length}</strong><small>{dataSourceLabel}</small></div>
-                  <div className="rq-dashboard-metric"><span>参与公式</span><strong>{candidateReport.ruleCount}</strong><small>启用 {enabledRuleCount} · 可计算 {calculableRuleCount}</small></div>
-                  <div className="rq-dashboard-metric"><span>本期依据</span><strong>{candidateReport.signalCount}</strong><small>结果生成所用信号</small></div>
+                  <div className="rq-dashboard-metric"><span>参与公式</span><strong>{isCandidateReferencePreparing ? "整理中" : candidateReport.ruleCount}</strong><small>启用 {enabledRuleCount} · 可计算 {calculableRuleCount}</small></div>
+                  <div className="rq-dashboard-metric"><span>本期依据</span><strong>{isCandidateReferencePreparing ? "整理中" : candidateReport.signalCount}</strong><small>{isCandidateReferencePreparing ? "正在生成公式依据" : "结果生成所用依据"}</small></div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.55fr)_390px] 2xl:grid-cols-[minmax(0,1.55fr)_420px]">
                   <Panel className="p-4 sm:p-5">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div><h3 className="font-semibold text-white">本期综合参考</h3><p className="mt-1 text-sm text-slate-500">由历史表现和最新一期公式输出共同生成，仅供公式研究。</p></div>
-                      <Badge tone={candidateReport.signalCount ? "green" : "yellow"}>{candidateReport.signalCount ? `已生成 ${candidateReport.signalCount} 条依据` : "等待生成"}</Badge>
+                      <Badge tone={candidateReport.signalCount ? "green" : "yellow"}>{isCandidateReferencePreparing ? "正在整理" : candidateReport.signalCount ? `已生成 ${candidateReport.signalCount} 条依据` : "等待生成"}</Badge>
                     </div>
                     <div className="mt-5">
                       <p className="mb-2 text-xs font-medium text-slate-500">重点号码 Top 8</p>
                       <div className="rq-top-number-grid">
                         {candidateReport.topNumbers8.length ? candidateReport.topNumbers8.map((item, index) => (
                           <Link key={item.number} href="/candidate-pool" className="rq-top-number"><small>{String(index + 1).padStart(2, "0")}</small><strong>{padNumber(item.number)}</strong><span>{item.zodiac}</span></Link>
-                        )) : <span className="col-span-full text-sm text-slate-500">暂无可用证据，请先同步并计算公式。</span>}
+                        )) : isCandidateReferencePreparing ? (
+                          <>
+                            <span className="sr-only" role="status">正在生成号码依据</span>
+                            {Array.from({ length: 8 }, (_, index) => <span key={index} className="rq-top-number rq-skeleton-tile" aria-hidden="true"><i /><i /></span>)}
+                          </>
+                        ) : <span className="rq-inline-empty col-span-full">{candidateReportError || "暂无可用证据，请先同步并计算公式。"}</span>}
                       </div>
                     </div>
                     <div className="mt-5 border-t border-white/[0.08] pt-4">
                       <p className="mb-2 text-xs font-medium text-slate-500">参考生肖 Top 7</p>
                       <div className="rq-zodiac-row">
-                        {candidateReport.topZodiacs7.length ? candidateReport.topZodiacs7.map((item, index) => <span key={item.zodiac}><small>{index + 1}</small><b>{item.zodiac}</b></span>) : <span className="text-sm text-slate-500">暂无可用证据</span>}
+                        {candidateReport.topZodiacs7.length ? candidateReport.topZodiacs7.map((item, index) => <span key={item.zodiac}><small>{index + 1}</small><b>{item.zodiac}</b></span>) : isCandidateReferencePreparing ? (
+                          <>
+                            <span className="sr-only" role="status">正在整理生肖依据</span>
+                            {Array.from({ length: 7 }, (_, index) => <span key={index} className="rq-zodiac-skeleton" aria-hidden="true" />)}
+                          </>
+                        ) : <span className="rq-inline-empty">{candidateReportError || "暂无可用证据"}</span>}
                       </div>
                     </div>
                   </Panel>
@@ -2103,7 +2367,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     <div className="rq-status-list mt-5">
                       <p><span>最后同步</span><b>{displayLastSyncAt || "未同步"}</b></p>
                       <p><span>上次计算</span><b>{lastCalculationAt || "未计算"}</b></p>
-                      <p><span>公式状态</span><b>{exceptionRules.length ? `${exceptionRules.length} 条异常` : "全部正常"}</b></p>
+                      <p><span>公式状态</span><b>{isCandidateReferencePreparing ? "整理中" : exceptionRules.length ? `${exceptionRules.length} 条异常` : "全部正常"}</b></p>
                       <p><span>样例核对</span><b>{pendingRuleCount} 条未核对</b></p>
                     </div>
                     <div className="mt-5 grid grid-cols-2 gap-2"><Link href="/one-click" className="rq-link-button">计算明细</Link><Link href="/candidate-pool" className="rq-link-button rq-link-button--primary">全部依据</Link></div>
@@ -2198,9 +2462,22 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       </div>
                     ) : (
                       <div className="rq-one-click-latest-card rounded-lg border border-white/[0.08] bg-black/20 p-4">
-                        <p className="text-sm text-slate-500">数据来源：{dataSourceLabel}</p>
-                        <p className="mt-2 text-[28px] font-semibold leading-none text-white">{selectedOneClickDraw.issue}</p>
-                        <p className="mt-2 font-mono text-cyan-100">{latestNumbersLabel}</p>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="text-xs text-slate-500">当前计算期</p>
+                            <p className="mt-1 font-mono text-[24px] font-semibold leading-none text-white">{selectedOneClickDraw.issue}</p>
+                          </div>
+                          <Badge tone="green">{dataSourceLabel}</Badge>
+                        </div>
+                        <div className="rq-one-click-number-strip mt-4" aria-label={`${selectedOneClickDraw.issue}期开奖`}>
+                          {[selectedOneClickDraw.n1, selectedOneClickDraw.n2, selectedOneClickDraw.n3, selectedOneClickDraw.n4, selectedOneClickDraw.n5, selectedOneClickDraw.n6, selectedOneClickDraw.special].map((number, index) => (
+                            <span key={`${selectedOneClickDraw.issue}-${index}-${number}`} className={cn(index === 6 && "is-special")}>
+                              <small>{index === 6 ? "特" : index + 1}</small>
+                              <strong>{padNumber(number)}</strong>
+                              <em>{getNumberAttributes(number, config).zodiac}</em>
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -2221,7 +2498,12 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       {oneClickMode === "manual" && !manualDrawValidation.valid ? "等待修正" : `${oneClickResults.length} 条启用公式`}
                     </Badge>
                   </div>
-                  {oneClickMode === "manual" && !manualDrawValidation.valid ? (
+                  {isOneClickPreparing ? (
+                    <div className="rq-inline-progress" aria-live="polite" aria-busy="true">
+                      <span className="rq-progress-spinner" aria-hidden="true" />
+                      <div><strong>正在准备本期计算结果</strong><p>页面已经可以操作，结果完成后会立即显示。</p></div>
+                    </div>
+                  ) : oneClickMode === "manual" && !manualDrawValidation.valid ? (
                     <div className="rounded-lg border border-amber-300/20 bg-amber-300/[0.07] p-4 text-sm leading-6 text-amber-50">
                       当前手动开奖还没填完整，系统已暂停公式计算，避免生成错误结果。把号码修正到 1-49 且不重复后，结果会自动恢复。
                     </div>
@@ -2317,22 +2599,22 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
             {activeView === "formula-discovery" && (
               <div className="space-y-4">
                 <Panel className="p-5">
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="rq-discovery-head">
                     <div>
                       <h2 className="font-semibold text-white">公式筛选</h2>
                       <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-500">本地算法按 60% 训练期、20% 验证期、20% 独立留出期筛选，并比较最近表现与稳定差。推荐结果只代表历史筛选，不接入大模型，也不代表未来一定有效；确认加入公式库后才参与综合参考。</p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button size="sm" variant={discoveryDepth === "balanced" ? "primary" : "secondary"} onClick={() => { setDiscoveryElapsedSeconds(0); setDiscoveryDepth("balanced"); }}>稳健组合 · 2-3项</Button>
-                      <Button size="sm" variant={discoveryDepth === "deep" ? "primary" : "secondary"} onClick={() => { setDiscoveryElapsedSeconds(0); setDiscoveryDepth("deep"); }}>深度组合 · 2-4项</Button>
-                      <Button size="sm" variant={discoveryDepth === "advanced" ? "primary" : "secondary"} onClick={() => { setDiscoveryElapsedSeconds(0); setDiscoveryDepth("advanced"); }}>高级组合 · 2-5项</Button>
+                    <div className="rq-discovery-actions">
+                      <Button size="sm" variant={discoveryDepth === "balanced" ? "primary" : "secondary"} onClick={() => { setDiscoveryElapsedSeconds(0); setDiscoveryDepth("balanced"); }}>稳健 · 2-3项</Button>
+                      <Button size="sm" variant={discoveryDepth === "deep" ? "primary" : "secondary"} onClick={() => { setDiscoveryElapsedSeconds(0); setDiscoveryDepth("deep"); }}>深度 · 2-4项</Button>
+                      <Button size="sm" variant={discoveryDepth === "advanced" ? "primary" : "secondary"} onClick={() => { setDiscoveryElapsedSeconds(0); setDiscoveryDepth("advanced"); }}>高级 · 2-5项</Button>
                       <Button size="sm" disabled={discoveryLoading} onClick={() => {
                         setDiscoveryElapsedSeconds(0);
                         setDiscoveryStatus("");
                         setDiscoveryFocusId("");
                         setDiscoveryRefreshId((value) => value + 1);
                       }}><RefreshCw className={cn("h-4 w-4", discoveryLoading && "animate-spin")} />重新筛选</Button>
-                      <Badge tone="cyan">{discoveryLoading ? `后台筛选中 · ${discoveryElapsedSeconds}秒` : `已生成 ${discoveryCandidates.length} 条候选`}</Badge>
+                      <Badge tone="cyan">{discoveryLoading ? `正在筛选 · ${discoveryElapsedSeconds}秒` : `已生成 ${discoveryCandidates.length} 条候选`}</Badge>
                     </div>
                   </div>
                   {discoveryStatus && (
@@ -2342,10 +2624,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     </div>
                   )}
                 </Panel>
-                <div className="rq-discovery-layout grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-                  {isFormulaDiscoveryPreparing || discoveryLoading ? (
-                    <FormulaDiscoveryPendingPanel depth={discoveryDepth} elapsedSeconds={discoveryElapsedSeconds} preparing={isFormulaDiscoveryPreparing} />
-                  ) : (
+                {isFormulaDiscoveryPreparing || discoveryLoading ? (
+                  <FormulaDiscoveryPendingPanel depth={discoveryDepth} elapsedSeconds={discoveryElapsedSeconds} preparing={isFormulaDiscoveryPreparing} />
+                ) : (
+                  <div className="rq-discovery-layout grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
                     <div className="rq-discovery-list grid grid-cols-1 gap-3">
                       {discoveryCandidates.map((candidate) => {
                       const active = focusedDiscoveryCandidate?.rule.id === candidate.rule.id;
@@ -2375,16 +2657,16 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       );
                       })}
                     </div>
-                  )}
-                  <DiscoveryDetailPanel
-                    candidate={focusedDiscoveryCandidate}
-                    categoryLabel={focusedDiscoveryCandidate ? categoryLabel(focusedDiscoveryCandidate.rule.category) : ""}
-                    onAdd={(candidate) => void addDiscoveredRule(candidate.rule)}
-                    existingRule={focusedDiscoveryExistingRule}
-                    draws={activeDraws}
-                    config={config}
-                  />
-                </div>
+                    <DiscoveryDetailPanel
+                      candidate={focusedDiscoveryCandidate}
+                      categoryLabel={focusedDiscoveryCandidate ? categoryLabel(focusedDiscoveryCandidate.rule.category) : ""}
+                      onAdd={(candidate) => void addDiscoveredRule(candidate.rule)}
+                      existingRule={focusedDiscoveryExistingRule}
+                      draws={activeDraws}
+                      config={config}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -2533,16 +2815,21 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                         <Badge tone="green">参与参考 {referenceRuleCount}</Badge>
                       </div>
                     </div>
-                    <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap xl:w-auto xl:justify-end">
-                      <Link href="/formula-editor?mode=new" className="rq-link-button rq-link-button--primary h-9 min-w-0 whitespace-nowrap px-3 text-[13px] sm:h-10 sm:min-w-[116px] sm:px-4 sm:text-sm">
+                    <div className="rq-rule-actions w-full xl:w-auto">
+                      <Link href="/formula-editor?mode=new" className="rq-link-button rq-link-button--primary h-11 min-w-0 whitespace-nowrap px-3 text-[13px] sm:h-10 sm:min-w-[116px] sm:px-4 sm:text-sm">
                         <Plus className="h-4 w-4" />新增规则
                       </Link>
-                      <Button onClick={() => selectedRule && void store.duplicateRule(selectedRule.id)}>复制公式</Button>
-                      <Button onClick={() => exportRuleLibraryWord(rules)}><FileDown className="h-4 w-4" />下载全部公式</Button>
-                      <Link href="/one-click" className="inline-flex h-9 min-w-0 items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/[0.055] px-3 text-[13px] text-white hover:bg-white/[0.09] sm:h-10 sm:min-w-[104px] sm:px-4 sm:text-sm">试算公式</Link>
+                      <button type="button" className="rq-rule-tools-toggle" aria-expanded={mobileRuleToolsOpen} onClick={() => setMobileRuleToolsOpen((open) => !open)}>
+                        <Settings2 className="h-4 w-4" />更多与筛选
+                      </button>
+                      <div className={cn("rq-rule-secondary-actions", mobileRuleToolsOpen && "is-open")}>
+                        <Button onClick={() => selectedRule && void store.duplicateRule(selectedRule.id)}>复制公式</Button>
+                        <Button onClick={() => exportRuleLibraryWord(rules)}><FileDown className="h-4 w-4" />下载全部公式</Button>
+                        <Link href="/one-click" className="rq-link-button">试算公式</Link>
+                      </div>
                     </div>
                   </div>
-                  <div className="rq-rule-filter-grid mb-4 grid grid-cols-1 gap-2 md:grid-cols-3">
+                  <div className={cn("rq-rule-filter-grid mb-4 grid grid-cols-1 gap-2 md:grid-cols-3", mobileRuleToolsOpen && "is-open")}>
                     <Select value={ruleFilter} onChange={(event) => { setRuleFilter(event.target.value as RuleCategory | "all"); setRulePage(0); }}>
                       <option value="all">全部类型</option>
                       {categories.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
@@ -2574,14 +2861,23 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       <option value="name_asc">排序：公式名称</option>
                     </Select>
                   </div>
-                  <nav className="rq-workspace-tabs rq-rules-workspace-tabs mb-4" aria-label="公式管理工作区">
+                   <nav className="rq-workspace-tabs rq-rules-workspace-tabs mb-4" aria-label="公式管理工作区">
                     {[
                       ["library", "公式库", `${visibleRules.length} 条公式`],
-                      ["health", "运行健康", `${exceptionRules.length} 条异常`],
-                      ["reconcile", "规则对账", `${ruleReconciliationRows.length} 个来源`],
+                       ["health", "运行健康", isRuleManagementCalculating ? "整理中" : `${exceptionRules.length} 条异常`],
+                      ["reconcile", "规则对账", `${rawRuleFiles.length} 个来源`],
                     ].map(([key, label, hint]) => <button key={key} type="button" className={cn("rq-workspace-tab", rulesWorkspaceTab === key && "rq-workspace-tab--active")} onClick={() => setRulesWorkspaceTab(key as typeof rulesWorkspaceTab)}><span>{label}</span><small>{hint}</small></button>)}
-                  </nav>
-                  {rulesWorkspaceTab === "library" && <>
+                   </nav>
+                   <div className={cn("rq-analysis-status rq-rule-loading-banner mb-4", isRuleManagementCalculating && "is-loading", ruleManagementBacktestError && "is-error")} role="status" aria-live="polite">
+                     {isRuleManagementCalculating ? (
+                       <><span className="rq-progress-spinner" aria-hidden="true" /><div><strong>公式库已打开，正在整理历史表现</strong><small>现在可以筛选、翻页和查看规则，成功率与最近表现会自动补齐。</small></div></>
+                     ) : ruleManagementBacktestError ? (
+                       <><XCircle className="h-5 w-5" /><div><strong>历史表现暂未完成</strong><small>{ruleManagementBacktestError}</small></div></>
+                     ) : (
+                       <><CheckCircle2 className="h-5 w-5" /><div><strong>历史表现已就绪</strong><small>已完成 {backtest.ruleResults.length} 条启用公式的历史回放与状态整理。</small></div></>
+                     )}
+                   </div>
+                   {rulesWorkspaceTab === "library" && <>
                   <div className="rq-smart-note mb-4 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.055] p-3 text-xs leading-5 text-cyan-50/85">
                     智能学习排行会根据历史成功率、最近10期表现、当前连对、连错和错期自动调权；只是帮助排序和降权，所有结果仍然来自公式计算证据。
                   </div>
@@ -2629,14 +2925,14 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                               className={cn("rq-rule-row", selectedRuleId === rule.id && "rq-rule-row--active")}
                               onClick={() => store.setSelectedRule(rule.id)}
                             >
-                              <span className={cn("rq-rule-row__status", result?.error || !result?.total ? "is-error" : joinsReference ? "is-active" : "is-muted")} />
+                              <span className={cn("rq-rule-row__status", isRuleManagementCalculating ? "is-loading" : result?.error || !result?.total ? "is-error" : joinsReference ? "is-active" : "is-muted")} />
                               <span className="rq-rule-row__body">
                                 <strong>{rule.name}</strong>
                                 <small>{categoryLabel(rule.category)} · {rule.orderMode}序 · {sourceTypeLabel(rule.sourceType)}</small>
                               </span>
                               <span className="rq-rule-row__score">
-                                <strong>{result?.successRate ?? 0}%</strong>
-                                <small>近10 {recentSuccessCount(result)}/{result?.last10.length ?? 0}</small>
+                                <strong>{isRuleManagementCalculating ? "计算中" : `${result?.successRate ?? 0}%`}</strong>
+                                <small>{isRuleManagementCalculating ? "历史表现整理中" : `近10 ${recentSuccessCount(result)}/${result?.last10.length ?? 0}`}</small>
                               </span>
                             </button>
                           );
@@ -2659,13 +2955,13 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                           </div>
                           <div className="rq-formula-display"><span>公式</span><code>{inspectedRule.formula}</code></div>
                           <div className="rq-inspector-metrics">
-                            <div><span>历史成功率</span><strong>{inspectedRuleResult?.successRate ?? 0}%</strong></div>
-                            <div><span>最近 10 期</span><strong>{recentSuccessCount(inspectedRuleResult)}/{inspectedRuleResult?.last10.length ?? 0}</strong></div>
-                            <div><span>当前连对</span><strong>{inspectedRuleResult?.currentStreak ?? 0}</strong></div>
-                            <div><span>当前连错</span><strong>{consecutiveWrong(inspectedRuleResult)}</strong></div>
+                            <div><span>历史成功率</span><strong>{isRuleManagementCalculating ? "—" : `${inspectedRuleResult?.successRate ?? 0}%`}</strong></div>
+                            <div><span>最近 10 期</span><strong>{isRuleManagementCalculating ? "—" : `${recentSuccessCount(inspectedRuleResult)}/${inspectedRuleResult?.last10.length ?? 0}`}</strong></div>
+                            <div><span>当前连对</span><strong>{isRuleManagementCalculating ? "—" : inspectedRuleResult?.currentStreak ?? 0}</strong></div>
+                            <div><span>当前连错</span><strong>{isRuleManagementCalculating ? "—" : consecutiveWrong(inspectedRuleResult)}</strong></div>
                           </div>
                           <div className="rq-inspector-status">
-                            <div><span>计算状态</span><b className={inspectedRuleResult?.error || !inspectedRuleResult?.total ? "is-error" : "is-good"}>{inspectedRuleResult?.error || !inspectedRuleResult?.total ? "计算异常" : "可正常计算"}</b></div>
+                            <div><span>计算状态</span><b className={isRuleManagementCalculating ? "" : inspectedRuleResult?.error || !inspectedRuleResult?.total ? "is-error" : "is-good"}>{isRuleManagementCalculating ? "历史表现整理中" : inspectedRuleResult?.error || !inspectedRuleResult?.total ? "计算异常" : "可正常计算"}</b></div>
                             <div><span>样例核对</span><b>{inspectedRuleSummary?.label ?? "未核对"}</b></div>
                             <div><span>智能排行分</span><b>{ruleSmartScore(inspectedRule, inspectedRuleResult) > -9999 ? ruleSmartScore(inspectedRule, inspectedRuleResult) : "-"}</b></div>
                           </div>
@@ -2789,15 +3085,16 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     <Badge tone={sourceRecordBadgeTone}>{sourceRecordBadgeLabel}</Badge>
                     <span>{sourceStatus || "打开本页会自动同步一次并写入本地库；网站每天更新后，也可以手动重新同步。"}</span>
                   </div>
+                  {referenceStatus && <p className="rq-reference-feedback mt-3" role="status">{referenceStatus}</p>}
                 </Panel>
 
                 <nav className="rq-workspace-tabs rq-candidate-workspace-tabs" aria-label="综合参考工作区">
                   {[
                     ["results", "本期结果", "号码与生肖排序"],
-                    ["evidence", "公式依据", `${candidateReport.signalCount} 条证据`],
-                    ["history", "历史复盘", `${resolvedReferenceHistory.length} 次保存`],
+                    ["evidence", "公式依据", isCandidateReferencePreparing ? "整理中" : `${candidateReport.signalCount} 条证据`],
+                    ["history", "历史复盘", `${referenceHistory.length} 次保存`],
                     ["combo", "自选公式组合", `${selectedComboRuleIds.length || Math.min(6, referenceRuleCount)} 条已选`],
-                    ["operations", "运行状态", exceptionRules.length ? `${exceptionRules.length} 条异常` : "状态正常"],
+                    ["operations", "运行状态", isCandidateReferencePreparing ? "整理中" : exceptionRules.length ? `${exceptionRules.length} 条异常` : "状态正常"],
                   ].map(([key, label, hint]) => (
                     <button key={key} type="button" className={cn("rq-workspace-tab", candidateWorkspaceTab === key && "rq-workspace-tab--active")} onClick={() => setCandidateWorkspaceTab(key as typeof candidateWorkspaceTab)}>
                       <span>{label}</span><small>{hint}</small>
@@ -2849,11 +3146,6 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     <p className="text-sm text-amber-100">当前可能不是最新开奖数据，请先同步。同步新一期开奖后，系统会重新计算综合参考结果。</p>
                   </Panel>
                 )}
-                {referenceStatus && (
-                  <Panel className="p-4">
-                    <p className="text-sm text-emerald-100">{referenceStatus}</p>
-                  </Panel>
-                )}
                 </>}
                 {candidateWorkspaceTab === "history" && <>
                 <Panel className="p-4">
@@ -2872,10 +3164,12 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     </div>
                   </div>
                 </Panel>
-                {isCandidatePoolPreparing && (
-                  <ComputationPendingPanel title="正在准备综合参考结果" desc="页面已经响应，正在延后计算公式信号、候选排序和证据链，避免切换页面卡住。" />
-                )}
-                <ReferenceObservationPanel report={referenceObservation} />
+                {isCandidateHistoryPreparing ? (
+                  <div className="rq-inline-progress" aria-live="polite" aria-busy="true">
+                    <span className="rq-progress-spinner" aria-hidden="true" />
+                    <div><strong>正在准备历史复盘</strong><p>页面保持可用，系统正在按过去开奖逐期重建当时的综合排序。</p></div>
+                  </div>
+                ) : <ReferenceObservationPanel report={referenceObservation} />}
                 <ReferenceHistoryPanel
                   records={resolvedReferenceHistory}
                   config={config}
@@ -2903,7 +3197,12 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   </section>
                 )}
 
-                {candidateWorkspaceTab === "results" && (isCandidatePoolPreparing ? null : candidateReport.ruleCount === 0 || candidateReport.signalCount === 0 ? (
+                {candidateWorkspaceTab === "results" && (isCandidatePoolPreparing || isCandidateReferencePreparing ? (
+                  <div className="rq-inline-progress" aria-live="polite" aria-busy="true">
+                    <span className="rq-progress-spinner" aria-hidden="true" />
+                    <div><strong>正在生成本期综合依据</strong><p>公式历史表现正在整理，完成后会自动显示号码、生肖和对应证据。</p></div>
+                  </div>
+                ) : candidateReport.ruleCount === 0 || candidateReport.signalCount === 0 ? (
                   <ReferenceEmptyState />
                 ) : (
                   <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1fr_420px]">
@@ -3087,9 +3386,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
             {activeView === "reports" && (
               <div className="rq-export-grid">
                 <ExportTile icon={Database} title="开奖数据" desc="导出 CSV / Excel 格式的当前验证开奖数据" action={() => exportDrawsCsv(activeDraws)} />
-                <ExportTile icon={Layers3} title="规则库 JSON" desc="导出当前规则对象，可用于备份或迁移" action={() => exportJson(rules, "rulequant-rules.json")} />
+                <ExportTile icon={Layers3} title="规则库备份" desc="保存当前全部规则，用于备份或迁移" action={() => exportJson(rules, "rulequant-rules.json")} />
                 <ExportTile icon={FileDown} title="全部公式 Word (.docx)" desc="导出手机和电脑都能打开的标准 Word 文档，包含新增公式、统一排版、总览和逐条详情" action={() => exportRuleLibraryWord(rules)} />
-                <ExportTile icon={Settings2} title="配置 JSON" desc="导出生肖、波色、五行和归一化配置" action={() => exportJson(config, "rulequant-config.json")} />
+                <ExportTile icon={Settings2} title="属性配置备份" desc="保存生肖、波色、五行和计算口径" action={() => exportJson(config, "rulequant-config.json")} />
                 <ExportTile icon={BarChart3} title="回测 Excel" desc="导出每期计算过程、输出和验证结果" action={() => exportBacktestExcel(backtest)} />
                 <ExportTile icon={Activity} title="候选池 Excel" desc="导出 Top 号码、Top 生肖和规则信号明细" action={() => exportCandidatePoolExcel(candidateReport)} />
                 <ExportTile icon={FileDown} title="候选池 HTML" desc="生成可直接转发查看的规则共识候选池报告" action={() => exportCandidatePoolHtml(candidateReport)} />
@@ -3102,7 +3401,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
             )}
 
             {activeView === "help" && <RuleUnderstandingPage />}
-          </motion.div>
+          </div>
         </main>
       </div>
     </div>
@@ -3133,7 +3432,7 @@ function OneClickResultCard({
           <p className="text-sm text-white">{item.finalOutputLabel}</p>
           <p className="mt-1 text-xs text-slate-500">{item.mappingLine}</p>
         </div>
-        <Link href="/formula-detail" onClick={onOpen} className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-white/10 bg-white/[0.06] px-3 text-xs text-slate-100 hover:bg-white/[0.09]">
+        <Link href="/formula-detail" onClick={onOpen} className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-white/10 bg-white/[0.06] px-3 text-xs text-slate-100 hover:bg-white/[0.09] sm:h-9">
           <Eye className="h-4 w-4" />查看明细
         </Link>
       {item.error && <p className="mt-3 text-sm text-rose-200">{item.error}</p>}
@@ -3558,7 +3857,7 @@ function NewRuleBuilder({
           </div>
           <div className="grid grid-cols-3 gap-2 rounded-md border border-white/[0.07] bg-black/15 p-1">
             {(["paste", "template", "advanced"] as BuilderMode[]).map((item) => (
-              <button key={item} type="button" onClick={() => setMode(item)} className={cn("h-9 rounded px-3 text-xs font-medium transition", mode === item ? "bg-cyan-300/14 text-cyan-50" : "text-slate-400 hover:bg-white/[0.05] hover:text-white")}>
+              <button key={item} type="button" onClick={() => setMode(item)} className={cn("h-11 rounded px-3 text-xs font-medium transition sm:h-10", mode === item ? "bg-cyan-300/14 text-cyan-50" : "text-slate-400 hover:bg-white/[0.05] hover:text-white")}>
                 {item === "paste" ? "原文识别" : item === "template" ? "模板添加" : "高级"}
               </button>
             ))}
@@ -3672,7 +3971,7 @@ function NewRuleBuilder({
                     type="button"
                     onClick={() => toggleZodiacOffset(item)}
                     className={cn(
-                      "h-9 rounded-md border text-xs font-semibold transition",
+                      "h-11 rounded-md border text-xs font-semibold transition sm:h-10",
                       selectedZodiacOffsets.includes(item)
                         ? "border-cyan-300/50 bg-cyan-300/15 text-cyan-50"
                         : "border-white/[0.08] bg-white/[0.03] text-slate-400 hover:bg-white/[0.06] hover:text-white",
@@ -4685,6 +4984,7 @@ function ConfigEditor({
 }) {
   const [text, setText] = useState("");
   const [error, setError] = useState("");
+  const [saveStatus, setSaveStatus] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"overview" | "tables" | "advanced" | "maintenance">("overview");
 
@@ -4692,6 +4992,7 @@ function ConfigEditor({
     if (!advancedOpen && !text) {
       setText(JSON.stringify(config, null, 2));
     }
+    setSaveStatus("");
     setAdvancedOpen((current) => !current);
   }
 
@@ -4700,7 +5001,9 @@ function ConfigEditor({
       const parsed = JSON.parse(text);
       await updateConfig(parsed);
       setError("");
+      setSaveStatus("配置已保存并通过格式校验，后续计算将使用新配置。");
     } catch (saveError) {
+      setSaveStatus("");
       setError(saveError instanceof Error ? saveError.message : String(saveError));
     }
   }
@@ -4717,7 +5020,7 @@ function ConfigEditor({
         {[
           ["overview", "基础规则", "常用规则口径"],
           ["tables", "属性表", "生肖、波色、五行"],
-          ["advanced", "高级配置", "底层 JSON"],
+          ["advanced", "高级设置", "规则参数"],
           ["maintenance", "数据维护", "导出与重置"],
         ].map(([key, label, hint]) => (
           <button key={key} type="button" className={cn(settingsTab === key && "is-active")} onClick={() => setSettingsTab(key as typeof settingsTab)}><strong>{label}</strong><small>{hint}</small></button>
@@ -4749,16 +5052,17 @@ function ConfigEditor({
         </>}
 
         {settingsTab === "advanced" && <>
-          <div className="rq-section-head"><div><p className="rq-eyebrow">高级配置</p><h2>底层规则配置</h2><p>仅在需要调整生肖、波色、五行、段位或偏移序列时使用。</p></div><Button onClick={toggleAdvancedConfig}>{advancedOpen ? "隐藏编辑器" : "打开编辑器"}</Button></div>
-          {advancedOpen ? <Textarea value={text} onChange={(event) => setText(event.target.value)} className="mt-5 min-h-[460px] font-mono text-sm" /> : <div className="rq-empty-copy mt-5">高级编辑器默认关闭，普通使用不需要接触内部配置。</div>}
+          <div className="rq-section-head"><div><p className="rq-eyebrow">高级设置</p><h2>规则参数</h2><p>仅在需要调整生肖、波色、五行、段位或偏移序列时使用。</p></div><Button onClick={toggleAdvancedConfig}>{advancedOpen ? "收起参数" : "编辑参数"}</Button></div>
+          {advancedOpen ? <Textarea value={text} onChange={(event) => setText(event.target.value)} className="mt-5 min-h-[460px] font-mono text-sm" /> : <div className="rq-empty-copy mt-5">规则参数默认收起，日常使用无需修改。</div>}
           {advancedOpen && error && <p className="mt-3 text-sm text-rose-200">{error}</p>}
-          {advancedOpen && <div className="mt-4 flex gap-2"><Button variant="primary" onClick={saveConfig}><Save className="h-4 w-4" />保存并校验</Button><Button onClick={() => exportJson(config, "rulequant-config.json")}><FileJson className="h-4 w-4" />导出 JSON</Button></div>}
+          {advancedOpen && saveStatus && <p className="rq-save-confirmation mt-3" role="status">{saveStatus}</p>}
+          {advancedOpen && <div className="mt-4 flex gap-2"><Button variant="primary" onClick={saveConfig}><Save className="h-4 w-4" />保存并校验</Button><Button onClick={() => exportJson(config, "rulequant-config.json")}><FileJson className="h-4 w-4" />导出参数备份</Button></div>}
         </>}
 
         {settingsTab === "maintenance" && <>
           <div className="rq-section-head"><div><p className="rq-eyebrow">数据维护</p><h2>备份与恢复</h2><p>危险操作集中在这里，避免日常使用时误触。</p></div></div>
           <div className="rq-maintenance-actions">
-            <button type="button" onClick={() => exportJson(config, "rulequant-config.json")}><FileJson /><span><strong>导出当前配置</strong><small>保存为 JSON 备份</small></span></button>
+            <button type="button" onClick={() => exportJson(config, "rulequant-config.json")}><FileJson /><span><strong>导出当前配置</strong><small>保存为配置备份</small></span></button>
             <button type="button" className="is-danger" onClick={() => { if (window.confirm("确认恢复示例数据吗？当前本地修改会被替换。")) void resetSeed(); }}><RefreshCw /><span><strong>恢复示例数据</strong><small>此操作需要再次确认</small></span></button>
           </div>
         </>}

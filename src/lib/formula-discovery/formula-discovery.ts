@@ -364,7 +364,7 @@ export function discoverFormulaCandidates(input: FormulaDiscoveryInput): Formula
       ...makeRule(category, formula, index + termCount * 10000, orderMode),
       enabled: true,
     }))));
-    const batchResults = runBacktest({ draws: sortedDraws, rules, config: input.config }).ruleResults;
+    const batchResults = runBacktest({ draws: sortedDraws, rules, config: input.config, cache: false }).ruleResults;
     const depthCandidates: FormulaDiscoveryCandidate[] = [];
 
     batchResults.forEach((result) => {

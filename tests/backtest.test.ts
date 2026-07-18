@@ -37,10 +37,32 @@ describe("backtest engine", () => {
     };
 
     clearBacktestCache();
-    runBacktest({ draws, rules: [rule], config: defaultConfig });
-    runBacktest({ draws, rules: [rule], config: defaultConfig });
+    const first = runBacktest({ draws, rules: [rule], config: defaultConfig });
+    const second = runBacktest({ draws, rules: [rule], config: defaultConfig });
 
     expect(getBacktestCacheSize()).toBe(1);
+    expect(second).toBe(first);
+  });
+
+  test("skips and bounds cache entries for temporary screening runs", () => {
+    const makeRule = (index: number): RuleRecord => ({
+      ...baseRule,
+      id: `cache-bound-${index}`,
+      name: `缓存边界 ${index}`,
+      category: "kill_zodiac",
+      formula: `平1 + 平2 + ${index}`,
+      normalizer: "subtract_48_to_1_49",
+      target: "special_zodiac",
+    });
+
+    clearBacktestCache();
+    runBacktest({ draws, rules: [makeRule(0)], config: defaultConfig, cache: false });
+    expect(getBacktestCacheSize()).toBe(0);
+
+    for (let index = 1; index <= 8; index += 1) {
+      runBacktest({ draws, rules: [makeRule(index)], config: defaultConfig });
+    }
+    expect(getBacktestCacheSize()).toBe(6);
   });
 
   test("runs kill zodiac with detailed calculation process", () => {

@@ -15,6 +15,7 @@ type GenerateCandidatePoolInput = {
 
 const RISK_NOTICE = "综合参考结果仅用于历史数据研究、规则公式计算和参考排序，不代表一定正确。";
 const candidatePoolCache = new Map<string, CandidatePoolReport>();
+const CANDIDATE_POOL_CACHE_LIMIT = 32;
 
 function sortDraws(draws: DrawRecord[]): DrawRecord[] {
   return [...draws].sort((a, b) => {
@@ -98,7 +99,11 @@ function focusedNumbers(candidates: CandidateNumber[], count: number): Candidate
 export function generateCandidatePool(input: GenerateCandidatePoolInput): CandidatePoolReport {
   const key = candidateCacheKey(input);
   const cached = candidatePoolCache.get(key);
-  if (cached) return cached;
+  if (cached) {
+    candidatePoolCache.delete(key);
+    candidatePoolCache.set(key, cached);
+    return cached;
+  }
 
   const sortedDraws = sortDraws(input.draws);
   const latestDraw = sortedDraws.at(-1);
@@ -130,6 +135,11 @@ export function generateCandidatePool(input: GenerateCandidatePoolInput): Candid
   };
 
   candidatePoolCache.set(key, report);
+  while (candidatePoolCache.size > CANDIDATE_POOL_CACHE_LIMIT) {
+    const oldestKey = candidatePoolCache.keys().next().value;
+    if (!oldestKey) break;
+    candidatePoolCache.delete(oldestKey);
+  }
   return report;
 }
 

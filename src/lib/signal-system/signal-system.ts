@@ -37,10 +37,10 @@ function recentRate(result?: RuleBacktestResult): number {
 }
 
 function wrongStreak(result?: RuleBacktestResult): number {
-  if (!result?.details.length) return 0;
+  if (!result?.last10.length) return 0;
   let count = 0;
-  for (let index = result.details.length - 1; index >= 0; index -= 1) {
-    if (result.details[index].success) break;
+  for (let index = result.last10.length - 1; index >= 0; index -= 1) {
+    if (result.last10[index]) break;
     count += 1;
   }
   return count;

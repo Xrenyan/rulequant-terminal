@@ -52,9 +52,17 @@ export function canRuleParticipateInReference(rule: RuleRecord, summary?: Pick<R
 }
 
 export function buildRuleValidationSummaries(input: BuildRuleValidationSummariesInput): RuleValidationSummary[] {
+  const sampleResultsByRule = new Map<string, SampleCheckResult[]>();
+  for (const result of input.sampleResults) {
+    const existing = sampleResultsByRule.get(result.ruleId);
+    if (existing) existing.push(result);
+    else sampleResultsByRule.set(result.ruleId, [result]);
+  }
+  const backtestByRule = new Map(input.backtest.ruleResults.map((item) => [item.rule.id, item]));
+
   return input.rules.map((rule) => {
-    const sampleResults = input.sampleResults.filter((item) => item.ruleId === rule.id);
-    const backtest = input.backtest.ruleResults.find((item) => item.rule.id === rule.id);
+    const sampleResults = sampleResultsByRule.get(rule.id) ?? [];
+    const backtest = backtestByRule.get(rule.id);
     const passedSampleCount = sampleResults.filter((item) => item.passed).length;
     const mismatchCount = sampleResults.length - passedSampleCount;
 

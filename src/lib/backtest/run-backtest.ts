@@ -15,38 +15,13 @@ type RunBacktestInput = {
   config: RuleQuantConfig;
   fromIssue?: string;
   toIssue?: string;
+  cache?: boolean;
 };
 
 export { calculateRule, type CalculateRuleContext };
 
 const backtestCache = new Map<string, BacktestResult>();
-
-function cloneBacktest(result: BacktestResult): BacktestResult {
-  return {
-    generatedAt: result.generatedAt,
-    ruleResults: result.ruleResults.map((ruleResult) => ({
-      ...ruleResult,
-      rule: { ...ruleResult.rule, positionPattern: [...ruleResult.rule.positionPattern], tags: [...ruleResult.rule.tags], examples: [...ruleResult.rule.examples] },
-      last10: [...ruleResult.last10],
-      failedIssues: [...ruleResult.failedIssues],
-      details: ruleResult.details.map((detail) => ({
-        ...detail,
-        currentNumbers: [...detail.currentNumbers],
-        lOrder: [...detail.lOrder],
-        dOrder: [...detail.dOrder],
-        variables: { ...detail.variables },
-        process: [...detail.process],
-        normalizerSteps: [...detail.normalizerSteps],
-        finalResult: Array.isArray(detail.finalResult) ? [...detail.finalResult] as number[] | string[] : detail.finalResult,
-        mappedResult: [...detail.mappedResult],
-        secondaryMappedResult: detail.secondaryMappedResult ? [...detail.secondaryMappedResult] : undefined,
-        nextNumbers: detail.nextNumbers ? [...detail.nextNumbers] : undefined,
-        nextSpecialAttributes: detail.nextSpecialAttributes ? { ...detail.nextSpecialAttributes } : undefined,
-        futureChecks: detail.futureChecks.map((check) => ({ ...check, specialAttributes: { ...check.specialAttributes } })),
-      })),
-    })),
-  };
-}
+const BACKTEST_CACHE_LIMIT = 6;
 
 function backtestCacheKey(input: RunBacktestInput): string {
   return JSON.stringify({
@@ -149,9 +124,14 @@ function buildRuleResult(rule: RuleRecord, normalizedDraws: NormalizedDraw[], co
 }
 
 export function runBacktest(input: RunBacktestInput): BacktestResult {
-  const key = backtestCacheKey(input);
-  const cached = backtestCache.get(key);
-  if (cached) return cloneBacktest(cached);
+  const shouldCache = input.cache !== false;
+  const key = shouldCache ? backtestCacheKey(input) : "";
+  const cached = shouldCache ? backtestCache.get(key) : undefined;
+  if (cached) {
+    backtestCache.delete(key);
+    backtestCache.set(key, cached);
+    return cached;
+  }
 
   const normalizedDraws = input.draws
     .map((draw) => normalizeDraw(draw, input.config))
@@ -164,6 +144,13 @@ export function runBacktest(input: RunBacktestInput): BacktestResult {
       .map((rule) => buildRuleResult(rule, normalizedDraws, input.config)),
   };
 
-  backtestCache.set(key, cloneBacktest(result));
-  return cloneBacktest(result);
+  if (shouldCache) {
+    backtestCache.set(key, result);
+    while (backtestCache.size > BACKTEST_CACHE_LIMIT) {
+      const oldestKey = backtestCache.keys().next().value;
+      if (!oldestKey) break;
+      backtestCache.delete(oldestKey);
+    }
+  }
+  return result;
 }

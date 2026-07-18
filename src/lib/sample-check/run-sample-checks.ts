@@ -1,5 +1,5 @@
 import { runBacktest } from "@/lib/backtest/run-backtest";
-import type { DrawRecord, RuleQuantConfig, RuleRecord, SampleCase, SampleCheckResult } from "@/types/domain";
+import type { BacktestResult, DrawRecord, RuleQuantConfig, RuleRecord, SampleCase, SampleCheckResult } from "@/types/domain";
 
 function sameValue(expected: unknown, actual: unknown): boolean {
   return JSON.stringify(expected) === JSON.stringify(actual);
@@ -10,10 +10,11 @@ type Input = {
   draws: DrawRecord[];
   rules: RuleRecord[];
   config: RuleQuantConfig;
+  backtest?: BacktestResult;
 };
 
 export function runSampleChecks(input: Input): SampleCheckResult[] {
-  const backtest = runBacktest({ draws: input.draws, rules: input.rules, config: input.config });
+  const backtest = input.backtest ?? runBacktest({ draws: input.draws, rules: input.rules, config: input.config });
 
   return input.cases.map((sampleCase) => {
     const ruleResult = backtest.ruleResults.find((item) => item.rule.id === sampleCase.ruleId);

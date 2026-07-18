@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Crosshair, RefreshCw } from "lucide-react";
 import {
-  analyzeBinaryTrend,
   analyzeHistoricalNineGrid,
   DRAW_POSITION_LABELS,
   type BinaryTrendReport,
@@ -117,7 +116,42 @@ function NineGridWorkspace({ draws, config }: { draws: DrawRecord[]; config: Rul
   const [section, setSection] = useState<"ranking" | "backtest" | "evidence">("ranking");
   const [showAllRankings, setShowAllRankings] = useState(false);
   const [visibleGridCount, setVisibleGridCount] = useState(4);
-  const report = useMemo(() => analyzeHistoricalNineGrid(draws, config, mode), [draws, config, mode]);
+  const requestKey = useMemo(() => {
+    const latest = draws.at(-1);
+    return JSON.stringify([mode, draws.length, latest?.issue, latest?.n1, latest?.n2, latest?.n3, latest?.n4, latest?.n5, latest?.n6, latest?.special, config]);
+  }, [draws, config, mode]);
+  const [analysis, setAnalysis] = useState<{ key: string; report?: ReturnType<typeof analyzeHistoricalNineGrid>; loading: boolean; error: string }>({ key: "", loading: true, error: "" });
+
+  useEffect(() => {
+    let disposed = false;
+    const worker = new Worker(new URL("../workers/special-analysis.worker.ts", import.meta.url));
+    setAnalysis({ key: requestKey, loading: true, error: "" });
+    worker.onmessage = (event: MessageEvent<{ ok: boolean; report?: ReturnType<typeof analyzeHistoricalNineGrid>; error?: string }>) => {
+      if (disposed) return;
+      setAnalysis({ key: requestKey, report: event.data.report, loading: false, error: event.data.ok ? "" : event.data.error ?? "九宫格分析失败" });
+      worker.terminate();
+    };
+    worker.onerror = (event) => {
+      if (disposed) return;
+      setAnalysis({ key: requestKey, loading: false, error: event.message || "九宫格分析暂时无法启动" });
+      worker.terminate();
+    };
+    worker.postMessage({ kind: "nine-grid", draws, config, mode });
+    return () => {
+      disposed = true;
+      worker.terminate();
+    };
+  }, [draws, config, mode, requestKey]);
+
+  const report = analysis.key === requestKey ? analysis.report : undefined;
+
+  if (analysis.loading || analysis.key !== requestKey) {
+    return <Panel className="p-5"><div className="rq-inline-progress"><span className="rq-progress-spinner" aria-hidden="true" /><div><strong>正在整理九宫格历史数据</strong><p>页面仍可切换和滚动，结果完成后会自动显示。</p></div></div></Panel>;
+  }
+
+  if (analysis.error) {
+    return <Panel className="p-5"><Badge tone="rose">分析未完成</Badge><h3 className="mt-3 font-semibold text-white">{analysis.error}</h3></Panel>;
+  }
 
   if (!report) {
     return <Panel className="p-5"><Badge tone="cyan">历史锚点九宫格</Badge><h3 className="mt-3 font-semibold text-white">开奖记录不足，暂时无法生成九宫格排行。</h3></Panel>;
@@ -207,10 +241,43 @@ function TrendCard({ report }: { report: BinaryTrendReport }) {
   );
 }
 
+function BinaryTrendWorkspace({ draws }: { draws: DrawRecord[] }) {
+  const latest = draws.at(-1);
+  const requestKey = `${draws.length}:${latest?.issue ?? ""}:${latest?.special ?? ""}`;
+  const [analysis, setAnalysis] = useState<{ key: string; size?: BinaryTrendReport; parity?: BinaryTrendReport; loading: boolean; error: string }>({ key: "", loading: true, error: "" });
+
+  useEffect(() => {
+    let disposed = false;
+    const worker = new Worker(new URL("../workers/special-analysis.worker.ts", import.meta.url));
+    setAnalysis({ key: requestKey, loading: true, error: "" });
+    worker.onmessage = (event: MessageEvent<{ ok: boolean; size?: BinaryTrendReport; parity?: BinaryTrendReport; error?: string }>) => {
+      if (disposed) return;
+      setAnalysis({ key: requestKey, size: event.data.size, parity: event.data.parity, loading: false, error: event.data.ok ? "" : event.data.error ?? "走势分析失败" });
+      worker.terminate();
+    };
+    worker.onerror = (event) => {
+      if (disposed) return;
+      setAnalysis({ key: requestKey, loading: false, error: event.message || "走势分析暂时无法启动" });
+      worker.terminate();
+    };
+    worker.postMessage({ kind: "binary", draws });
+    return () => {
+      disposed = true;
+      worker.terminate();
+    };
+  }, [draws, requestKey]);
+
+  if (analysis.loading || analysis.key !== requestKey) {
+    return <Panel className="p-5"><div className="rq-inline-progress"><span className="rq-progress-spinner" aria-hidden="true" /><div><strong>正在分析大小单双走势</strong><p>正在整理近期开奖和滚动验证结果。</p></div></div></Panel>;
+  }
+  if (analysis.error || !analysis.size || !analysis.parity) {
+    return <Panel className="p-5"><Badge tone="rose">分析未完成</Badge><h3 className="mt-3 font-semibold text-white">{analysis.error || "样本不足"}</h3></Panel>;
+  }
+  return <div className="grid grid-cols-1 gap-4 xl:grid-cols-2"><TrendCard report={analysis.size} /><TrendCard report={analysis.parity} /></div>;
+}
+
 export function SpecialAnalysisView({ draws, config, dataSourceLabel, sourceLoading, onSync }: Props) {
   const [tab, setTab] = useState<"nine-grid" | "trends">("nine-grid");
-  const sizeTrend = useMemo(() => analyzeBinaryTrend(draws, "size"), [draws]);
-  const parityTrend = useMemo(() => analyzeBinaryTrend(draws, "parity"), [draws]);
 
   return (
     <div className="space-y-4">
@@ -226,7 +293,7 @@ export function SpecialAnalysisView({ draws, config, dataSourceLabel, sourceLoad
         <button type="button" className={cn("rq-workspace-tab", tab === "trends" && "rq-workspace-tab--active")} onClick={() => setTab("trends")}><span>大小单双</span><small>近20-30期走势</small></button>
       </nav>
 
-      {tab === "nine-grid" ? <NineGridWorkspace draws={draws} config={config} /> : <div className="grid grid-cols-1 gap-4 xl:grid-cols-2"><TrendCard report={sizeTrend} /><TrendCard report={parityTrend} /></div>}
+      {tab === "nine-grid" ? <NineGridWorkspace draws={draws} config={config} /> : <BinaryTrendWorkspace draws={draws} />}
     </div>
   );
 }

@@ -356,6 +356,8 @@ async function loadCloudStateFromApi(): Promise<RuleQuantCloudState | null> {
   })[0] ?? null;
 }
 
+let hydrationPromise: Promise<void> | null = null;
+
 export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
   draws: seedDraws,
   rules: mergeRulesWithSeedRules(seedRules),
@@ -371,14 +373,23 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
   hasHydrated: false,
   selectedRuleId: seedRules[0]?.id ?? "",
   hydrate: async () => {
-    const persisted = await loadPersistedState();
-    const preferredSelectedRuleId = readSelectedRuleId();
-    set(buildHydratedState({ persisted, current: get(), preferredSelectedRuleId }));
+    if (get().hasHydrated) return;
+    if (hydrationPromise) return hydrationPromise;
+    hydrationPromise = (async () => {
+      const persisted = await loadPersistedState();
+      const preferredSelectedRuleId = readSelectedRuleId();
+      set(buildHydratedState({ persisted, current: get(), preferredSelectedRuleId }));
 
-    // Network discovery must never block the first usable screen. Reconcile a
-    // fresher cloud snapshot after local data is already interactive.
-    const cloud = await loadCloudStateFromApi();
-    if (cloud) set(buildHydratedState({ persisted, cloud, current: get(), preferredSelectedRuleId: readSelectedRuleId() }));
+      // Network discovery must never block the first usable screen. Reconcile a
+      // fresher cloud snapshot after local data is already interactive.
+      const cloud = await loadCloudStateFromApi();
+      if (cloud) set(buildHydratedState({ persisted, cloud, current: get(), preferredSelectedRuleId: readSelectedRuleId() }));
+    })();
+    try {
+      await hydrationPromise;
+    } finally {
+      hydrationPromise = null;
+    }
   },
   persist: async () => {
     const state = get();

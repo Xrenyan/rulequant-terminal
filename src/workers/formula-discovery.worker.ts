@@ -25,7 +25,7 @@ self.onmessage = (event: MessageEvent<Request>) => {
         : depth === "deep"
           ? ["sum", "alternating"]
           : ["sum"],
-      combinationLimitPerTerm: depth === "advanced" ? 18 : depth === "deep" ? 28 : 36,
+      combinationLimitPerTerm: depth === "advanced" ? 18 : depth === "deep" ? 26 : 24,
       minTrainingRate: depth === "advanced" ? 68 : 62,
       minValidationRate: depth === "advanced" ? 68 : 62,
       minHoldoutRate: depth === "advanced" ? 68 : 62,

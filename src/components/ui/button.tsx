@@ -15,7 +15,7 @@ const variants = {
 };
 
 const sizes = {
-  sm: "h-8 min-h-8 px-3 text-[13px]",
+  sm: "h-9 min-h-9 px-3 text-[13px] max-sm:h-11 max-sm:min-h-11",
   md: "h-10 min-h-10 px-4 text-sm max-sm:h-11 max-sm:min-h-11 max-sm:px-3 max-sm:text-[13px]",
   icon: "h-10 w-10 min-w-10 p-0 max-sm:h-11 max-sm:w-11 max-sm:min-w-11",
 };

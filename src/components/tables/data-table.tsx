@@ -51,15 +51,15 @@ export function DataTable<T>({ data, columns, dense = false }: DataTableProps<T>
           <span className="sm:hidden">横向滑动查看更多列</span>
           <span className="shrink-0">显示 {table.getFilteredRowModel().rows.length} / {data.length}</span>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="rq-button rq-button--secondary h-8 rounded-md border px-3 text-[13px] disabled:opacity-40">上一页</button>
+            <button type="button" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="rq-button rq-button--secondary h-10 rounded-md border px-3 text-[13px] disabled:opacity-40">上一页</button>
             <span className="min-w-16 text-center">第 {table.getState().pagination.pageIndex + 1}/{Math.max(table.getPageCount(), 1)} 页</span>
-            <button type="button" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="rq-button rq-button--secondary h-8 rounded-md border px-3 text-[13px] disabled:opacity-40">下一页</button>
+            <button type="button" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="rq-button rq-button--secondary h-10 rounded-md border px-3 text-[13px] disabled:opacity-40">下一页</button>
           </div>
         </div>
       </div>
-      <div className="rq-scrollbar max-h-[560px] overflow-auto [-webkit-overflow-scrolling:touch]">
+      <div className="rq-scrollbar overflow-x-auto overflow-y-visible [-webkit-overflow-scrolling:touch]">
         <table className="w-full min-w-[640px] border-collapse text-left text-xs sm:min-w-[760px] sm:text-sm">
-          <thead className="rq-data-table__head sticky top-0 z-10 backdrop-blur">
+          <thead className="rq-data-table__head backdrop-blur">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (

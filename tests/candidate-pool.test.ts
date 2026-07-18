@@ -48,6 +48,27 @@ describe("candidate pool", () => {
     expect(candidateWithEvidence?.opposeRules[0].action).toBe("exclude");
   });
 
+  it("preserves historical weighting when worker input omits detailed ledgers", () => {
+    const rules = seedRules.map((rule) => ({ ...rule, manuallyConfirmed: true }));
+    const backtest = runBacktest({ draws: seedDraws, rules, config: seedConfig });
+    const compactBacktest = {
+      ...backtest,
+      ruleResults: backtest.ruleResults.map((result) => ({ ...result, details: [], failedIssues: [] })),
+    };
+
+    clearCandidatePoolCache();
+    const fullReport = generateCandidatePool({ draws: seedDraws, rules, config: seedConfig, backtest });
+    clearCandidatePoolCache();
+    const compactReport = generateCandidatePool({ draws: seedDraws, rules, config: seedConfig, backtest: compactBacktest });
+
+    expect(compactReport.ruleCount).toBe(fullReport.ruleCount);
+    expect(compactReport.signalCount).toBe(fullReport.signalCount);
+    expect(compactReport.topNumbers18.map((candidate) => [candidate.number, candidate.score]))
+      .toEqual(fullReport.topNumbers18.map((candidate) => [candidate.number, candidate.score]));
+    expect(compactReport.topZodiacs9.map((candidate) => [candidate.zodiac, candidate.score]))
+      .toEqual(fullReport.topZodiacs9.map((candidate) => [candidate.zodiac, candidate.score]));
+  });
+
   it("keeps kill-three-as-nine as both nine-zodiac support and kill-zodiac opposition", () => {
     const confirmedRules = seedRules.map((rule) => ({ ...rule, manuallyConfirmed: true }));
     const backtest = runBacktest({ draws: seedDraws, rules: confirmedRules, config: seedConfig });
