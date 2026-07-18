@@ -25,6 +25,10 @@ jobs:
       RULEQUANT_PAGES_BRANCH: "main"
       RULEQUANT_PAGES_URL: "https://xrenyan.github.io/rulequant-terminal-pages/dashboard/"
       RULEQUANT_PAGES_DEPLOY_KEY: ${{ secrets.RULEQUANT_PAGES_DEPLOY_KEY }}
+      TCB_SECRET_ID: ${{ secrets.TCB_SECRET_ID }}
+      TCB_SECRET_KEY: ${{ secrets.TCB_SECRET_KEY }}
+      TCB_ENV_ID: ${{ secrets.TCB_ENV_ID }}
+      TCB_PUBLIC_URL: ${{ vars.TCB_PUBLIC_URL }}
     steps:
       - name: Check Pages deploy key
         shell: bash
@@ -123,6 +127,32 @@ jobs:
             git push origin "${RULEQUANT_PAGES_BRANCH}"
           fi
 
+      - name: Check CloudBase mirror configuration
+        if: steps.publish_check.outputs.publish == 'true'
+        id: cloudbase_config
+        shell: bash
+        run: |
+          if [ -n "$TCB_SECRET_ID" ] && [ -n "$TCB_SECRET_KEY" ] && [ -n "$TCB_ENV_ID" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "CloudBase mirror is configured."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "CloudBase mirror is not configured; GitHub Pages remains the active host."
+          fi
+
+      - name: Install CloudBase CLI
+        if: steps.cloudbase_config.outputs.enabled == 'true'
+        run: npm install --global @cloudbase/cli
+
+      - name: Publish CloudBase mainland mirror
+        if: steps.cloudbase_config.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tcb login --apiKeyId "$TCB_SECRET_ID" --apiKey "$TCB_SECRET_KEY"
+          tcb hosting deploy ./out /rulequant-terminal-pages -e "$TCB_ENV_ID"
+          tcb hosting deploy ./deploy/cloudbase-root / -e "$TCB_ENV_ID"
+
       - name: Verify Pages data
         shell: bash
         run: |
@@ -142,6 +172,33 @@ jobs:
             const count = Array.isArray(state?.draws) ? state.draws.length : 0;
             if (!latest || count === 0) throw new Error('static state missing latestIssue/draws');
             console.log(JSON.stringify({ latestIssue: latest, drawCount: count, dashboardStatus: page.status }, null, 2));
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Verify CloudBase mainland mirror
+        if: steps.cloudbase_config.outputs.enabled == 'true' && env.TCB_PUBLIC_URL != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 8
+          node - <<'NODE'
+          (async () => {
+            const root = process.env.TCB_PUBLIC_URL.replace(/\/$/, '');
+            const stamp = Date.now();
+            const stateUrl = `${root}/rulequant-terminal-pages/static-cloud-state.json?t=${stamp}`;
+            const pageUrl = `${root}/rulequant-terminal-pages/dashboard/?t=${stamp}`;
+            const stateResponse = await fetch(stateUrl, { cache: 'no-store' });
+            if (!stateResponse.ok) throw new Error(`CloudBase state HTTP ${stateResponse.status}`);
+            const state = await stateResponse.json();
+            const pageResponse = await fetch(pageUrl, { cache: 'no-store' });
+            if (!pageResponse.ok) throw new Error(`CloudBase dashboard HTTP ${pageResponse.status}`);
+            const latest = state?.meta?.latestIssue;
+            const count = Array.isArray(state?.draws) ? state.draws.length : 0;
+            if (!latest || count === 0) throw new Error('CloudBase state missing latestIssue/draws');
+            console.log(JSON.stringify({ latestIssue: latest, drawCount: count, dashboardStatus: pageResponse.status }, null, 2));
           })().catch((error) => {
             console.error(error);
             process.exit(1);
