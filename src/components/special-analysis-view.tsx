@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Crosshair, RefreshCw } from "lucide-react";
+import Image from "next/image";
 import {
   analyzeHistoricalNineGrid,
   DRAW_POSITION_LABELS,
@@ -25,6 +26,14 @@ type Props = {
   onSync: () => void;
 };
 
+function zodiacBannerPath() {
+  return `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/zodiac/zodiac-paper-cut-banner.png`;
+}
+
+type NineGridReport = ReturnType<typeof analyzeHistoricalNineGrid>;
+const nineGridReportCache = new Map<string, NineGridReport>();
+const binaryTrendCache = new Map<string, { size: BinaryTrendReport; parity: BinaryTrendReport }>();
+
 function numberLabel(number: number, config: RuleQuantConfig) {
   return `${String(number).padStart(2, "0")} ${getNumberAttributes(number, config).zodiac}`;
 }
@@ -41,15 +50,15 @@ function Metric({ label, value }: { label: string; value: string | number }) {
 function HistoricalGridCard({ occurrence }: { occurrence: HistoricalNineGridOccurrence }) {
   const rowOffsets = [-1, 0, 1] as const;
   return (
-    <section className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
+    <section className="rq-nine-evidence-card" aria-label={`${occurrence.issue}期 ${DRAW_POSITION_LABELS[occurrence.positionIndex]} 九宫格`}>
       <div className="flex items-center justify-between gap-2">
         <strong className="text-sm text-white">{occurrence.issue}期 · {DRAW_POSITION_LABELS[occurrence.positionIndex]}</strong>
         <Badge tone="cyan">定位</Badge>
       </div>
-      <div className="mt-3 grid grid-cols-[54px_repeat(3,minmax(0,1fr))] gap-1.5">
+      <div className="rq-nine-evidence-grid" role="grid" aria-label="历史号码九宫格">
         <span />
         {occurrence.columnIndexes.map((index) => (
-          <span key={index} className="pb-1 text-center text-xs text-slate-500">{DRAW_POSITION_LABELS[index]}</span>
+          <span key={index} role="columnheader" className="pb-1 text-center text-xs text-slate-500">{DRAW_POSITION_LABELS[index]}</span>
         ))}
         {rowOffsets.map((rowOffset) => {
           const cells = occurrence.cells.filter((cell) => cell.rowOffset === rowOffset);
@@ -57,7 +66,7 @@ function HistoricalGridCard({ occurrence }: { occurrence: HistoricalNineGridOccu
             <div className="contents" key={rowOffset}>
               <span className={cn("flex items-center justify-center text-xs tabular-nums", rowOffset === 0 ? "font-semibold text-cyan-200" : "text-slate-500")}>{cells[0]?.issue.slice(-3)}</span>
               {cells.map((cell) => (
-                <div key={`${cell.issue}-${cell.positionIndex}`} className={cn("relative flex min-h-16 flex-col items-center justify-center rounded-lg border text-center", cell.isAnchor ? "border-cyan-300/55 bg-cyan-300/15" : rowOffset === 0 ? "border-white/[0.12] bg-white/[0.05]" : "border-white/[0.07] bg-black/10")}>
+                <div role="gridcell" aria-label={`${cell.issue}期 ${DRAW_POSITION_LABELS[cell.positionIndex]} ${String(cell.number).padStart(2, "0")} ${cell.zodiac}${cell.isAnchor ? "，定位格" : ""}`} key={`${cell.issue}-${cell.positionIndex}`} className={cn("rq-nine-evidence-cell", cell.isAnchor ? "is-anchor" : rowOffset === 0 ? "is-focus-row" : "")}>
                   <strong className="text-base text-white tabular-nums">{String(cell.number).padStart(2, "0")}</strong>
                   <span className="mt-1 text-xs text-slate-400">{cell.zodiac}</span>
                   {cell.isAnchor ? <Crosshair className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-cyan-200" /> : null}
@@ -120,14 +129,24 @@ function NineGridWorkspace({ draws, config }: { draws: DrawRecord[]; config: Rul
     const latest = draws.at(-1);
     return JSON.stringify([mode, draws.length, latest?.issue, latest?.n1, latest?.n2, latest?.n3, latest?.n4, latest?.n5, latest?.n6, latest?.special, config]);
   }, [draws, config, mode]);
-  const [analysis, setAnalysis] = useState<{ key: string; report?: ReturnType<typeof analyzeHistoricalNineGrid>; loading: boolean; error: string }>({ key: "", loading: true, error: "" });
+  const [analysis, setAnalysis] = useState<{ key: string; report?: NineGridReport; loading: boolean; error: string }>({ key: "", loading: true, error: "" });
 
   useEffect(() => {
     let disposed = false;
+    const cached = nineGridReportCache.get(requestKey);
+    if (cached) {
+      queueMicrotask(() => {
+        if (!disposed) setAnalysis({ key: requestKey, report: cached, loading: false, error: "" });
+      });
+      return () => { disposed = true; };
+    }
     const worker = new Worker(new URL("../workers/special-analysis.worker.ts", import.meta.url));
-    setAnalysis({ key: requestKey, loading: true, error: "" });
-    worker.onmessage = (event: MessageEvent<{ ok: boolean; report?: ReturnType<typeof analyzeHistoricalNineGrid>; error?: string }>) => {
+    queueMicrotask(() => {
+      if (!disposed) setAnalysis((current) => ({ ...current, key: requestKey, loading: true, error: "" }));
+    });
+    worker.onmessage = (event: MessageEvent<{ ok: boolean; report?: NineGridReport; error?: string }>) => {
       if (disposed) return;
+      if (event.data.ok && event.data.report) nineGridReportCache.set(requestKey, event.data.report);
       setAnalysis({ key: requestKey, report: event.data.report, loading: false, error: event.data.ok ? "" : event.data.error ?? "九宫格分析失败" });
       worker.terminate();
     };
@@ -187,25 +206,31 @@ function NineGridWorkspace({ draws, config }: { draws: DrawRecord[]; config: Rul
         </div>
       </Panel>
 
-      <nav className="rq-workspace-tabs rq-nine-section-tabs" aria-label="九宫格分析内容">
-        <button type="button" className={cn("rq-workspace-tab", section === "ranking" && "rq-workspace-tab--active")} onClick={() => setSection("ranking")}><span>频次排行</span><small>生肖与49码</small></button>
-        <button type="button" className={cn("rq-workspace-tab", section === "backtest" && "rq-workspace-tab--active")} onClick={() => setSection("backtest")}><span>回测验证</span><small>同锚点与滚动验证</small></button>
-        <button type="button" className={cn("rq-workspace-tab", section === "evidence" && "rq-workspace-tab--active")} onClick={() => setSection("evidence")}><span>历史九宫格</span><small>逐次查看证据</small></button>
+      <nav className="rq-workspace-tabs rq-nine-section-tabs" role="tablist" aria-label="九宫格分析内容">
+        <button type="button" role="tab" aria-selected={section === "ranking"} className={cn("rq-workspace-tab", section === "ranking" && "rq-workspace-tab--active")} onClick={() => setSection("ranking")}><span>频次排行</span><small>生肖与49码</small></button>
+        <button type="button" role="tab" aria-selected={section === "backtest"} className={cn("rq-workspace-tab", section === "backtest" && "rq-workspace-tab--active")} onClick={() => setSection("backtest")}><span>回测验证</span><small>同锚点与滚动验证</small></button>
+        <button type="button" role="tab" aria-selected={section === "evidence"} className={cn("rq-workspace-tab", section === "evidence" && "rq-workspace-tab--active")} onClick={() => setSection("evidence")}><span>历史九宫格</span><small>逐次查看证据</small></button>
       </nav>
 
-      {section === "ranking" ? <Panel className="p-4 sm:p-5">
+      {section === "ranking" ? <Panel className="rq-nine-ranking-panel p-4 sm:p-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div><h3 className="font-semibold text-white">{mode === "zodiac" ? "生肖频次排行" : "49码频次排行"}</h3><p className="mt-1 text-xs text-slate-500">排名来自全部历史九宫格，定位格也会计入并单独标明。</p></div>
           <Badge tone="slate">显示 {rankingItems.length}/{report.rankings.length}</Badge>
         </div>
-        <div className={cn("mt-4 grid gap-2", mode === "zodiac" ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" : "grid-cols-2 sm:grid-cols-3 xl:grid-cols-4") }>
+        {mode === "zodiac" ? (
+          <figure className="rq-zodiac-paper-cut" aria-label="十二生肖传统剪纸插画">
+            <Image src={zodiacBannerPath()} alt="鼠、牛、虎、兔、龙、蛇、马、羊、猴、鸡、狗、猪十二生肖传统剪纸" width={2048} height={682} priority unoptimized />
+          </figure>
+        ) : null}
+        <div className={cn("rq-nine-ranking-grid", mode === "zodiac" ? "is-zodiac" : "is-number") }>
           {rankingItems.map((item) => (
-            <div key={item.key} className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.035] p-3">
-              <div className="absolute inset-x-0 bottom-0 h-1 bg-white/[0.03]"><i className="block h-full bg-cyan-300/55" style={{ width: `${Math.max(3, item.count / maxCount * 100)}%` }} /></div>
-              <div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold text-cyan-200">#{item.rank}</span><span className="text-xs text-slate-500">{item.share}%</span></div>
-              <div className="mt-2 flex items-baseline gap-2"><strong className="text-xl text-white tabular-nums">{item.label}</strong>{mode === "number" ? <span className="text-sm text-slate-400">{item.zodiac}</span> : null}</div>
-              <p className="mt-2 text-xs text-slate-500">出现 {item.count} 格 · 定位 {item.anchorCount} 次</p>
-            </div>
+            <article key={item.key} className={cn("rq-nine-ranking-card", item.rank === 1 && "is-leading")}>
+              <div className="rq-nine-ranking-card__progress"><i style={{ width: `${Math.max(3, item.count / maxCount * 100)}%` }} /></div>
+              <div className="rq-nine-ranking-card__head"><span>#{item.rank}</span><strong>{item.share}%</strong></div>
+              <div className="rq-nine-ranking-card__main">
+                <div><strong>{item.label}</strong>{mode === "number" ? <span>{item.zodiac}</span> : null}<p>出现 {item.count} 格 · 定位 {item.anchorCount} 次</p></div>
+              </div>
+            </article>
           ))}
         </div>
         {mode === "number" ? <div className="mt-4 flex justify-center"><Button onClick={() => setShowAllRankings((value) => !value)}>{showAllRankings ? "收起到 Top18" : "查看完整49码排行"}</Button></div> : null}
@@ -216,7 +241,7 @@ function NineGridWorkspace({ draws, config }: { draws: DrawRecord[]; config: Rul
         <BacktestCard title="全量逐期滚动验证" report={report.overallBacktest} mode={mode} config={config} compact />
       </div> : null}
 
-      {section === "evidence" ? <Panel className="p-4 sm:p-5">
+      {section === "evidence" ? <Panel className="rq-nine-evidence-panel p-4 sm:p-5">
         <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="font-semibold text-white">历史九宫格证据</h3><p className="mt-1 text-xs text-slate-500">平1取自己和右边两列，特码取左边两列和自己，中间位置取左、中、右三列。</p></div><Badge tone="slate">显示 {Math.min(visibleGridCount, report.occurrences.length)}/{report.occurrences.length}</Badge></div>
         <div className="mt-4 grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">{visibleOccurrences.map((occurrence) => <HistoricalGridCard key={occurrence.id} occurrence={occurrence} />)}</div>
         {report.occurrences.length > visibleGridCount ? <div className="mt-4 flex justify-center"><Button onClick={() => setVisibleGridCount((count) => count + 4)}>再看4个九宫格</Button></div> : null}
@@ -248,10 +273,20 @@ function BinaryTrendWorkspace({ draws }: { draws: DrawRecord[] }) {
 
   useEffect(() => {
     let disposed = false;
+    const cached = binaryTrendCache.get(requestKey);
+    if (cached) {
+      queueMicrotask(() => {
+        if (!disposed) setAnalysis({ key: requestKey, size: cached.size, parity: cached.parity, loading: false, error: "" });
+      });
+      return () => { disposed = true; };
+    }
     const worker = new Worker(new URL("../workers/special-analysis.worker.ts", import.meta.url));
-    setAnalysis({ key: requestKey, loading: true, error: "" });
+    queueMicrotask(() => {
+      if (!disposed) setAnalysis((current) => ({ ...current, key: requestKey, loading: true, error: "" }));
+    });
     worker.onmessage = (event: MessageEvent<{ ok: boolean; size?: BinaryTrendReport; parity?: BinaryTrendReport; error?: string }>) => {
       if (disposed) return;
+      if (event.data.ok && event.data.size && event.data.parity) binaryTrendCache.set(requestKey, { size: event.data.size, parity: event.data.parity });
       setAnalysis({ key: requestKey, size: event.data.size, parity: event.data.parity, loading: false, error: event.data.ok ? "" : event.data.error ?? "走势分析失败" });
       worker.terminate();
     };
@@ -288,9 +323,9 @@ export function SpecialAnalysisView({ draws, config, dataSourceLabel, sourceLoad
         </div>
       </Panel>
 
-      <nav className="rq-workspace-tabs rq-special-tabs" aria-label="专项分析工作区">
-        <button type="button" className={cn("rq-workspace-tab", tab === "nine-grid" && "rq-workspace-tab--active")} onClick={() => setTab("nine-grid")}><span>九宫格</span><small>历史锚点排行</small></button>
-        <button type="button" className={cn("rq-workspace-tab", tab === "trends" && "rq-workspace-tab--active")} onClick={() => setTab("trends")}><span>大小单双</span><small>近20-30期走势</small></button>
+      <nav className="rq-workspace-tabs rq-special-tabs" role="tablist" aria-label="专项分析工作区">
+        <button type="button" role="tab" aria-selected={tab === "nine-grid"} className={cn("rq-workspace-tab", tab === "nine-grid" && "rq-workspace-tab--active")} onClick={() => setTab("nine-grid")}><span>九宫格</span><small>历史锚点排行</small></button>
+        <button type="button" role="tab" aria-selected={tab === "trends"} className={cn("rq-workspace-tab", tab === "trends" && "rq-workspace-tab--active")} onClick={() => setTab("trends")}><span>大小单双</span><small>近20-30期走势</small></button>
       </nav>
 
       {tab === "nine-grid" ? <NineGridWorkspace draws={draws} config={config} /> : <BinaryTrendWorkspace draws={draws} />}

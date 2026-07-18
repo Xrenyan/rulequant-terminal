@@ -8,6 +8,7 @@ const drawImportEndpoint = process.env.RULEQUANT_DRAW_IMPORT_URL || "https://rul
 const drawSourceUrl = process.env.RULEQUANT_DRAW_SOURCE_URL || "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html";
 const drawFromYear = Number(process.env.RULEQUANT_DRAW_FROM_YEAR || 2026);
 const drawToYear = Number(process.env.RULEQUANT_DRAW_TO_YEAR || drawFromYear);
+const requireLiveSource = process.env.RULEQUANT_REQUIRE_LIVE_SOURCE === "true";
 const root = process.cwd();
 const REQUEST_HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RuleQuant/1.0",
@@ -324,6 +325,21 @@ async function downloadHtml(url) {
   }
 }
 
+async function retry(task, attempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await task();
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1200));
+      }
+    }
+  }
+  throw lastError;
+}
+
 async function fetchDrawsDirectlyFromSource(baseUrl, fromYear, toYear) {
   const records = [];
   const errors = [];
@@ -331,7 +347,7 @@ async function fetchDrawsDirectlyFromSource(baseUrl, fromYear, toYear) {
   for (const year of normalizeYears(fromYear, toYear)) {
     const url = buildYearUrl(baseUrl, year);
     try {
-      const html = await downloadHtml(url);
+      const html = await retry(() => downloadHtml(url));
       const parsed = parseDrawHtml(html, { year, sourceUrl: url });
       records.push(...parsed.records);
       errors.push(...parsed.errors.map((message) => `${year}: ${message}`));
@@ -407,6 +423,9 @@ async function main() {
   let sourceFetchedAt = "";
   try {
     const imported = await fetchDrawsDirectlyFromSource(drawSourceUrl, drawFromYear, drawToYear);
+    if (!Array.isArray(imported.records) || imported.records.length === 0) {
+      throw new Error(imported.errors?.join("; ") || "configured source returned no draw records");
+    }
     if (Array.isArray(imported.records)) {
       sourceDraws = imported.records;
       sourceFetchedAt = imported.fetchedAt ?? "";
@@ -415,13 +434,17 @@ async function main() {
     console.warn(`Direct draw source refresh failed; trying import endpoint: ${error instanceof Error ? error.message : String(error)}`);
     try {
       const imported = await fetchDrawsViaImportEndpoint();
-      if (Array.isArray(imported.records)) {
+      if (Array.isArray(imported.records) && imported.records.length > 0) {
         sourceDraws = imported.records;
         sourceFetchedAt = imported.fetchedAt ?? "";
       }
     } catch (fallbackError) {
       console.warn(`Draw source refresh skipped: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`);
     }
+  }
+
+  if (requireLiveSource && sourceDraws.length === 0) {
+    throw new Error("Live draw source verification failed after retries; keeping the previously published site unchanged.");
   }
 
   const mergedDraws = sortDraws(

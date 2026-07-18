@@ -21,6 +21,7 @@ jobs:
       RULEQUANT_DRAW_SOURCE_URL: "https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html"
       RULEQUANT_CLOUD_STATE_URL: "https://rulequant-terminal.vercel.app/api/cloud/state"
       RULEQUANT_DRAW_IMPORT_URL: "https://rulequant-terminal.vercel.app/api/import-draws-from-url"
+      RULEQUANT_REQUIRE_LIVE_SOURCE: "true"
       RULEQUANT_PAGES_REPO: "Xrenyan/rulequant-terminal-pages"
       RULEQUANT_PAGES_BRANCH: "main"
       RULEQUANT_PAGES_URL: "https://xrenyan.github.io/rulequant-terminal-pages/dashboard/"
@@ -173,7 +174,9 @@ jobs:
           set -euo pipefail
           if [ "${{ steps.publish_check.outputs.publish }}" = "true" ]; then sleep 20; fi
           node - <<'NODE'
+          const fs = require('node:fs');
           (async () => {
+            const expected = JSON.parse(fs.readFileSync('public/static-cloud-state.json', 'utf8'));
             const stateUrl = 'https://xrenyan.github.io/rulequant-terminal-pages/static-cloud-state.json?t=' + Date.now();
             const pageUrl = 'https://xrenyan.github.io/rulequant-terminal-pages/dashboard/?t=' + Date.now();
             const state = await fetch(stateUrl, { cache: 'no-store' }).then((r) => {
@@ -185,6 +188,9 @@ jobs:
             const latest = state?.meta?.latestIssue;
             const count = Array.isArray(state?.draws) ? state.draws.length : 0;
             if (!latest || count === 0) throw new Error('static state missing latestIssue/draws');
+            if (latest !== expected?.meta?.latestIssue || count !== expected?.draws?.length) {
+              throw new Error(`published state mismatch: expected ${expected?.meta?.latestIssue}/${expected?.draws?.length}, received ${latest}/${count}`);
+            }
             console.log(JSON.stringify({ latestIssue: latest, drawCount: count, dashboardStatus: page.status }, null, 2));
           })().catch((error) => {
             console.error(error);
