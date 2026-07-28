@@ -110,11 +110,20 @@ export function normalizeDraw(draw: DrawRecord, config: RuleQuantConfig): Normal
   };
 }
 
-function reduceBy(raw: number, step: number, maxExclusive: number): { value: number; steps: number[] } {
+function reduceBy(
+  raw: number,
+  step: number,
+  maxExclusive: number,
+  minInclusive: number,
+): { value: number; steps: number[] } {
   const steps = [raw];
   let value = raw;
   while (value >= maxExclusive) {
     value -= step;
+    steps.push(value);
+  }
+  while (value < minInclusive) {
+    value += step;
     steps.push(value);
   }
   return { value, steps };
@@ -127,11 +136,15 @@ export function normalizeZodiacNumber(raw: number): { value: number; steps: numb
     value -= 48;
     steps.push(value);
   }
+  while (value < 1) {
+    value += 48;
+    steps.push(value);
+  }
   return { value, steps };
 }
 
 export function normalizeSum(raw: number): { value: number; steps: number[] } {
-  return reduceBy(raw, 13, 14);
+  return reduceBy(raw, 13, 14, 1);
 }
 
 export function normalizeTail(raw: number): { value: number; steps: number[] } {
@@ -139,7 +152,7 @@ export function normalizeTail(raw: number): { value: number; steps: number[] } {
 }
 
 export function normalizeHead(raw: number): { value: number; steps: number[] } {
-  return reduceBy(raw, 5, 5);
+  return reduceBy(raw, 5, 5, 0);
 }
 
 export function normalizeElement(raw: number): { value: number; steps: number[] } {
@@ -157,5 +170,5 @@ export function normalizeElement(raw: number): { value: number; steps: number[] 
 }
 
 export function normalizeSegment(raw: number): { value: number; steps: number[] } {
-  return reduceBy(raw, 7, 8);
+  return reduceBy(raw, 7, 8, 1);
 }

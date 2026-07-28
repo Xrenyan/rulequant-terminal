@@ -3,6 +3,7 @@ import { defaultConfig } from "@/lib/config/default-config";
 import { evaluateFormula } from "@/lib/formula/evaluate";
 import { calculateRule, clearFormulaEngineCache, getFormulaEngineCacheSize } from "@/lib/formula-engine/formula-engine";
 import { getNumberAttributes, normalizeDraw } from "@/lib/engine/attributes";
+import { addRuleToLibrary } from "@/lib/rules/rule-library";
 import type { RuleRecord } from "@/types/domain";
 
 const draw = normalizeDraw(
@@ -20,6 +21,84 @@ const draw = normalizeDraw(
 );
 
 describe("formula engine", () => {
+  test("normalizes negative system-recommended formulas before mapping", () => {
+    const baseRule: RuleRecord = {
+      id: "recommended-negative",
+      name: "系统推荐负数闭环",
+      category: "kill_zodiac",
+      orderMode: "L",
+      formula: "平1尾 - 平2 - 平3合 - 平4头 - 99",
+      normalizer: "subtract_48_to_1_49",
+      target: "special_zodiac",
+      verifyMode: "next_special",
+      positionPattern: [],
+      periodSpan: 1,
+      enabled: true,
+      sourceType: "system_recommended",
+      participatesInReference: true,
+      tags: [],
+      description: "",
+      sourceFile: "formula-discovery",
+      examples: [],
+      createdAt: "2026-06-27T00:00:00.000Z",
+      updatedAt: "2026-06-27T00:00:00.000Z",
+    };
+
+    const zodiac = calculateRule(baseRule, draw, defaultConfig);
+    const sum = calculateRule(
+      { ...baseRule, id: "recommended-negative-sum", category: "kill_sum", normalizer: "subtract_13_to_1_13", target: "special_sum" },
+      draw,
+      defaultConfig,
+    );
+    const head = calculateRule(
+      { ...baseRule, id: "recommended-negative-head", category: "kill_head", normalizer: "subtract_5_to_0_4", target: "special_head" },
+      draw,
+      defaultConfig,
+    );
+    const segment = calculateRule(
+      { ...baseRule, id: "recommended-negative-segment", category: "kill_segment", normalizer: "subtract_7_to_1_7", target: "special_segment" },
+      draw,
+      defaultConfig,
+    );
+    const tail = calculateRule(
+      { ...baseRule, id: "recommended-negative-tail", category: "kill_tail", normalizer: "mod_10", target: "special_tail" },
+      draw,
+      defaultConfig,
+    );
+    const element = calculateRule(
+      { ...baseRule, id: "recommended-negative-element", category: "kill_element", normalizer: "subtract_5_to_1_5", target: "special_element" },
+      draw,
+      defaultConfig,
+    );
+
+    expect(zodiac.rawResult).toBeLessThan(0);
+    expect(zodiac.finalResult).toBeGreaterThanOrEqual(1);
+    expect(zodiac.finalResult).toBeLessThanOrEqual(49);
+    expect(sum.finalResult).toBeGreaterThanOrEqual(1);
+    expect(sum.finalResult).toBeLessThanOrEqual(13);
+    expect(head.finalResult).toBeGreaterThanOrEqual(0);
+    expect(head.finalResult).toBeLessThanOrEqual(4);
+    expect(segment.finalResult).toBeGreaterThanOrEqual(1);
+    expect(segment.finalResult).toBeLessThanOrEqual(7);
+    expect(tail.finalResult).toBeGreaterThanOrEqual(0);
+    expect(tail.finalResult).toBeLessThanOrEqual(9);
+    expect(element.finalResult).toBeGreaterThanOrEqual(1);
+    expect(element.finalResult).toBeLessThanOrEqual(5);
+    expect(zodiac.process.some((line) => line.includes(" + 48 = "))).toBe(true);
+
+    const added = addRuleToLibrary({
+      existingRules: [],
+      draft: { ...baseRule, id: undefined, enabled: true, participatesInReference: true },
+    });
+    expect(added.ok).toBe(true);
+    if (added.ok) {
+      const recalculated = calculateRule(added.rule, draw, defaultConfig);
+      expect(recalculated.rawResult).toBeLessThan(0);
+      expect(recalculated.finalResult).toBeGreaterThanOrEqual(1);
+      expect(recalculated.finalResult).toBeLessThanOrEqual(49);
+    }
+  });
+
   test("resolves Chinese position variables from L order", () => {
     const result = evaluateFormula("平1 + 平2 + 特码尾 + 总数尾", draw, defaultConfig, "L");
 

@@ -81,4 +81,36 @@ describe("formula discovery", () => {
     expect(new Set(candidates.map((candidate) => candidate.complexity))).toEqual(new Set([2, 3, 4]));
     expect(candidates.every((candidate) => candidate.holdoutResult.total > 0)).toBe(true);
   });
+
+  it("normalizes negative results from advanced subtraction formulas before they become usable outputs", () => {
+    const candidates = discoverFormulaCandidates({
+      draws: seedDraws,
+      config: seedConfig,
+      limit: 24,
+      categories: ["kill_zodiac", "kill_tail", "kill_sum", "kill_head", "kill_segment", "kill_element"],
+      variablePool: ["平1尾", "平2尾", "平3合", "特码合"],
+      maxTerms: 3,
+      orderModes: ["L", "D"],
+      formulaStyles: ["alternating", "subtract_last"],
+      combinationLimitPerTerm: 24,
+      minTrainingRate: 0,
+      minValidationRate: 0,
+      minHoldoutRate: 0,
+      minRecentRate: 0,
+      maxTrainValidationGap: 100,
+    });
+
+    expect(candidates.length).toBeGreaterThan(0);
+    expect(candidates.some((candidate) => candidate.details.some((detail) => detail.rawResult < 0))).toBe(true);
+
+    for (const candidate of candidates) {
+      for (const detail of candidate.details) {
+        if (typeof detail.finalResult !== "number") continue;
+        expect(detail.finalResult).toBeGreaterThanOrEqual(0);
+        if (["kill_zodiac", "kill_sum", "kill_segment", "kill_element"].includes(candidate.rule.category)) {
+          expect(detail.finalResult).toBeGreaterThan(0);
+        }
+      }
+    }
+  }, 15_000);
 });

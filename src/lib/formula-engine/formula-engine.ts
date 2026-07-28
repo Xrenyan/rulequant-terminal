@@ -10,6 +10,7 @@ import {
 import { evaluateFormula } from "@/lib/formula/evaluate";
 import type {
   BacktestDetail,
+  FormulaEvaluation,
   FutureCheck,
   NormalizedDraw,
   RuleCalculation,
@@ -19,6 +20,7 @@ import type {
 
 export type CalculateRuleContext = {
   periodIndex?: number;
+  cache?: boolean;
 };
 
 export type FormulaEngineCalculation = RuleCalculation & {
@@ -29,6 +31,10 @@ export type FormulaEngineCalculation = RuleCalculation & {
 };
 
 const calculationCache = new Map<string, FormulaEngineCalculation>();
+const formulaEvaluationCache = new Map<string, FormulaEvaluation>();
+let formulaDrawSignatureCache = new WeakMap<NormalizedDraw, string>();
+let formulaConfigSignatureCache = new WeakMap<RuleQuantConfig, string>();
+const FORMULA_EVALUATION_CACHE_LIMIT = 50_000;
 
 function stableStringify(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
@@ -114,6 +120,9 @@ function cacheKey(rule: RuleRecord, current: NormalizedDraw, config: RuleQuantCo
 
 export function clearFormulaEngineCache(): void {
   calculationCache.clear();
+  formulaEvaluationCache.clear();
+  formulaDrawSignatureCache = new WeakMap<NormalizedDraw, string>();
+  formulaConfigSignatureCache = new WeakMap<RuleQuantConfig, string>();
 }
 
 export function getFormulaEngineCacheSize(): number {
@@ -122,7 +131,58 @@ export function getFormulaEngineCacheSize(): number {
 
 function reductionProcess(steps: number[], stepLabel: number): string[] {
   if (steps.length <= 1) return [`取值 ${steps[0]}`];
-  return steps.slice(0, -1).map((value, index) => `${value} - ${stepLabel} = ${steps[index + 1]}`);
+  return steps.slice(0, -1).map((value, index) => {
+    const next = steps[index + 1];
+    return next > value
+      ? `${value} + ${stepLabel} = ${next}`
+      : `${value} - ${stepLabel} = ${next}`;
+  });
+}
+
+function cloneFormulaEvaluation(evaluation: FormulaEvaluation): FormulaEvaluation {
+  return {
+    ...evaluation,
+    variables: { ...evaluation.variables },
+    trace: [...evaluation.trace],
+  };
+}
+
+function formulaEvaluationCacheKey(
+  formula: string,
+  current: NormalizedDraw,
+  config: RuleQuantConfig,
+  orderMode: RuleRecord["orderMode"],
+): string {
+  let drawSignature = formulaDrawSignatureCache.get(current);
+  if (!drawSignature) {
+    drawSignature = stableStringify(drawCacheSignature(current));
+    formulaDrawSignatureCache.set(current, drawSignature);
+  }
+  let configSignature = formulaConfigSignatureCache.get(config);
+  if (!configSignature) {
+    configSignature = stableStringify(configCacheSignature(config));
+    formulaConfigSignatureCache.set(config, configSignature);
+  }
+  return `${orderMode}\u001f${formula}\u001f${drawSignature}\u001f${configSignature}`;
+}
+
+function evaluateFormulaCached(
+  formula: string,
+  current: NormalizedDraw,
+  config: RuleQuantConfig,
+  orderMode: RuleRecord["orderMode"],
+): FormulaEvaluation {
+  const key = formulaEvaluationCacheKey(formula, current, config, orderMode);
+  const cached = formulaEvaluationCache.get(key);
+  if (cached) return cloneFormulaEvaluation(cached);
+  const evaluation = evaluateFormula(formula, current, config, orderMode);
+  formulaEvaluationCache.set(key, cloneFormulaEvaluation(evaluation));
+  while (formulaEvaluationCache.size > FORMULA_EVALUATION_CACHE_LIMIT) {
+    const oldestKey = formulaEvaluationCache.keys().next().value;
+    if (!oldestKey) break;
+    formulaEvaluationCache.delete(oldestKey);
+  }
+  return cloneFormulaEvaluation(evaluation);
 }
 
 function unique<T>(items: T[]): T[] {
@@ -463,7 +523,7 @@ function calculateRuleUncached(
   }
 
   const dynamicFormula = formulaForPeriod(rule, current, context);
-  const formula = evaluateFormula(dynamicFormula.formula, current, config, rule.orderMode);
+  const formula = evaluateFormulaCached(dynamicFormula.formula, current, config, rule.orderMode);
   const rawResult = formula.value;
   const trace = [...dynamicFormula.patternTrace, ...formula.trace];
 
@@ -770,6 +830,9 @@ export function calculateRule(
   config: RuleQuantConfig,
   context: CalculateRuleContext = {},
 ): FormulaEngineCalculation {
+  if (context.cache === false) {
+    return calculateRuleUncached(rule, current, config, context);
+  }
   const key = cacheKey(rule, current, config, context);
   const cached = calculationCache.get(key);
   if (cached) return cloneCalculation(cached);
@@ -840,8 +903,9 @@ export function calculateRuleDetail(input: {
   futureDraws: NormalizedDraw[];
   config: RuleQuantConfig;
   periodIndex: number;
+  cache?: boolean;
 }): BacktestDetail {
-  const calculation = calculateRule(input.rule, input.current, input.config, { periodIndex: input.periodIndex });
+  const calculation = calculateRule(input.rule, input.current, input.config, { periodIndex: input.periodIndex, cache: input.cache });
   const futureChecks: FutureCheck[] = input.futureDraws.map((future) => ({
     issue: future.issue,
     special: future.special,

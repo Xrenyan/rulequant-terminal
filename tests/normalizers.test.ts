@@ -96,4 +96,12 @@ describe("draw and number normalization", () => {
     expect(normalizeHead(17)).toEqual({ value: 2, steps: [17, 12, 7, 2] });
     expect(normalizeSegment(23)).toEqual({ value: 2, steps: [23, 16, 9, 2] });
   });
+
+  test("normalizers close negative discovery results into usable ranges", () => {
+    expect(normalizeZodiacNumber(-1)).toEqual({ value: 47, steps: [-1, 47] });
+    expect(normalizeZodiacNumber(0)).toEqual({ value: 48, steps: [0, 48] });
+    expect(normalizeSum(-2)).toEqual({ value: 11, steps: [-2, 11] });
+    expect(normalizeHead(-3)).toEqual({ value: 2, steps: [-3, 2] });
+    expect(normalizeSegment(-5)).toEqual({ value: 2, steps: [-5, 2] });
+  });
 });

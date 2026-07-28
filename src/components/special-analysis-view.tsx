@@ -26,8 +26,24 @@ type Props = {
   onSync: () => void;
 };
 
-function zodiacBannerPath() {
-  return `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/zodiac/zodiac-paper-cut-banner.png`;
+const ZODIAC_PAPERCUT_ASSET: Record<string, string> = {
+  鼠: "rat",
+  牛: "ox",
+  虎: "tiger",
+  兔: "rabbit",
+  龙: "dragon",
+  蛇: "snake",
+  马: "horse",
+  羊: "goat",
+  猴: "monkey",
+  鸡: "rooster",
+  狗: "dog",
+  猪: "pig",
+};
+
+function zodiacPaperCutPath(zodiac: string) {
+  const asset = ZODIAC_PAPERCUT_ASSET[zodiac];
+  return asset ? `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/zodiac/papercut/${asset}.png` : "";
 }
 
 type NineGridReport = ReturnType<typeof analyzeHistoricalNineGrid>;
@@ -40,8 +56,8 @@ function numberLabel(number: number, config: RuleQuantConfig) {
 
 function Metric({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="min-w-0 rounded-lg border border-white/[0.08] bg-white/[0.035] p-4">
-      <p className="text-xs text-slate-500">{label}</p>
+    <div className="rq-analysis-metric min-w-0 p-4">
+      <p className="text-sm text-slate-500">{label}</p>
       <p className="mt-2 break-words text-[24px] font-semibold leading-none text-white tabular-nums">{value}</p>
     </div>
   );
@@ -92,8 +108,8 @@ function BacktestCard({ title, report, mode, config, compact = false }: { title:
       </div>
       <div className="mt-4 grid grid-cols-3 gap-2">
         {report.topRates.map((item) => (
-          <div key={item.top} className="rounded-lg border border-white/[0.08] bg-white/[0.035] p-3 text-center">
-            <span className="text-xs text-slate-500">Top {item.top}</span>
+          <div key={item.top} className="rq-backtest-metric p-3 text-center">
+            <span className="text-sm text-slate-500">Top {item.top}</span>
             <strong className="mt-1 block text-lg text-white tabular-nums">{item.rate}%</strong>
             <small className="text-xs text-slate-500">{item.success}/{report.total}</small>
           </div>
@@ -101,7 +117,7 @@ function BacktestCard({ title, report, mode, config, compact = false }: { title:
       </div>
       <p className="mt-3 text-xs text-slate-500">平均命中位置：{report.total ? `第 ${report.averageRank} 位` : "样本不足"}</p>
       {!compact && report.rows.length > 0 ? (
-        <div className="mt-3 max-h-56 overflow-auto rounded-lg border border-white/[0.07]">
+        <div className="rq-analysis-list mt-3 max-h-56 overflow-auto">
           {report.rows.slice(0, 12).map((row) => (
             <div key={`${row.anchorIssue}-${row.nextIssue}`} className="grid grid-cols-[1fr_auto] gap-3 border-b border-white/[0.06] px-3 py-2.5 text-xs last:border-0">
               <div>
@@ -193,14 +209,14 @@ function NineGridWorkspace({ draws, config }: { draws: DrawRecord[]; config: Rul
             </div>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">生肖模式查历史所有“{report.anchorZodiac}”，号码模式查历史所有“{String(report.anchorNumber).padStart(2, "0")}”。每次截取前后3期和相邻3列，再统计完整排行。</p>
           </div>
-          <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/[0.08] bg-black/10 p-1">
-            <button type="button" className={cn("min-h-11 rounded-lg px-4 text-sm font-semibold transition", mode === "zodiac" ? "bg-cyan-300/15 text-cyan-100" : "text-slate-400 hover:bg-white/[0.05]")} onClick={() => { setMode("zodiac"); setShowAllRankings(false); }}>生肖 {report.anchorZodiac}</button>
-            <button type="button" className={cn("min-h-11 rounded-lg px-4 text-sm font-semibold transition", mode === "number" ? "bg-blue-400/15 text-blue-100" : "text-slate-400 hover:bg-white/[0.05]")} onClick={() => { setMode("number"); setShowAllRankings(false); }}>号码 {String(report.anchorNumber).padStart(2, "0")}</button>
+          <div className="rq-analysis-segmented grid grid-cols-2 gap-1 p-1">
+            <button type="button" className={cn("min-h-11 rounded-[13px] px-4 text-sm font-semibold transition", mode === "zodiac" ? "is-active" : "")} onClick={() => { setMode("zodiac"); setShowAllRankings(false); }}>生肖 {report.anchorZodiac}</button>
+            <button type="button" className={cn("min-h-11 rounded-[13px] px-4 text-sm font-semibold transition", mode === "number" ? "is-active" : "")} onClick={() => { setMode("number"); setShowAllRankings(false); }}>号码 {String(report.anchorNumber).padStart(2, "0")}</button>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Metric label="历史出现位置" value={`${report.occurrences.length} 次`} />
-          <Metric label="累计九宫格" value={`${report.occurrences.length * 9} 格`} />
+          <Metric label="已生成九宫格" value={`${report.occurrences.length} 组`} />
           <Metric label="同锚点验证" value={`${report.conditionedBacktest.total} 期`} />
           <Metric label="全量滚动验证" value={`${report.overallBacktest.total} 期`} />
         </div>
@@ -217,18 +233,18 @@ function NineGridWorkspace({ draws, config }: { draws: DrawRecord[]; config: Rul
           <div><h3 className="font-semibold text-white">{mode === "zodiac" ? "生肖频次排行" : "49码频次排行"}</h3><p className="mt-1 text-xs text-slate-500">排名来自全部历史九宫格，定位格也会计入并单独标明。</p></div>
           <Badge tone="slate">显示 {rankingItems.length}/{report.rankings.length}</Badge>
         </div>
-        {mode === "zodiac" ? (
-          <figure className="rq-zodiac-paper-cut" aria-label="十二生肖传统剪纸插画">
-            <Image src={zodiacBannerPath()} alt="鼠、牛、虎、兔、龙、蛇、马、羊、猴、鸡、狗、猪十二生肖传统剪纸" width={2048} height={682} priority unoptimized />
-          </figure>
-        ) : null}
         <div className={cn("rq-nine-ranking-grid", mode === "zodiac" ? "is-zodiac" : "is-number") }>
           {rankingItems.map((item) => (
             <article key={item.key} className={cn("rq-nine-ranking-card", item.rank === 1 && "is-leading")}>
               <div className="rq-nine-ranking-card__progress"><i style={{ width: `${Math.max(3, item.count / maxCount * 100)}%` }} /></div>
               <div className="rq-nine-ranking-card__head"><span>#{item.rank}</span><strong>{item.share}%</strong></div>
               <div className="rq-nine-ranking-card__main">
-                <div><strong>{item.label}</strong>{mode === "number" ? <span>{item.zodiac}</span> : null}<p>出现 {item.count} 格 · 定位 {item.anchorCount} 次</p></div>
+                <div className="rq-nine-ranking-card__copy"><strong>{item.label}</strong>{mode === "number" ? <span>{item.zodiac}</span> : null}<p>出现 {item.count} 格 · 定位 {item.anchorCount} 次</p></div>
+                {mode === "zodiac" && zodiacPaperCutPath(item.label) ? (
+                  <div className="rq-nine-ranking-card__art" aria-hidden="true">
+                    <Image src={zodiacPaperCutPath(item.label)} alt="" width={128} height={128} unoptimized />
+                  </div>
+                ) : null}
               </div>
             </article>
           ))}
@@ -257,9 +273,9 @@ function TrendCard({ report }: { report: BinaryTrendReport }) {
     <Panel className="p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold text-white">{report.title}</h3><p className="mt-1 text-xs leading-5 text-slate-500">{report.explanation}</p></div><Badge tone={report.backtestRate >= 55 ? "green" : "yellow"}>滚动验证 {report.backtestRate}%</Badge></div>
       <div className="mt-4 grid grid-cols-2 gap-3">
-        {report.probabilities.map((item) => <div key={item.label} className={cn("rounded-lg border p-4", item.label === top.label ? "border-cyan-300/35 bg-cyan-300/10" : "border-white/[0.08] bg-white/[0.03]")}><p className="text-sm text-slate-400">下一期参考：{item.label}</p><p className="mt-2 text-[28px] font-semibold text-white tabular-nums">{item.probability}%</p></div>)}
+        {report.probabilities.map((item) => <div key={item.label} className={cn("rq-trend-choice p-4", item.label === top.label && "is-leading")}><p className="text-sm text-slate-400">下一期参考：{item.label}</p><p className="mt-2 text-[28px] font-semibold text-white tabular-nums">{item.probability}%</p></div>)}
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">{report.sequence20.map((item, index) => <span key={`${item}-${index}`} className={cn("flex h-8 w-8 items-center justify-center rounded-md border text-xs", item === report.labels[0] ? "border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-100" : "border-violet-300/20 bg-violet-300/[0.08] text-violet-100")}>{item}</span>)}</div>
+      <div className="mt-4 flex flex-wrap gap-2">{report.sequence20.map((item, index) => <span key={`${item}-${index}`} className={cn("rq-trend-token flex h-9 w-9 items-center justify-center text-sm", item === report.labels[0] ? "is-primary" : "is-secondary")}>{item}</span>)}</div>
       <div className="mt-3 flex flex-wrap gap-2">{report.modelWeights.slice(0, 3).map((model) => <Badge key={model.label} tone="slate">{model.label} {model.weight}%</Badge>)}</div>
       <p className="mt-3 text-xs leading-5 text-slate-500">最近20期 · 当前连续 {report.currentLabel} {report.currentStreak} 期 · 学习样本 {report.trainingSamples} 期 · 概率差 {report.confidence}% · 历史滚动验证 {report.backtestSuccess}/{report.backtestTotal}</p>
     </Panel>

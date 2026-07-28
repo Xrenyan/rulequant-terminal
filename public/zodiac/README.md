@@ -1,3 +1,5 @@
-# Zodiac illustration
+# Zodiac illustrations
 
-`zodiac-paper-cut-banner.png` was generated specifically for RuleQuant. It presents all twelve zodiac animals as one traditional Chinese paper-cut artwork, so the ranking UI uses a single cohesive visual rather than mixing unrelated emoji assets.
+`papercut/` contains twelve individually generated Chinese paper-cut zodiac assets for RuleQuant.
+The frequency ranking places only the matching animal inside each result card instead of showing a separate all-zodiac banner.
+The PNG files are 256px transparent assets optimized for the card size.
