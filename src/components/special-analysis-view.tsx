@@ -16,6 +16,7 @@ import type { DrawRecord, RuleQuantConfig } from "@/types/domain";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
+import { FixedPatternAnalysisWorkspace } from "@/components/fixed-pattern-analysis-workspace";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -328,13 +329,13 @@ function BinaryTrendWorkspace({ draws }: { draws: DrawRecord[] }) {
 }
 
 export function SpecialAnalysisView({ draws, config, dataSourceLabel, sourceLoading, onSync }: Props) {
-  const [tab, setTab] = useState<"nine-grid" | "trends">("nine-grid");
+  const [tab, setTab] = useState<"nine-grid" | "trends" | "fixed-pattern">("nine-grid");
 
   return (
     <div className="space-y-4">
       <Panel className="p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div><div className="flex flex-wrap items-center gap-2"><Badge tone="cyan">专项观察</Badge><Badge tone="green">{draws.length}期真实数据</Badge></div><h2 className="mt-3 text-xl font-semibold text-white">九宫格与二分类走势</h2><p className="mt-2 max-w-4xl text-sm leading-6 text-slate-500">这里只观察历史九宫格、大小和单双。杀半头、杀一门、杀一波等公式统一在公式库中新增、回测和管理。</p></div>
+          <div><div className="flex flex-wrap items-center gap-2"><Badge tone="cyan">专项观察</Badge><Badge tone="green">{draws.length}期真实数据</Badge></div><h2 className="mt-3 text-xl font-semibold text-white">历史概率专项观察</h2><p className="mt-2 max-w-4xl text-sm leading-6 text-slate-500">九宫格、大小单双、固定出波与出尾分别独立回测。杀半头、杀一门、杀一波等计算公式仍统一在公式库管理。</p></div>
           <div className="flex flex-wrap items-center gap-2"><Badge tone="slate">数据来源：{dataSourceLabel}</Badge><Button variant="primary" disabled={sourceLoading} onClick={onSync}><RefreshCw className={cn("h-4 w-4", sourceLoading && "animate-spin")} />{sourceLoading ? "同步中" : "同步最新开奖"}</Button></div>
         </div>
       </Panel>
@@ -342,9 +343,12 @@ export function SpecialAnalysisView({ draws, config, dataSourceLabel, sourceLoad
       <nav className="rq-workspace-tabs rq-special-tabs" role="tablist" aria-label="专项分析工作区">
         <button type="button" role="tab" aria-selected={tab === "nine-grid"} className={cn("rq-workspace-tab", tab === "nine-grid" && "rq-workspace-tab--active")} onClick={() => setTab("nine-grid")}><span>九宫格</span><small>历史锚点排行</small></button>
         <button type="button" role="tab" aria-selected={tab === "trends"} className={cn("rq-workspace-tab", tab === "trends" && "rq-workspace-tab--active")} onClick={() => setTab("trends")}><span>大小单双</span><small>近20-30期走势</small></button>
+        <button type="button" role="tab" aria-selected={tab === "fixed-pattern"} className={cn("rq-workspace-tab", tab === "fixed-pattern" && "rq-workspace-tab--active")} onClick={() => setTab("fixed-pattern")}><span>波色尾数</span><small>固定资料滚动验证</small></button>
       </nav>
 
-      {tab === "nine-grid" ? <NineGridWorkspace draws={draws} config={config} /> : <BinaryTrendWorkspace draws={draws} />}
+      {tab === "nine-grid" ? <NineGridWorkspace draws={draws} config={config} /> : null}
+      {tab === "trends" ? <BinaryTrendWorkspace draws={draws} /> : null}
+      {tab === "fixed-pattern" ? <FixedPatternAnalysisWorkspace draws={draws} config={config} /> : null}
     </div>
   );
 }

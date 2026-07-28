@@ -20,8 +20,8 @@ function draw(issue: string, special: number): DrawRecord {
 
 describe("store hydration draw freshness", () => {
   it("does not roll back a newer local draw when a stale mobile snapshot arrives", () => {
-    const localNewest = draw("2026198", 25);
-    const staleRemote = draw("2026197", 29);
+    const localNewest = draw("2026209", 25);
+    const staleRemote = draw("2026207", 29);
     const persisted = {
       draws: [...seedDraws, localNewest],
       rules: seedRules,
