@@ -1240,6 +1240,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const [pendingRoute, setPendingRoute] = useState("");
   const [mobileNavCompact, setMobileNavCompact] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const mobileMoreCloseRef = useRef<HTMLButtonElement>(null);
   const [backgroundBacktestState, setBackgroundBacktestState] = useState<{
     key: string;
     result?: BacktestResult;
@@ -1294,9 +1295,33 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       if (disposed) return;
       setPendingRoute("");
       setMobileNavCompact(false);
+      setMobileMoreOpen(false);
     });
     return () => { disposed = true; };
   }, [activeView]);
+
+  useEffect(() => {
+    if (!mobileMoreOpen) return;
+
+    const previousOverflow = document.documentElement.style.overflow;
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setMobileMoreOpen(false);
+    };
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) setMobileMoreOpen(false);
+    };
+
+    document.documentElement.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", handleResize);
+    window.requestAnimationFrame(() => mobileMoreCloseRef.current?.focus());
+
+    return () => {
+      document.documentElement.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [mobileMoreOpen]);
 
   useEffect(() => {
     let lastScrollY = window.scrollY;
@@ -2401,12 +2426,19 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
           </nav>
         </aside>
 
-        <nav className={cn("rq-mobile-nav fixed inset-x-0 bottom-0 z-50 w-screen max-w-[100vw] border-t px-2 pb-[calc(0.45rem+env(safe-area-inset-bottom))] pt-2 lg:hidden", mobileNavCompact && "rq-mobile-nav--compact", mobileMoreOpen && "is-more-open")}>
-          {mobileMoreOpen && (
-            <div className="rq-mobile-more" role="dialog" aria-label="更多功能">
+        {mobileMoreOpen && typeof document !== "undefined" && createPortal(
+          <div className="rq-mobile-more-layer lg:hidden">
+            <button
+              type="button"
+              className="rq-mobile-more-backdrop"
+              aria-label="关闭更多功能"
+              onClick={() => setMobileMoreOpen(false)}
+            />
+            <div className="rq-mobile-more" role="dialog" aria-modal="true" aria-label="更多功能">
+              <div className="rq-mobile-more__handle" aria-hidden="true" />
               <div className="rq-mobile-more__head">
                 <div><strong>更多功能</strong><small>数据、校验、筛选与设置</small></div>
-                <Button size="icon" variant="ghost" aria-label="收起更多功能" onClick={() => setMobileMoreOpen(false)}><ChevronDown className="h-4 w-4" /></Button>
+                <button ref={mobileMoreCloseRef} type="button" className="rq-mobile-more__close" aria-label="收起更多功能" onClick={() => setMobileMoreOpen(false)}><ChevronDown className="h-5 w-5" /></button>
               </div>
               <div className="rq-mobile-more__grid">
                 {mobileMoreItems.map((item) => {
@@ -2414,14 +2446,19 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   const active = item.key === activeView;
                   return (
                     <Link key={item.key} href={item.href} onClick={() => setMobileMoreOpen(false)} className={cn("rq-mobile-more__item", active && "is-active")}>
-                      <Icon className="h-5 w-5" />
+                      <span className="rq-mobile-more__icon"><Icon className="h-5 w-5" /></span>
                       <span>{item.label}</span>
+                      <ChevronRight className="rq-mobile-more__chevron h-4 w-4" aria-hidden="true" />
                     </Link>
                   );
                 })}
               </div>
             </div>
-          )}
+          </div>,
+          document.body,
+        )}
+
+        <nav className={cn("rq-mobile-nav fixed inset-x-0 bottom-0 z-50 w-screen max-w-[100vw] border-t px-2 pb-[calc(0.45rem+env(safe-area-inset-bottom))] pt-2 lg:hidden", mobileNavCompact && "rq-mobile-nav--compact", mobileMoreOpen && "is-more-open")}>
           <div className="rq-mobile-nav__grid grid min-w-0 gap-1">
             {mobileNavItems.map((item) => {
               const Icon = item.icon;
