@@ -2474,7 +2474,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   )}
                 >
                   <Icon className="h-4 w-4" />
-                  <span className="max-w-full truncate">{item.label}</span>
+                  <span className="max-w-full">{item.key === "candidate-pool" ? "综合结果" : item.label}</span>
                 </Link>
               );
             })}
@@ -2688,20 +2688,19 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                                 )}
                               >
                                 <Label>{isSpecial ? "特码" : `第${index + 1}位`}</Label>
-                                <div className="mt-1 grid grid-cols-[32px_1fr_32px] gap-1">
-                                  <Button type="button" size="icon" className="rq-number-stepper-button h-10 min-w-8" onClick={() => stepManualDrawNumber(key, -1)}>-</Button>
+                                <div className="mt-1 grid grid-cols-[44px_1fr_44px] gap-1.5">
+                                  <Button type="button" size="icon" className="rq-number-stepper-button h-11 min-w-11" onClick={() => stepManualDrawNumber(key, -1)} aria-label={`${isSpecial ? "特码" : `第${index + 1}位`}减一`}>-</Button>
                                   <Input
-                                    type="number"
-                                    min={1}
-                                    max={49}
+                                    type="text"
                                     inputMode="numeric"
-                                    className={cn("rq-number-stepper-input text-center font-mono text-[18px]", invalid && "border-amber-300/50", duplicated && "border-rose-300/50")}
+                                    pattern="[0-9]*"
+                                    className={cn("rq-number-stepper-input h-11 text-center font-mono text-[18px]", invalid && "border-amber-300/50", duplicated && "border-rose-300/50")}
                                     value={manualDraw[key]}
                                     onChange={(event) => updateManualDraw(key, event.target.value)}
                                     onBlur={() => repairManualDrawNumber(key)}
                                     onWheel={(event) => event.currentTarget.blur()}
                                   />
-                                  <Button type="button" size="icon" className="rq-number-stepper-button h-10 min-w-8" onClick={() => stepManualDrawNumber(key, 1)}>+</Button>
+                                  <Button type="button" size="icon" className="rq-number-stepper-button h-11 min-w-11" onClick={() => stepManualDrawNumber(key, 1)} aria-label={`${isSpecial ? "特码" : `第${index + 1}位`}加一`}>+</Button>
                                 </div>
                                 <p className={cn("mt-2 min-h-5 text-center text-xs", invalid || duplicated ? "text-rose-100" : isSpecial ? "text-cyan-100/70" : "text-slate-500")}>
                                   {invalid ? "离开输入框会自动修正" : duplicated ? "重复号码，请改一个" : numberWithZodiac(Number(manualDraw[key]), config)}
