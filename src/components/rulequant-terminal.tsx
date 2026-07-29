@@ -272,6 +272,7 @@ const categories: Array<{ value: RuleCategory; label: string }> = [
   { value: "include_zodiac", label: "选生肖" },
   { value: "kill_zodiac", label: "杀一肖" },
   { value: "kill_color", label: "杀波色" },
+  { value: "kill_half_color", label: "杀半波" },
   { value: "include_color", label: "参考波色" },
   { value: "kill_parity", label: "杀单双" },
   { value: "include_parity", label: "参考单双" },
@@ -4377,7 +4378,7 @@ function RuleForm({
     },
     {
       title: "总数期号",
-      items: ["总数", "总数尾", "总数合", "期号尾", "期数尾", "期合", "期合尾"].map((item) => ({ label: item, value: item })),
+      items: ["总数", "总数尾", "总数合", "期号", "期号尾", "期数尾", "期合", "期合尾"].map((item) => ({ label: item, value: item })),
     },
   ];
 

@@ -6,6 +6,7 @@ const CATEGORY_BY_LABEL = {
   "杀一肖": "kill_zodiac",
   "选一肖": "include_zodiac",
   "杀一波": "kill_color",
+  "杀半波": "kill_half_color",
   "参考波色": "include_color",
   "杀单双": "kill_parity",
   "参考单双": "include_parity",

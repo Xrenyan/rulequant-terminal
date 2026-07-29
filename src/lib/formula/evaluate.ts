@@ -96,6 +96,7 @@ function attrValue(name: string, number: number, config: RuleQuantConfig): numbe
       return attrs.number;
     case "位":
     case "位置":
+    case "肖位":
     case "生肖位":
       return fixedZodiacPosition(number, config);
     default:
@@ -149,7 +150,11 @@ function specialVariable(name: string, draw: NormalizedDraw): number | undefined
     总数: draw.total,
     总数尾: draw.totalTail,
     总数合: draw.totalSum,
+    总分: draw.total,
+    总分尾: draw.totalTail,
+    总分合: draw.totalSum,
     期数: issuePeriodNumber,
+    期号: issuePeriodNumber,
     期数尾: draw.issueTail,
     期号尾: draw.issueTail,
     期尾: draw.issueTail,

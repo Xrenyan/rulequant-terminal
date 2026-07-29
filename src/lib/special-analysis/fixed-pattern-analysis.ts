@@ -176,6 +176,7 @@ const COLOR_BY_ZODIAC: Record<string, { primary: FixedPatternColor[]; secondary?
 const COLOR_DATE_TABLE_1: Record<number, FixedPatternColor[]> = buildDayTable([
   [[2, 12, 22], ["红", "绿"]],
   [[3, 13, 23], ["红", "蓝"]],
+  [[4, 14, 24], ["绿", "红"]],
   [[5, 15, 25], ["绿", "蓝"]],
   [[6, 16, 26], ["绿", "蓝"]],
   [[7, 17, 27], ["绿", "红"]],

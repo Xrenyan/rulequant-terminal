@@ -80,6 +80,7 @@ function targetForCategory(category: RuleRecord["category"]): { action: RuleSign
     case "kill_head":
       return { action: "exclude", targetType: "head" };
     case "kill_half_head":
+    case "kill_half_color":
     case "kill_door":
       return { action: "exclude", targetType: "number" };
     case "kill_element":

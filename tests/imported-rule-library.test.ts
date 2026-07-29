@@ -6,7 +6,7 @@ import { buildRuleSignature } from "@/lib/rules/rule-library";
 
 describe("cleaned rule library import", () => {
   it("contains every unique exported formula with stable source counts", () => {
-    expect(seedRules).toHaveLength(81);
+    expect(seedRules).toHaveLength(92);
     expect(seedRules.filter((rule) => rule.sourceType === "manual")).toHaveLength(33);
     expect(seedRules.filter((rule) => rule.sourceType === "system_recommended")).toHaveLength(6);
     expect(seedRules.filter((rule) => rule.id.startsWith("rq-docx-20260727-"))).toHaveLength(14);

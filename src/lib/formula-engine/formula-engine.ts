@@ -133,6 +133,10 @@ function reductionProcess(steps: number[], stepLabel: number): string[] {
   if (steps.length <= 1) return [`取值 ${steps[0]}`];
   return steps.slice(0, -1).map((value, index) => {
     const next = steps[index + 1];
+    const distance = Math.abs(next - value);
+    if (distance > stepLabel && distance % stepLabel === 0) {
+      return `${value} 连续${next > value ? "加" : "减"} ${stepLabel} 共 ${distance / stepLabel} 次 = ${next}`;
+    }
     return next > value
       ? `${value} + ${stepLabel} = ${next}`
       : `${value} - ${stepLabel} = ${next}`;
@@ -199,6 +203,27 @@ function moduloSteps(value: number, divisor: number, zeroBased = true): { value:
   return { value: normalized, steps: rounded === normalized ? [rounded] : [rounded, normalized] };
 }
 
+function repeatedModuloSteps(value: number, divisor: number): { value: number; steps: number[] } {
+  const rounded = Math.round(value);
+  const normalized = modulo(rounded, divisor);
+  const operationCount = Math.abs((rounded - normalized) / divisor);
+
+  // Keep the familiar handwritten trace for normal formulas, but collapse
+  // extreme values so an imported rule can never block the main thread.
+  if (operationCount > 16) {
+    return { value: normalized, steps: [rounded, normalized] };
+  }
+
+  const direction = rounded >= divisor ? -divisor : divisor;
+  const steps = [rounded];
+  let current = rounded;
+  for (let index = 0; index < operationCount; index += 1) {
+    current += direction;
+    steps.push(current);
+  }
+  return { value: normalized, steps };
+}
+
 const halfHeadByDigit: Record<number, { head: number; parity: "单" | "双"; label: string }> = {
   0: { head: 4, parity: "双", label: "4头双" },
   1: { head: 0, parity: "单", label: "0头单" },
@@ -218,6 +243,24 @@ function halfHeadNumbers(digit: number): { label: string; numbers: number[] } {
     const head = Math.floor(number / 10);
     const parity = number % 2 === 0 ? "双" : "单";
     return head === target.head && parity === target.parity;
+  });
+  return { label: target.label, numbers };
+}
+
+const halfColorByDigit: Record<number, { color: string; parity: "单" | "双"; label: string }> = {
+  0: { color: "红", parity: "双", label: "红波双" },
+  1: { color: "红", parity: "单", label: "红波单" },
+  2: { color: "蓝", parity: "双", label: "蓝波双" },
+  3: { color: "蓝", parity: "单", label: "蓝波单" },
+  4: { color: "绿", parity: "双", label: "绿波双" },
+  5: { color: "绿", parity: "单", label: "绿波单" },
+};
+
+function halfColorNumbers(digit: number, config: RuleQuantConfig): { label: string; numbers: number[] } {
+  const target = halfColorByDigit[digit];
+  const numbers = Array.from({ length: 49 }, (_, index) => index + 1).filter((number) => {
+    const attributes = getNumberAttributes(number, config);
+    return attributes.color === target.color && attributes.parity === target.parity;
   });
   return { label: target.label, numbers };
 }
@@ -667,6 +710,26 @@ function calculateRuleUncached(
         trace,
       };
     }
+    case "kill_half_color": {
+      const normalized = repeatedModuloSteps(rawResult, 6);
+      const target = halfColorNumbers(normalized.value, config);
+      return {
+        rawResult,
+        normalizerSteps: normalized.steps,
+        finalResult: normalized.value,
+        mappedResult: target.numbers,
+        secondaryMappedResult: [target.label],
+        process: [
+          ...trace,
+          ...reductionProcess(normalized.steps, 6),
+          `${normalized.value} = ${target.label}`,
+          `排除号码：${target.numbers.map((number) => String(number).padStart(2, "0")).join("、")}`,
+        ],
+        variables: formula.variables,
+        expression: formula.expression,
+        trace,
+      };
+    }
     case "kill_door": {
       const normalized = moduloSteps(rawResult, 5, false);
       const numbers = doorNumbers(normalized.value);
@@ -868,6 +931,7 @@ export function checkRuleSuccess(rule: RuleRecord, calculation: RuleCalculation,
     case "kill_head":
       return !resultSet.includes(special.head);
     case "kill_half_head":
+    case "kill_half_color":
     case "kill_door":
       return !resultSet.includes(special.number);
     case "kill_element":

@@ -314,7 +314,7 @@ function SourceResult({ report }: { report: FixedPatternAnalysisReport }) {
         ))}
       </div>
       <p className="mt-4 text-sm leading-6 text-slate-500">
-        羊的“防红、绿”只作为弱参考，不计入该资料的历史命中；第一份开奖日波色表未写 4、14、24 日，系统不会自行猜测。
+        羊的“防红、绿”只作为弱参考，不计入该资料的历史命中；第一份开奖日波色表已按用户确认补充：4、14、24 日为绿波、红波。
       </p>
     </Panel>
   );

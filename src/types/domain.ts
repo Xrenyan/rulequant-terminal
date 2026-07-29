@@ -4,6 +4,7 @@ export type RuleCategory =
   | "kill_zodiac"
   | "include_zodiac"
   | "kill_color"
+  | "kill_half_color"
   | "include_color"
   | "kill_parity"
   | "include_parity"

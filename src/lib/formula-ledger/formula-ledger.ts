@@ -126,6 +126,8 @@ function finalOutputLabel(rule: RuleRecord, mappedResult: Array<number | string>
       return `杀头${value}`;
     case "kill_half_head":
       return `杀半头号码 ${value}`;
+    case "kill_half_color":
+      return `杀半波号码 ${value}`;
     case "kill_door":
       return `杀一门号码 ${value}`;
     case "kill_element":
@@ -148,7 +150,7 @@ function finalOutputLabel(rule: RuleRecord, mappedResult: Array<number | string>
   }
 }
 
-function mappingLine(rule: RuleRecord, calculation: Pick<RuleCalculation, "finalResult" | "mappedResult" | "normalizerSteps">): string {
+function mappingLine(rule: RuleRecord, calculation: Pick<RuleCalculation, "finalResult" | "mappedResult" | "normalizerSteps" | "secondaryMappedResult">): string {
   const mapped = calculation.mappedResult.join("、");
   const finalResult = Array.isArray(calculation.finalResult) ? calculation.finalResult.join("、") : calculation.finalResult;
   switch (rule.category) {
@@ -173,6 +175,10 @@ function mappingLine(rule: RuleRecord, calculation: Pick<RuleCalculation, "final
       return `${finalResult} 对应头数${mapped}`;
     case "kill_half_head":
       return `${finalResult} 对应半头号码 ${mapped}`;
+    case "kill_half_color": {
+      const semanticLabel = calculation.secondaryMappedResult?.join("、") || "半波";
+      return `${finalResult} 对应${semanticLabel}；排除号码 ${mapped}`;
+    }
     case "kill_door":
       return `${finalResult} 对应门数号码 ${mapped}`;
     case "kill_segment":

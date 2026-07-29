@@ -44,6 +44,7 @@ function categoryFromText(text: string, formula: string): RuleCategory {
   if (/杀一?合|合数/.test(scope)) return "kill_sum";
   if (/杀一?尾/.test(scope)) return "kill_tail";
   if (/杀半头/.test(scope)) return "kill_half_head";
+  if (/杀半波/.test(scope)) return "kill_half_color";
   if (/杀一门|门数/.test(scope)) return "kill_door";
   if (/杀一?头/.test(scope)) return "kill_head";
   if (/杀一?行|五行/.test(scope) && !/[肖尾头合段]/.test(formula)) return "kill_element";
@@ -64,6 +65,8 @@ function normalizerFor(category: RuleCategory): string {
       return "subtract_5_to_0_4";
     case "kill_half_head":
       return "half_head_digit";
+    case "kill_half_color":
+      return "subtract_6_to_0_5";
     case "kill_door":
       return "subtract_5_to_1_5";
     case "kill_color":
@@ -103,6 +106,7 @@ function targetFor(category: RuleCategory): string {
     case "kill_head":
       return "special_head";
     case "kill_half_head":
+    case "kill_half_color":
     case "kill_door":
       return "special_number";
     case "kill_element":

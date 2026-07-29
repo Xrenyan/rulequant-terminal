@@ -41,7 +41,9 @@ describe("fixed pattern mappings", () => {
       secondary: ["红", "绿"],
     });
     expect(FIXED_PATTERN_RULES.colorByDayTable1[2]).toEqual(["红", "绿"]);
-    expect(FIXED_PATTERN_RULES.colorByDayTable1[4]).toBeUndefined();
+    expect(FIXED_PATTERN_RULES.colorByDayTable1[4]).toEqual(["绿", "红"]);
+    expect(FIXED_PATTERN_RULES.colorByDayTable1[14]).toEqual(["绿", "红"]);
+    expect(FIXED_PATTERN_RULES.colorByDayTable1[24]).toEqual(["绿", "红"]);
     expect(FIXED_PATTERN_RULES.colorByDayTable2[4]).toEqual(["绿", "红"]);
     expect(FIXED_PATTERN_RULES.tailsByPreviousSpecialTail[4]).toEqual([3, 4, 5, 0, 6, 7]);
     expect(FIXED_PATTERN_RULES.tailsByPreviousZodiac.鸡).toEqual([0, 2, 3, 5, 7, 8, 9]);

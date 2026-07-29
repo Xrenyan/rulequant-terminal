@@ -55,6 +55,7 @@ const ruleCategoryLabels: Record<string, string> = {
   kill_zodiac: "杀一肖",
   include_zodiac: "选生肖",
   kill_color: "杀一波",
+  kill_half_color: "杀半波",
   include_color: "参考波色",
   kill_parity: "杀单双",
   include_parity: "参考单双",
