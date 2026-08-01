@@ -19,6 +19,36 @@ function draw(issue: string, special: number): DrawRecord {
 }
 
 describe("store hydration draw freshness", () => {
+  it("adds newly shipped seed rules without removing a locally created rule", () => {
+    const localRule = {
+      ...seedRules[0],
+      id: "friend-local-only-rule",
+      name: "朋友本地新增公式",
+      sourceType: "manual" as const,
+      formula: `${seedRules[0].formula} + 17`,
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+    };
+    const persisted = {
+      draws: seedDraws,
+      rules: [...seedRules.slice(0, -1), localRule],
+      samples: seedSampleCases,
+      config: seedConfig,
+      logs: [],
+      backups: [],
+      referenceHistory: [],
+    };
+
+    const hydrated = buildHydratedState({
+      persisted,
+      current: { draws: seedDraws, rules: persisted.rules, selectedRuleId: localRule.id },
+    });
+
+    expect(hydrated.rules.some((rule) => rule.id === localRule.id)).toBe(true);
+    expect(hydrated.rules.some((rule) => rule.id === seedRules.at(-1)?.id)).toBe(true);
+    expect(hydrated.rules).toHaveLength(seedRules.length + 1);
+  });
+
   it("does not roll back a newer local draw when a stale mobile snapshot arrives", () => {
     const localNewest = draw("2026209", 25);
     const staleRemote = draw("2026207", 29);

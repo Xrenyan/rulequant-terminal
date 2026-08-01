@@ -6,11 +6,26 @@ import { buildRuleSignature } from "@/lib/rules/rule-library";
 
 describe("cleaned rule library import", () => {
   it("contains every unique exported formula with stable source counts", () => {
-    expect(seedRules).toHaveLength(92);
-    expect(seedRules.filter((rule) => rule.sourceType === "manual")).toHaveLength(33);
+    expect(seedRules).toHaveLength(117);
+    expect(seedRules.filter((rule) => rule.sourceType === "manual")).toHaveLength(57);
+    expect(seedRules.filter((rule) => rule.sourceType === "user_provided")).toHaveLength(53);
     expect(seedRules.filter((rule) => rule.sourceType === "system_recommended")).toHaveLength(6);
     expect(seedRules.filter((rule) => rule.id.startsWith("rq-docx-20260727-"))).toHaveLength(14);
+    expect(seedRules.filter((rule) => rule.id.startsWith("rq-docx-20260729-"))).toHaveLength(25);
     expect(new Set(seedRules.map((rule) => rule.id)).size).toBe(seedRules.length);
+  });
+
+  it("keeps the latest corrected formulas from the 116-rule archive", () => {
+    expect(seedRules.find((rule) => rule.id === "rq-kill-tail-d-core")?.formula).toBe(
+      "6+平1五行值 + 平4 + 特码尾 + 总数尾",
+    );
+    expect(seedRules.find((rule) => rule.id === "rq-manual-html-20260716-055")).toMatchObject({
+      orderMode: "L",
+      formula: "平2尾+平3合尾+特码合+特码五行值",
+    });
+    expect(seedRules.find((rule) => rule.id === "rq-system-html-20260716-067")?.formula).toBe(
+      "4+平1段+平3头+总数尾 + 期尾",
+    );
   });
 
   it("can calculate every imported formula against the latest bundled draw", () => {
