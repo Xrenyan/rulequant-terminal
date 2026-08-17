@@ -173,23 +173,25 @@ git commit -m "feat: add formula result summary engine"
 - Consumes: `FormulaSummaryReport`, `buildFormulaSummaryReport`, `buildFormulaSummaryGroups`, `DrawRecord[]`, `RuleRecord[]`, and `RuleQuantConfig` from Task 1.
 - Produces: `FormulaResultStatisticsView({ draws, rules, config }: FormulaResultStatisticsViewProps)` and the CSS class family `.rq-formula-stats-*`.
 
-- [ ] **Step 1: Write a failing source contract for page copy and controls**
+- [ ] **Step 1: Write a failing rendered-behavior test for page copy and controls**
 
-Create `tests/formula-result-statistics-view.test.ts` to read the future component source and styles, then assert:
+Create `tests/formula-result-statistics-view.test.ts` with `// @vitest-environment jsdom`. Dynamically import the future component so the first run reaches a clear assertion, then mount the real component with `createRoot`, `act`, `seedDraws`, `seedRules`, and `seedConfig`. Assert the visible control behavior rather than source text:
 
 ```ts
-expect(viewSource).toContain("公式结果统计");
-expect(viewSource).toContain("最新输出");
-expect(viewSource).toContain("最近十期");
-expect(viewSource).toContain("排除统计");
-expect(viewSource).toContain("支持统计");
-expect(viewSource).toContain("查看可视化");
-expect(viewSource).not.toContain("单双统计");
-expect(viewSource).not.toContain("大小统计");
-expect(styles).toContain(".rq-formula-stats");
+const module = await import("@/components/formula-result-statistics-view").catch(() => undefined);
+expect(module, "statistics view should exist").toBeDefined();
+await act(async () => root.render(React.createElement(module!.FormulaResultStatisticsView, { draws: seedDraws, rules: seedRules, config: seedConfig })));
+expect(host.textContent).toContain("公式结果统计");
+expect(host.textContent).toContain("最新输出");
+expect(host.textContent).toContain("最近十期");
+expect(host.textContent).not.toContain("单双统计");
+expect(host.textContent).not.toContain("大小统计");
+const recentButton = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("最近十期"))!;
+await act(async () => recentButton.click());
+expect(recentButton.getAttribute("aria-pressed")).toBe("true");
 ```
 
-Use `existsSync` before `readFileSync` and assert the file exists so the initial failure is a clear assertion, not a file-system exception.
+Unmount the root after each test. Add a second behavioral case that clicks `支持统计` and verifies its pressed state and ranking unit copy changes from `被排除次数` to `被支持次数`.
 
 - [ ] **Step 2: Run the view test and verify it fails because the component is absent**
 
@@ -281,22 +283,27 @@ git commit -m "feat: add formula result statistics page"
 - Consumes: selected `FormulaSummaryPeriod[]`, action, target type, selected target, `onSelectTarget`, `onClose`, and a return-focus ref.
 - Produces: `FormulaResultVisualizationDialog(props: FormulaResultVisualizationDialogProps)` and `.rq-formula-viz-*` styles.
 
-- [ ] **Step 1: Write failing accessibility and visualization contracts**
+- [ ] **Step 1: Write failing accessibility and visualization behavior tests**
 
-Assert the new source contains:
+Mount the real statistics view in jsdom, focus and click `查看可视化`, then assert the actual portal and interaction state:
 
 ```ts
-expect(source).toContain('role="dialog"');
-expect(source).toContain('aria-modal="true"');
-expect(source).toContain("createPortal(");
-expect(source).toContain("document.body");
-expect(source).toContain("Escape");
-expect(source).toContain("公式贡献排行");
-expect(source).toContain("最近十期变化");
-expect(source).toContain("贡献公式明细");
-expect(styles).toContain(".rq-formula-viz__sheet");
-expect(styles).toContain("env(safe-area-inset-bottom)");
+const trigger = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("查看可视化"))!;
+trigger.focus();
+await act(async () => trigger.click());
+const dialog = document.body.querySelector('[role="dialog"]') as HTMLElement;
+expect(dialog).not.toBeNull();
+expect(dialog.getAttribute("aria-modal")).toBe("true");
+expect(dialog.textContent).toContain("公式贡献排行");
+expect(dialog.textContent).toContain("最近十期变化");
+expect(dialog.textContent).toContain("贡献公式明细");
+expect(document.body.style.overflow).toBe("hidden");
+await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+expect(document.activeElement).toBe(trigger);
 ```
+
+Add a second case that reopens the dialog, clicks the backdrop, and proves scroll state and focus are restored again.
 
 - [ ] **Step 2: Run the drill-down test and verify the expected red state**
 
@@ -381,19 +388,18 @@ git commit -m "feat: add formula statistics visualization"
 - Consumes: `FormulaResultStatisticsView` from Task 2.
 - Produces: route `/formula-result-statistics`, `ViewKey` value `formula-result-statistics`, a tenth desktop nav item, and a mobile More-sheet entry.
 
-- [ ] **Step 1: Write the failing route/navigation contract**
+- [ ] **Step 1: Write the failing route boundary test**
 
-Read the route and terminal source, then assert:
+Use a dynamic import for the future route and inspect the React element returned by the real page function:
 
 ```ts
-expect(routeSource).toContain('activeView="formula-result-statistics"');
-expect(terminalSource).toContain('| "formula-result-statistics"');
-expect(terminalSource).toContain('href: "/formula-result-statistics"');
-expect(terminalSource).toContain('label: "公式结果统计"');
-expect(terminalSource).toContain('<FormulaResultStatisticsView draws={activeDraws} rules={rules} config={config} />');
+const route = await import("@/app/formula-result-statistics/page").catch(() => undefined);
+expect(route, "formula statistics route should exist").toBeDefined();
+const element = route!.default();
+expect(element.props.activeView).toBe("formula-result-statistics");
 ```
 
-Also count `navItems` business labels and assert the new label occurs once.
+The browser workflow in Task 5 verifies that the terminal renders the exact tenth desktop entry and mobile More-sheet entry; do not add source-text tests for those visual behaviors.
 
 - [ ] **Step 2: Run the route test and verify it fails**
 
