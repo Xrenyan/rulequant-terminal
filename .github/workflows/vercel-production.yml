@@ -1,9 +1,8 @@
 name: Deploy RuleQuant to Vercel
 
+# Vercel is retained only as an explicit legacy fallback. GitHub Pages is the
+# active public host, so source pushes must never deploy this workflow.
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
