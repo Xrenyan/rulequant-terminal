@@ -68,11 +68,35 @@ describe("formula result statistics", () => {
       ["102", "103"],
       ["103", undefined],
     ]);
+    expect(report.periods[0].targetResult).toMatchObject({
+      issue: "102",
+      number: 14,
+      head: 1,
+      tail: 4,
+      sum: 5,
+      segment: 2,
+      parity: "双",
+    });
     expect(report.latestPeriod).toMatchObject({
       calculationIssue: "103",
       targetLabel: "下期待开奖",
       isPending: true,
     });
+    expect(report.latestPeriod?.targetResult).toBeUndefined();
+    expect(report.latestPeriod?.targetResultWarning).toBeUndefined();
+  });
+
+  it("isolates an invalid target draw without discarding source contributions", () => {
+    const invalidTarget = { ...draws[1], special: 50 };
+    const report = buildFormulaSummaryReport({
+      draws: [draws[0], invalidTarget],
+      config: defaultConfig,
+      rules: [makeRule("kill-a", "kill_zodiac", "平1")],
+    });
+
+    expect(report.periods[0].contributions).toHaveLength(1);
+    expect(report.periods[0].targetResult).toBeUndefined();
+    expect(report.periods[0].targetResultWarning).toContain("号码必须在 1-49 之间");
   });
 
   it("excludes parity and size categories while retaining half-head and half-color semantics", () => {
