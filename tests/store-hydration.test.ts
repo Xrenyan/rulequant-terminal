@@ -50,8 +50,9 @@ describe("store hydration draw freshness", () => {
   });
 
   it("does not roll back a newer local draw when a stale mobile snapshot arrives", () => {
-    const localNewest = draw("2026209", 25);
-    const staleRemote = draw("2026207", 29);
+    const shippedLatestIssue = Number(seedDraws.at(-1)?.issue ?? "2026000");
+    const localNewest = draw(String(shippedLatestIssue + 2), 25);
+    const staleRemote = draw(String(shippedLatestIssue + 1), 29);
     const persisted = {
       draws: [...seedDraws, localNewest],
       rules: seedRules,

@@ -1,16 +1,16 @@
 param(
-  [string]$ProjectRoot = "D:\RuleQuant\rulequant-terminal",
-  [string]$DeployRoot = "D:\RuleQuant\deploy-rulequant-terminal",
+  [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
+  [string]$DeployRoot = "",
   [string]$PublicUrl = "https://rulequant-terminal.vercel.app/dashboard"
 )
 
 $ErrorActionPreference = "Stop"
 
-$nodePath = "C:\Users\32129\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin"
-$binPath = "C:\Users\32129\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin"
-$env:PATH = "$nodePath;$binPath;$env:PATH"
-
 $source = (Resolve-Path -LiteralPath $ProjectRoot).Path
+if (-not $DeployRoot) {
+  $DeployRoot = Join-Path (Split-Path -Parent $source) "deploy-rulequant-terminal"
+}
+$DeployRoot = [System.IO.Path]::GetFullPath($DeployRoot)
 if (-not (Test-Path -LiteralPath $DeployRoot)) {
   New-Item -ItemType Directory -Path $DeployRoot | Out-Null
 }
@@ -19,7 +19,7 @@ if ($target -ne $DeployRoot) {
   throw "Unexpected deploy target: $target"
 }
 
-robocopy $source $target /MIR /XD .git .next node_modules output release /XF *.log *.tsbuildinfo | Out-Null
+robocopy $source $target /MIR /XD .git .next node_modules out output release /XF *.log *.tsbuildinfo | Out-Null
 if ($LASTEXITCODE -ge 8) {
   throw "Robocopy failed with code $LASTEXITCODE"
 }
@@ -40,7 +40,7 @@ Push-Location $target
 try {
   $deployed = $false
   for ($attempt = 1; $attempt -le 3; $attempt++) {
-    pnpm dlx vercel@latest deploy --prod --yes --force --archive=tgz --logs --no-color
+    pnpm dlx vercel@59.1.3 deploy --prod --yes --force --archive=tgz --logs --no-color
     if ($LASTEXITCODE -eq 0) {
       $deployed = $true
       break

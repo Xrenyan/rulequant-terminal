@@ -1,14 +1,15 @@
 param(
-  [string]$ProjectRoot = "D:\RuleQuant\rulequant-terminal",
-  [string]$StateRoot = "D:\RuleQuant\.automation",
+  [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
+  [string]$StateRoot = "",
   [switch]$InitializeOnly
 )
 
 $ErrorActionPreference = "Stop"
 
-$nodePath = "C:\Users\32129\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin"
-$binPath = "C:\Users\32129\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin"
-$env:PATH = "$nodePath;$binPath;$env:PATH"
+$project = (Resolve-Path -LiteralPath $ProjectRoot).Path
+if (-not $StateRoot) {
+  $StateRoot = Join-Path (Split-Path -Parent $project) ".rulequant-automation"
+}
 
 if (-not (Test-Path -LiteralPath $StateRoot)) {
   New-Item -ItemType Directory -Path $StateRoot | Out-Null
@@ -79,7 +80,7 @@ function Publish-GithubPagesShare {
   }
 }
 
-Push-Location $ProjectRoot
+Push-Location $project
 try {
   git fetch origin main | Out-Null
   if ($LASTEXITCODE -ne 0) {
@@ -151,7 +152,7 @@ try {
     throw "typecheck failed with code $LASTEXITCODE"
   }
 
-  pnpm test -- --runInBand
+  pnpm test -- --run
   if ($LASTEXITCODE -ne 0) {
     throw "tests failed with code $LASTEXITCODE"
   }

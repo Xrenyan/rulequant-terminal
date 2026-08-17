@@ -1,20 +1,25 @@
 param(
-  [string]$ProjectRoot = "D:\RuleQuant\rulequant-terminal",
-  [string]$BuildRoot = "D:\RuleQuant\rulequant-terminal-static-build",
-  [string]$PagesRoot = "D:\RuleQuant\rulequant-terminal-pages",
+  [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
+  [string]$BuildRoot = "",
+  [string]$PagesRoot = "",
   [string]$PagesRepo = "https://github.com/Xrenyan/rulequant-terminal-pages.git",
   [string]$PublicUrl = "https://xrenyan.github.io/rulequant-terminal-pages/dashboard/"
 )
 
 $ErrorActionPreference = "Stop"
 
-$nodePath = "C:\Users\32129\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin"
-$binPath = "C:\Users\32129\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin"
-$env:PATH = "$nodePath;$binPath;$env:PATH"
 $env:GITHUB_PAGES_BASE_PATH = "/rulequant-terminal-pages"
 
 $project = (Resolve-Path -LiteralPath $ProjectRoot).Path
-$buildRootFull = $BuildRoot
+$projectParent = Split-Path -Parent $project
+if (-not $BuildRoot) {
+  $BuildRoot = Join-Path $projectParent "rulequant-terminal-static-build"
+}
+if (-not $PagesRoot) {
+  $PagesRoot = Join-Path $projectParent "rulequant-terminal-pages"
+}
+$buildRootFull = [System.IO.Path]::GetFullPath($BuildRoot)
+$expectedPagesRoot = [System.IO.Path]::GetFullPath((Join-Path $projectParent "rulequant-terminal-pages"))
 if (-not (Test-Path -LiteralPath $PagesRoot)) {
   git clone $PagesRepo $PagesRoot
   if ($LASTEXITCODE -ne 0) {
@@ -23,7 +28,7 @@ if (-not (Test-Path -LiteralPath $PagesRoot)) {
 }
 
 $pages = (Resolve-Path -LiteralPath $PagesRoot).Path
-if (-not $pages.StartsWith("D:\RuleQuant\rulequant-terminal-pages")) {
+if ($pages -ne $expectedPagesRoot) {
   throw "Unexpected GitHub Pages target: $pages"
 }
 
