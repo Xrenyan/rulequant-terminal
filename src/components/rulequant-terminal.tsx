@@ -4,6 +4,7 @@ import {
   Activity,
   BarChart3,
   Braces,
+  ChartNoAxesColumnIncreasing,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -28,6 +29,7 @@ import {
   Upload,
   XCircle,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -81,6 +83,32 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 import { paginateItems } from "@/lib/pagination";
 import { fetchJsonWithSessionCache } from "@/lib/network/urls";
+
+const FormulaResultStatisticsView = dynamic(
+  () => import("@/components/formula-result-statistics-view").then((module) => module.FormulaResultStatisticsView),
+  { ssr: false, loading: FormulaResultStatisticsLoading },
+);
+
+function preloadFormulaResultStatistics() {
+  if (typeof window !== "undefined") void import("@/components/formula-result-statistics-view");
+}
+
+function FormulaResultStatisticsLoading() {
+  return (
+    <div className="rq-formula-stats-loading" role="status" aria-busy="true" aria-label="正在准备完整的公式结果统计">
+      <section className="rq-formula-stats-loading__hero">
+        <span />
+        <div><i /><i /><i /></div>
+      </section>
+      <section className="rq-formula-stats-loading__rail">{Array.from({ length: 4 }, (_, index) => <span key={index} />)}</section>
+      <section className="rq-formula-stats-loading__workspace">
+        <div>{Array.from({ length: 7 }, (_, index) => <i key={index} />)}</div>
+        <div>{Array.from({ length: 7 }, (_, index) => <i key={index} />)}</div>
+      </section>
+      <p>正在载入完整统计、证据明细与可视化入口…</p>
+    </div>
+  );
+}
 
 let exportersPromise: ReturnType<typeof importExporters> | undefined;
 const formulaDiscoveryCache = new Map<string, FormulaDiscoveryCandidate[]>();
@@ -192,6 +220,7 @@ function exportHtmlReport(result: BacktestResult, rules: RuleRecord[], config: R
 export type ViewKey =
   | "dashboard"
   | "one-click"
+  | "formula-result-statistics"
   | "formula-detail"
   | "formula-discovery"
   | "special-analysis"
@@ -210,6 +239,7 @@ export type ViewKey =
 const navItems: Array<{ key: ViewKey; href: string; label: string; icon: typeof Gauge }> = [
   { key: "dashboard", href: "/dashboard", label: "首页", icon: Gauge },
   { key: "one-click", href: "/one-click", label: "一键算公式", icon: Play },
+  { key: "formula-result-statistics", href: "/formula-result-statistics", label: "公式结果统计", icon: ChartNoAxesColumnIncreasing },
   { key: "candidate-pool", href: "/candidate-pool", label: "综合参考结果", icon: Activity },
   { key: "special-analysis", href: "/special-analysis", label: "专项概率观察", icon: BarChart3 },
   { key: "draws", href: "/draws", label: "开奖数据", icon: TableProperties },
@@ -254,6 +284,7 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}
 const viewLabels: Record<ViewKey, string> = {
   dashboard: "首页",
   "one-click": "一键算公式",
+  "formula-result-statistics": "公式结果统计",
   "formula-detail": "公式逐期明细",
   "formula-discovery": "公式筛选",
   "special-analysis": "专项概率观察",
@@ -2431,6 +2462,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                 <Link
                   key={item.key}
                   href={item.href}
+                  onMouseEnter={item.key === "formula-result-statistics" ? preloadFormulaResultStatistics : undefined}
+                  onFocus={item.key === "formula-result-statistics" ? preloadFormulaResultStatistics : undefined}
                   className={cn("rq-nav-item flex h-10 items-center gap-3 rounded-xl px-3 text-sm transition", active && "rq-nav-item--active")}
                 >
                   <Icon className="h-4 w-4" />
@@ -2460,7 +2493,15 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   const Icon = item.icon;
                   const active = item.key === activeView;
                   return (
-                    <Link key={item.key} href={item.href} onClick={() => setMobileMoreOpen(false)} className={cn("rq-mobile-more__item", active && "is-active")}>
+                    <Link
+                      key={item.key}
+                      href={item.href}
+                      onMouseEnter={item.key === "formula-result-statistics" ? preloadFormulaResultStatistics : undefined}
+                      onFocus={item.key === "formula-result-statistics" ? preloadFormulaResultStatistics : undefined}
+                      onTouchStart={item.key === "formula-result-statistics" ? preloadFormulaResultStatistics : undefined}
+                      onClick={() => setMobileMoreOpen(false)}
+                      className={cn("rq-mobile-more__item", active && "is-active")}
+                    >
                       <span className="rq-mobile-more__icon"><Icon className="h-5 w-5" /></span>
                       <span>{item.label}</span>
                       <ChevronRight className="rq-mobile-more__chevron h-4 w-4" aria-hidden="true" />
@@ -2803,6 +2844,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   )}
                 </Panel>
               </div>
+            )}
+
+            {activeView === "formula-result-statistics" && (
+              <FormulaResultStatisticsView draws={activeDraws} rules={rules} config={config} />
             )}
 
             {activeView === "formula-detail" && (
