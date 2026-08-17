@@ -24,10 +24,12 @@ import {
   buildFormulaVisualizationModel,
   selectRankSeries,
 } from "@/lib/formula-summary/formula-visualization";
+import type { RuleQuantConfig } from "@/types/domain";
 import { cn } from "@/lib/utils";
 
 export type FormulaResultVisualizationDialogProps = {
   periods: FormulaSummaryPeriod[];
+  config: RuleQuantConfig;
   action: FormulaSummaryAction;
   targetType: FormulaSummaryTargetType;
   selectedTargetKey: string;

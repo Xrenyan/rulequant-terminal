@@ -69,13 +69,13 @@ function findButton(label: string): HTMLButtonElement {
   return button as HTMLButtonElement;
 }
 
-async function renderView() {
+async function renderView({ draws: viewDraws = draws }: { draws?: DrawRecord[] } = {}) {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
   await act(async () => {
     root?.render(React.createElement(FormulaResultStatisticsView, {
-      draws,
+      draws: viewDraws,
       rules,
       config: defaultConfig,
     }));
@@ -131,14 +131,25 @@ describe("formula result statistics view", () => {
     Object.defineProperty(globalThis, "Worker", { configurable: true, writable: true, value: WorkerStub });
     await renderView();
 
-    expect(WorkerStub.instance?.postMessage).toHaveBeenCalledWith({ draws, rules, config: defaultConfig, maxPeriods: 10 });
+    expect(WorkerStub.instance?.postMessage).toHaveBeenCalledWith({ draws, rules, config: defaultConfig, maxPeriods: 11 });
     expect(host?.textContent).toContain("正在整理完整统计");
 
-    const report = buildFormulaSummaryReport({ draws, rules, config: defaultConfig, maxPeriods: 10 });
+    const report = buildFormulaSummaryReport({ draws, rules, config: defaultConfig, maxPeriods: 11 });
     await act(async () => WorkerStub.instance?.onmessage?.({ data: { ok: true, report } } as MessageEvent));
 
     expect(host?.textContent).toContain("最新输出");
     await act(async () => findButton("最近十期").click());
     expect(host?.textContent).toContain("3 个计算期");
+  });
+
+  it("keeps the page recent range at ten calculation periods", async () => {
+    const longDraws = Array.from({ length: 12 }, (_, index) => ({
+      issue: String(101 + index),
+      n1: 1, n2: 2, n3: 3, n4: 4, n5: 5, n6: 6,
+      special: index % 49 + 1,
+    }));
+    await renderView({ draws: longDraws });
+    await act(async () => findButton("最近十期").click());
+    expect(host?.textContent).toContain("10 个计算期");
   });
 });

@@ -38,6 +38,8 @@ type FormulaSummaryCacheEntry = { rules: RuleRecord[]; config: RuleQuantConfig; 
 type FormulaSummaryAsyncState = FormulaSummaryCacheEntry & { draws: DrawRecord[]; error?: string };
 
 const formulaSummaryReportCache = new WeakMap<DrawRecord[], FormulaSummaryCacheEntry>();
+const FORMULA_SUMMARY_PREPARED_PERIODS = 11;
+const FORMULA_SUMMARY_VISIBLE_PERIODS = 10;
 const EMPTY_FORMULA_SUMMARY_REPORT: FormulaSummaryReport = {
   periods: [],
   enabledRuleCount: 0,
@@ -135,7 +137,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
 
   const workerAvailable = typeof Worker !== "undefined";
   const synchronousReport = useMemo(
-    () => workerAvailable ? undefined : buildFormulaSummaryReport({ draws, rules, config, maxPeriods: 10 }),
+    () => workerAvailable ? undefined : buildFormulaSummaryReport({ draws, rules, config, maxPeriods: FORMULA_SUMMARY_PREPARED_PERIODS }),
     [workerAvailable, draws, rules, config],
   );
   const [asyncState, setAsyncState] = useState<FormulaSummaryAsyncState>(() => ({
@@ -175,7 +177,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
       if (!disposed) setAsyncState({ draws, rules, config, report: EMPTY_FORMULA_SUMMARY_REPORT, error: "统计线程暂时无法启动" });
       worker.terminate();
     };
-    worker.postMessage({ draws, rules, config, maxPeriods: 10 });
+    worker.postMessage({ draws, rules, config, maxPeriods: FORMULA_SUMMARY_PREPARED_PERIODS });
     return () => {
       disposed = true;
       worker.terminate();
@@ -188,7 +190,9 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
   const report = synchronousReport ?? asyncReport ?? EMPTY_FORMULA_SUMMARY_REPORT;
   const reportError = asyncState.draws === draws && asyncState.rules === rules && asyncState.config === config ? asyncState.error : undefined;
   const visiblePeriods = useMemo(
-    () => rangeMode === "latest" ? report.periods.slice(-1) : report.periods,
+    () => rangeMode === "latest"
+      ? report.periods.slice(-1)
+      : report.periods.slice(-FORMULA_SUMMARY_VISIBLE_PERIODS),
     [rangeMode, report.periods],
   );
   const groups = useMemo(() => buildFormulaSummaryGroups(visiblePeriods), [visiblePeriods]);
@@ -381,6 +385,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
         <Suspense fallback={<div className="rq-formula-viz-loading" role="status">正在打开完整可视化…</div>}>
           <LazyFormulaResultVisualizationDialog
             periods={report.periods}
+            config={config}
             action={action}
             targetType={activeTargetType}
             selectedTargetKey={activeTarget}
