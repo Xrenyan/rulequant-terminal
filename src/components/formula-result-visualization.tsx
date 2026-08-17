@@ -86,16 +86,11 @@ export function FormulaResultVisualizationDialog({
   const displayedSelectedShare = focusedTotal ? displayedSelectedTotal / focusedTotal * 100 : selectedShare;
   const displayedActivePeriods = focusedPeriod ? Number(displayedSelectedTotal > 0) : activePeriods;
   const displayedPeriodCount = focusedPeriod ? 1 : periods.length;
-  const selectedContributions = useMemo(() => (
-    selectedItem?.contributions.filter((contribution) => (
-      focusedIssue === "all" || contribution.calculationIssue === focusedIssue
-    )) ?? []
-  ), [focusedIssue, selectedItem]);
+  const selectedContributions = selectedItem?.contributions.filter((contribution) => (
+    focusedIssue === "all" || contribution.calculationIssue === focusedIssue
+  )) ?? [];
   const uniqueRuleCount = new Set(selectedContributions.map((contribution) => contribution.ruleId)).size;
-  const paretoRows = useMemo(
-    () => buildFormulaParetoRows(selectedContributions, 10),
-    [selectedContributions],
-  );
+  const paretoRows = buildFormulaParetoRows(selectedContributions, 10);
   const insight = useMemo(
     () => buildFormulaInsight(model, effectiveTargetKey),
     [effectiveTargetKey, model],
