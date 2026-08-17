@@ -949,26 +949,33 @@ git commit -m "feat: integrate formula draw landing dashboard"
 - Consumes: the class names introduced in Tasks 4–6 and the existing `--rq-*` tokens.
 - Produces: desktop/mobile layout, sticky labels, actual markers, scroll containment, dark/reduced modes, and 44 px interaction targets.
 
-- [ ] **Step 1: Add failing DOM-order and CSS-contract assertions**
+- [ ] **Step 1: Add failing user-visible DOM-order and control assertions**
 
 Assert the desktop DOM order contains overview, existing trend/rank, trajectory/pareto, landing, matrix, and evidence. Assert every landing record button and actual matrix cell is a real `button`, and number mode has `.rq-formula-complete-matrix__number-grid`.
 
-Add a source-level CSS assertion using `readFileSync`:
+Assert the mobile reading order is exposed through the same semantic section sequence and that every interactive landing/matrix control is keyboard reachable:
 
 ```ts
-const css = readFileSync("src/app/globals.css", "utf8");
-expect(css).toContain(".rq-formula-viz__landing-panel");
-expect(css).toContain(".rq-formula-complete-matrix__period");
-expect(css).toContain("grid-template-columns: repeat(7, minmax(0, 1fr))");
-expect(css).toContain("@media (prefers-reduced-motion: reduce)");
-expect(css).toContain("@media (prefers-reduced-transparency: reduce)");
+const sections = [...dialog.querySelectorAll<HTMLElement>(".rq-formula-viz__body > section")];
+expect(sections.map((section) => section.getAttribute("aria-labelledby"))).toEqual([
+  "formula-overview-title",
+  "formula-trend-title",
+  "formula-rank-title",
+  "formula-trajectory-title",
+  "formula-pareto-title",
+  "formula-landing-title",
+  "formula-matrix-title",
+  "formula-evidence-title",
+]);
+expect([...dialog.querySelectorAll("[data-landing-record] button, [data-actual-landing='true']")]
+  .every((control) => control instanceof HTMLButtonElement)).toBe(true);
 ```
 
-- [ ] **Step 2: Run the component tests and confirm the new CSS contract fails**
+- [ ] **Step 2: Run the component tests and confirm the new user-visible assertions fail before the UI integration is complete**
 
 Run: `pnpm exec vitest run tests/formula-result-visualization.test.ts tests/formula-complete-matrix.test.tsx`
 
-Expected: FAIL until the selectors are added.
+Expected: FAIL before Tasks 6–7 complete the new section order and controls. If Task 6 already made these assertions pass, record the existing GREEN result as the guard for this CSS/configuration task; visual behavior is verified in Task 8 using real Edge rendering rather than source-text assertions.
 
 - [ ] **Step 3: Add desktop panel, chart, KPI, table, and matrix styles**
 
