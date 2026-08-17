@@ -3361,6 +3361,336 @@ option { background: var(--rq-panel-strong); color: var(--rq-text); }
   .rq-formula-viz__toolbar { background: var(--rq-content-raised); backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 
+/* Formula analytics cockpit: truthful comparisons, dense evidence, and sibling mobile layout. */
+.rq-formula-viz__trajectory-panel,
+.rq-formula-viz__pareto-panel {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--rq-border);
+  border-radius: 20px;
+  background: var(--rq-content);
+  box-shadow: var(--rq-shadow-content);
+}
+
+.rq-formula-viz__overview { grid-column: 1 / -1; min-height: 236px; }
+.rq-formula-viz__trend-panel { grid-column: span 8; min-height: 426px; }
+.rq-formula-viz__rank-panel { grid-column: span 4; min-height: 426px; }
+.rq-formula-viz__trajectory-panel { grid-column: span 7; min-height: 402px; }
+.rq-formula-viz__pareto-panel { grid-column: span 5; min-height: 402px; }
+.rq-formula-viz__matrix-panel { min-height: 0; }
+.rq-formula-viz__evidence-panel { min-height: 0; }
+
+.rq-formula-viz__trajectory-panel > header,
+.rq-formula-viz__pareto-panel > header {
+  display: flex;
+  min-height: 68px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--rq-border);
+  padding: 12px 15px;
+}
+
+.rq-formula-viz__body > section:not(.rq-formula-viz__overview) {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 420px;
+}
+
+.rq-formula-viz__insight {
+  position: relative;
+  display: grid;
+  min-height: 72px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 14px 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--rq-accent) 22%, var(--rq-border));
+  border-radius: 15px;
+  padding: 12px 14px;
+  background:
+    radial-gradient(circle at 0 0, color-mix(in srgb, var(--rq-accent) 13%, transparent), transparent 52%),
+    var(--rq-content-raised);
+  box-shadow: inset 0 1px 0 var(--rq-glass-highlight);
+}
+
+.rq-formula-viz__insight::before {
+  width: 4px;
+  height: 38px;
+  border-radius: 999px;
+  background: var(--rq-accent);
+  content: "";
+}
+
+.rq-formula-viz__insight > span {
+  position: absolute;
+  top: 9px;
+  left: 30px;
+  color: var(--rq-accent-strong);
+  font-size: 10px;
+  font-weight: 720;
+  letter-spacing: .03em;
+}
+
+.rq-formula-viz__insight > strong {
+  padding-top: 13px;
+  color: var(--rq-text);
+  font-size: 14px;
+  font-weight: 690;
+  line-height: 1.55;
+}
+
+.rq-formula-viz__insight > p {
+  max-width: 260px;
+  color: var(--rq-muted);
+  font-size: 10px;
+  line-height: 1.5;
+  text-align: right;
+}
+
+.rq-formula-viz__kpis { margin-top: 10px; border-top: 1px solid var(--rq-border); }
+.rq-formula-viz__kpis article { min-height: 96px; padding-block: 13px; }
+.rq-formula-viz__kpis article.is-primary {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--rq-viz-mark) 8%, var(--rq-content-raised)), transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--rq-viz-mark) 78%, transparent);
+}
+
+.rq-formula-viz__comparison-chart,
+.rq-formula-viz__trajectory-chart,
+.rq-formula-viz__pareto-chart { padding: 10px 12px 0; }
+
+.rq-formula-viz__comparison-chart > svg,
+.rq-formula-viz__trajectory-chart > svg,
+.rq-formula-viz__pareto-chart > svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+.rq-formula-viz__axis-label { fill: var(--rq-muted); font: 600 9px var(--font-mono); }
+.rq-formula-viz__comparison-fill-start { stop-color: var(--rq-viz-mark); stop-opacity: .22; }
+.rq-formula-viz__comparison-fill-end { stop-color: var(--rq-viz-mark); stop-opacity: .01; }
+.rq-formula-viz__comparison-area { opacity: .95; }
+.rq-formula-viz__comparison-line { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.rq-formula-viz__comparison-line.is-selected { stroke: var(--rq-viz-mark); stroke-width: 3.4; }
+.rq-formula-viz__comparison-line.is-leader { stroke: var(--rq-accent); stroke-dasharray: 8 5; stroke-width: 2; }
+.rq-formula-viz__comparison-line.is-median { stroke: var(--rq-cyan); stroke-dasharray: 2 5; stroke-width: 2; }
+.rq-formula-viz__comparison-dot { fill: var(--rq-content-raised); stroke: var(--rq-viz-mark); stroke-width: 3; }
+.rq-formula-viz__comparison-chart g.is-focused .rq-formula-viz__comparison-dot { fill: var(--rq-viz-mark); r: 7px; }
+.rq-formula-viz__endpoint-labels text { paint-order: stroke; stroke: var(--rq-content); stroke-width: 5px; font: 720 10px var(--font-mono); }
+.rq-formula-viz__endpoint-labels .is-selected { fill: var(--rq-viz-mark); }
+.rq-formula-viz__endpoint-labels .is-leader { fill: var(--rq-accent-strong); }
+.rq-formula-viz__endpoint-labels .is-median { fill: var(--rq-cyan); }
+
+.rq-formula-viz__chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 4px 10px 10px;
+}
+
+.rq-formula-viz__chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--rq-muted);
+  font-size: 10px;
+}
+
+.rq-formula-viz__chart-legend i { display: block; width: 18px; height: 2px; border-radius: 999px; background: var(--rq-viz-mark); }
+.rq-formula-viz__chart-legend .is-leader i { background: repeating-linear-gradient(90deg, var(--rq-accent) 0 6px, transparent 6px 9px); }
+.rq-formula-viz__chart-legend .is-median i { background: repeating-linear-gradient(90deg, var(--rq-cyan) 0 2px, transparent 2px 5px); }
+.rq-formula-viz__chart-legend .is-bars i { height: 7px; background: var(--rq-viz-mark); }
+.rq-formula-viz__chart-legend .is-cumulative i { background: var(--rq-accent); }
+.rq-formula-viz__chart-legend .is-reference i { background: repeating-linear-gradient(90deg, var(--rq-warn) 0 4px, transparent 4px 7px); }
+
+.rq-formula-viz__period-filter button { min-height: 44px; }
+
+.rq-formula-viz__trajectory-line { fill: none; stroke: var(--rq-muted); stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; opacity: .52; }
+.rq-formula-viz__trajectory-dot { fill: var(--rq-content); stroke: var(--rq-muted); stroke-width: 1.8; opacity: .7; }
+.rq-formula-viz__trajectory-label { fill: var(--rq-muted); font: 680 9px var(--font-sans); opacity: .8; }
+.rq-formula-viz__trajectory-chart g.is-selected .rq-formula-viz__trajectory-line { stroke: var(--rq-viz-mark); stroke-width: 3.5; opacity: 1; }
+.rq-formula-viz__trajectory-chart g.is-selected .rq-formula-viz__trajectory-dot { fill: var(--rq-content); stroke: var(--rq-viz-mark); stroke-width: 3; opacity: 1; }
+.rq-formula-viz__trajectory-chart g.is-selected .rq-formula-viz__trajectory-label { fill: var(--rq-viz-mark); font-weight: 760; opacity: 1; }
+.rq-formula-viz__trajectory-chart .series-2 .rq-formula-viz__trajectory-line,
+.rq-formula-viz__trajectory-controls .series-2 i { stroke: var(--rq-cyan); background: var(--rq-cyan); }
+.rq-formula-viz__trajectory-chart .series-3 .rq-formula-viz__trajectory-line,
+.rq-formula-viz__trajectory-controls .series-3 i { stroke: var(--rq-good); background: var(--rq-good); }
+.rq-formula-viz__trajectory-chart .series-4 .rq-formula-viz__trajectory-line,
+.rq-formula-viz__trajectory-controls .series-4 i { stroke: var(--rq-warn); background: var(--rq-warn); }
+
+.rq-formula-viz__trajectory-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  padding: 4px 10px 12px;
+}
+
+.rq-formula-viz__trajectory-controls button {
+  display: grid;
+  min-height: 38px;
+  grid-template-columns: 7px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 5px 8px;
+  color: var(--rq-text-soft);
+  font-size: 11px;
+  text-align: left;
+}
+
+.rq-formula-viz__trajectory-controls button:hover { background: var(--rq-content-hover); }
+.rq-formula-viz__trajectory-controls button.is-active { border-color: color-mix(in srgb, var(--rq-viz-mark) 28%, var(--rq-border)); background: color-mix(in srgb, var(--rq-viz-mark) 7%, var(--rq-content-raised)); color: var(--rq-text); }
+.rq-formula-viz__trajectory-controls i { width: 7px; height: 7px; border-radius: 50%; background: var(--rq-viz-mark); }
+.rq-formula-viz__trajectory-controls span { color: var(--rq-muted); font: 650 10px var(--font-mono); }
+
+.rq-formula-viz__pareto-bar { fill: color-mix(in srgb, var(--rq-viz-mark) 76%, var(--rq-accent)); }
+.rq-formula-viz__pareto-chart g.is-remainder .rq-formula-viz__pareto-bar { fill: var(--rq-muted); opacity: .48; }
+.rq-formula-viz__pareto-label { fill: var(--rq-text-soft); font: 650 10px var(--font-sans); }
+.rq-formula-viz__pareto-count { fill: white; font: 740 10px var(--font-mono); }
+.rq-formula-viz__pareto-share { fill: var(--rq-accent-strong); font: 700 9px var(--font-mono); }
+.rq-formula-viz__pareto-line { fill: none; stroke: var(--rq-accent); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.4; }
+.rq-formula-viz__pareto-dot { fill: var(--rq-content); stroke: var(--rq-accent); stroke-width: 2.2; }
+.rq-formula-viz__pareto-reference { stroke: var(--rq-warn); stroke-dasharray: 4 5; stroke-width: 1.3; }
+.rq-formula-viz__pareto-reference-label { fill: var(--rq-warn); font: 700 9px var(--font-mono); }
+
+.rq-formula-viz__heat-legend {
+  display: grid;
+  grid-template-columns: auto auto 72px auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.rq-formula-viz__heat-legend span { color: var(--rq-muted); font-size: 10px; }
+.rq-formula-viz__heat-legend small { color: var(--rq-muted); font: 650 9px var(--font-mono); }
+.rq-formula-viz__heat-legend i {
+  display: block;
+  width: 72px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--rq-viz-mark) 8%, var(--rq-content-grouped)), color-mix(in srgb, var(--rq-viz-mark) 80%, var(--rq-content-grouped)));
+}
+
+.rq-formula-viz__evidence-list { max-height: none; overflow-y: visible; }
+.rq-formula-viz__evidence-row summary { grid-template-columns: auto minmax(0, 1fr) minmax(96px, max-content) auto; padding-block: 10px; }
+.rq-formula-viz__evidence-row summary > span:first-child { width: 34px; height: 34px; }
+.rq-formula-viz__target-chips {
+  display: flex !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: 300px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+  border-radius: 0 !important;
+  background: none !important;
+}
+
+.rq-formula-viz__target-chips i {
+  display: inline-flex;
+  min-width: 28px;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--rq-viz-mark) 24%, var(--rq-border));
+  border-radius: 9px;
+  padding: 4px 8px;
+  background: color-mix(in srgb, var(--rq-viz-mark) 7%, var(--rq-content-raised));
+  color: var(--rq-viz-mark);
+  font: 700 11px var(--font-mono);
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.rq-formula-viz__evidence-detail { gap: 12px; padding: 14px 16px 16px 58px; }
+.rq-formula-viz__evidence-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.rq-formula-viz__evidence-meta p {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 8px;
+  border: 1px solid var(--rq-border);
+  border-radius: 11px;
+  padding: 9px 10px;
+  background: var(--rq-content);
+}
+
+.rq-formula-viz__process { border: 1px solid var(--rq-border); border-radius: 12px; padding: 10px 12px; background: var(--rq-content); }
+.rq-formula-viz__process > span { display: block; margin-bottom: 9px; color: var(--rq-muted); font-size: 11px; }
+.rq-formula-viz__process ol { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; counter-reset: rq-process; }
+.rq-formula-viz__process li {
+  position: relative;
+  min-height: 24px;
+  padding: 3px 0 3px 34px;
+  color: var(--rq-text-soft);
+  font: 11px/1.6 var(--font-mono);
+  counter-increment: rq-process;
+}
+
+.rq-formula-viz__process li::before {
+  position: absolute;
+  top: 1px;
+  left: 0;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--rq-accent) 25%, var(--rq-border));
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--rq-accent) 7%, var(--rq-content-raised));
+  color: var(--rq-accent-strong);
+  content: counter(rq-process);
+  font: 700 9px var(--font-mono);
+}
+
+@media (max-width: 767px) {
+  .rq-formula-viz__overview,
+  .rq-formula-viz__rank-panel,
+  .rq-formula-viz__trend-panel,
+  .rq-formula-viz__trajectory-panel,
+  .rq-formula-viz__pareto-panel,
+  .rq-formula-viz__matrix-panel,
+  .rq-formula-viz__evidence-panel { grid-column: 1; min-height: 0; border-radius: 18px; }
+  .rq-formula-viz__overview { order: 1; }
+  .rq-formula-viz__trend-panel { order: 2; }
+  .rq-formula-viz__rank-panel { order: 3; }
+  .rq-formula-viz__trajectory-panel { order: 4; }
+  .rq-formula-viz__pareto-panel { order: 5; }
+  .rq-formula-viz__matrix-panel { order: 6; }
+  .rq-formula-viz__evidence-panel { order: 7; }
+  .rq-formula-viz__insight { grid-template-columns: auto minmax(0, 1fr); margin-inline: 10px; }
+  .rq-formula-viz__insight > p { grid-column: 2; max-width: none; text-align: left; }
+  .rq-formula-viz__kpis article { min-height: 94px; padding-inline: 12px; }
+  .rq-formula-viz__rank-list { max-height: none; overflow: visible; }
+  .rq-formula-viz__comparison-chart,
+  .rq-formula-viz__trajectory-chart,
+  .rq-formula-viz__pareto-chart { overflow-x: auto; padding-inline: 8px; }
+  .rq-formula-viz__comparison-chart > svg { min-width: 610px; }
+  .rq-formula-viz__trajectory-chart > svg { min-width: 590px; }
+  .rq-formula-viz__pareto-chart > svg { min-width: 500px; }
+  .rq-formula-viz__trajectory-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rq-formula-viz__trajectory-controls button { min-height: 44px; }
+  .rq-formula-viz__matrix-panel > header { align-items: flex-start; }
+  .rq-formula-viz__heat-legend { grid-template-columns: auto auto 64px auto; }
+  .rq-formula-viz__heat-legend i { width: 64px; }
+  .rq-formula-viz__evidence-row summary { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .rq-formula-viz__target-chips { grid-column: 2; max-width: 100%; justify-content: flex-start; }
+  .rq-formula-viz__evidence-row summary > svg { grid-column: 3; grid-row: 1 / span 2; }
+  .rq-formula-viz__evidence-detail { padding: 11px; }
+  .rq-formula-viz__evidence-meta { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 390px) {
+  .rq-formula-viz__insight > strong { font-size: 13px; }
+  .rq-formula-viz__period-filter { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .rq-formula-viz__trajectory-controls { grid-template-columns: 1fr 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rq-formula-viz__trajectory-line,
+  .rq-formula-viz__comparison-line,
+  .rq-formula-viz__pareto-line,
+  .rq-formula-viz__matrix-cell { transition: none; }
+}
+
 @media (max-width: 767px) {
   .rq-mobile-nav .rq-nav-item span {
     overflow: visible;

@@ -83,11 +83,37 @@ describe("formula result visualization", () => {
     expect(dialog).not.toBeNull();
     expect(dialog?.getAttribute("aria-modal")).toBe("true");
     expect(dialog?.textContent).toContain("分析概览");
-    expect(dialog?.textContent).toContain("结果构成");
+    expect(dialog?.textContent).toContain("自动洞察");
     expect(dialog?.textContent).toContain("公式贡献排行");
-    expect(dialog?.textContent).toContain("最近十期变化");
-    expect(dialog?.textContent).toContain("公式贡献结构");
+    expect(dialog?.textContent).toContain("相对趋势");
+    expect(dialog?.textContent).toContain("十期排名轨迹");
+    expect(dialog?.textContent).toContain("公式贡献帕累托");
+    expect(dialog?.textContent).toContain("统一色阶");
     expect(dialog?.textContent).toContain("贡献公式明细");
+    expect(dialog?.textContent).not.toContain("结果构成");
+    expect(dialog?.querySelector('svg[aria-label*="中位数"]')).not.toBeNull();
+    expect(dialog?.querySelector('svg[aria-label*="排名从"]')).not.toBeNull();
+    expect(dialog?.querySelector(".rq-formula-viz__heat-legend")).not.toBeNull();
+    expect(dialog?.querySelector(".rq-formula-viz__target-chips")).not.toBeNull();
+    const evidence = dialog?.querySelector(".rq-formula-viz__evidence-row") as HTMLDetailsElement | null;
+    expect(evidence).not.toBeNull();
+    if (evidence) evidence.open = true;
+    expect(evidence?.textContent).toContain("计算过程");
+    expect(evidence?.querySelector(".rq-formula-viz__process")).not.toBeNull();
+
+    const panelOrder = [
+      ".rq-formula-viz__overview",
+      ".rq-formula-viz__trend-panel",
+      ".rq-formula-viz__rank-panel",
+      ".rq-formula-viz__trajectory-panel",
+      ".rq-formula-viz__pareto-panel",
+      ".rq-formula-viz__matrix-panel",
+      ".rq-formula-viz__evidence-panel",
+    ].map((selector) => dialog?.querySelector(selector));
+    expect(panelOrder.every(Boolean)).toBe(true);
+    expect(panelOrder.every((panel, index) => (
+      index === 0 || panelOrder[index - 1]?.compareDocumentPosition(panel!) === Node.DOCUMENT_POSITION_FOLLOWING
+    ))).toBe(true);
     expect(document.body.style.overflow).toBe("hidden");
 
     await act(async () => {
