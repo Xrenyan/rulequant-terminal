@@ -9,7 +9,6 @@ import {
   Layers3,
   ListChecks,
   Eye,
-  Sparkles,
 } from "lucide-react";
 import {
   buildFormulaSummaryGroups,
@@ -22,6 +21,7 @@ import {
 } from "@/lib/formula-summary/formula-summary";
 import type { DrawRecord, RuleQuantConfig, RuleRecord } from "@/types/domain";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
 
@@ -229,20 +229,16 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
 
   return (
     <div className="rq-formula-stats">
-      <section className="rq-formula-stats__hero" aria-labelledby="formula-statistics-title">
-        <div>
-          <div className="rq-formula-stats__hero-icon"><BarChart3 className="h-5 w-5" /></div>
-          <h2 id="formula-statistics-title">公式结果统计</h2>
-          <p>按最新一期或最近十期，统计每条启用公式产生的排除与支持次数。</p>
-        </div>
-        <div className="rq-formula-stats__hero-actions">
-          <div className="rq-formula-stats__freshness">
-            <Sparkles className="h-4 w-4" />
-            <span><b>随开奖自动更新</b><small>不保存过期统计副本</small></span>
+      <Panel className="rq-formula-stats__command rq-task-surface p-4 sm:p-5" aria-labelledby="formula-statistics-title">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 id="formula-statistics-title">公式结果统计</h2>
+            <p className="mt-1 text-sm text-slate-500">按最新一期或最近十期，统计每条启用公式产生的排除与支持次数。</p>
           </div>
-          <button
+          <Button
             type="button"
-            className="rq-formula-stats__visualize-button"
+            className="w-full sm:w-auto"
+            variant="primary"
             disabled={!activeItem}
             onMouseEnter={preloadFormulaVisualization}
             onFocus={preloadFormulaVisualization}
@@ -250,58 +246,65 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
             onClick={(event) => openVisualization(event.currentTarget)}
           >
             <Eye className="h-4 w-4" />查看可视化
-          </button>
+          </Button>
         </div>
-      </section>
-
-      <Panel className="rq-formula-stats__status" aria-label="统计运行概况">
-        <div><CalendarRange className="h-4 w-4" /><span>最新计算期</span><strong>{latest?.calculationIssue ?? "-"}</strong></div>
-        <div><ChevronRight className="h-4 w-4" /><span>对应期</span><strong>{latest?.targetLabel ?? "-"}</strong></div>
-        <div><Layers3 className="h-4 w-4" /><span>参与统计公式</span><strong>{report.formulaCount} 条</strong></div>
-        <div><BarChart3 className="h-4 w-4" /><span>当前范围</span><strong>{visiblePeriods.length} 个计算期</strong></div>
-        <div><CircleAlert className="h-4 w-4" /><span>跳过异常</span><strong>{visiblePeriods.reduce((sum, period) => sum + period.skippedRules.length, 0)} 条</strong></div>
+        <div className="rq-formula-stats__sync-note mt-4">
+          <Badge tone="green">实时统计</Badge>
+          <span><b>随开奖自动更新</b><small>直接读取现有开奖与公式，不保存过期统计副本</small></span>
+        </div>
       </Panel>
+
+      <div className="rq-workspace-tabs rq-formula-stats__status" aria-label="统计运行概况">
+        <div className="rq-workspace-tab rq-workspace-tab--active"><CalendarRange className="h-4 w-4" /><span>最新计算期</span><strong>{latest?.calculationIssue ?? "-"}</strong></div>
+        <div className="rq-workspace-tab"><ChevronRight className="h-4 w-4" /><span>对应期</span><strong>{latest?.targetLabel ?? "-"}</strong></div>
+        <div className="rq-workspace-tab"><Layers3 className="h-4 w-4" /><span>参与统计公式</span><strong>{report.formulaCount} 条</strong></div>
+        <div className="rq-workspace-tab"><BarChart3 className="h-4 w-4" /><span>当前范围</span><strong>{visiblePeriods.length} 个计算期</strong></div>
+        <div className="rq-workspace-tab"><CircleAlert className="h-4 w-4" /><span>跳过异常</span><strong>{visiblePeriods.reduce((sum, period) => sum + period.skippedRules.length, 0)} 条</strong></div>
+      </div>
 
       <Panel className="rq-formula-stats__workspace">
         <div className="rq-formula-stats__toolbar">
-          <div className="rq-formula-stats__segmented" aria-label="统计时间范围">
+          <div className="rq-formula-stats__segmented rq-segmented-control" aria-label="统计时间范围">
             {rangeOptions.map((option) => (
-              <button
+              <Button
                 key={option.value}
                 type="button"
+                size="sm"
+                variant={rangeMode === option.value ? "primary" : "ghost"}
                 aria-pressed={rangeMode === option.value}
-                className={cn(rangeMode === option.value && "is-active")}
                 onClick={() => changeRange(option.value)}
               >
                 {option.label}
-              </button>
+              </Button>
             ))}
           </div>
-          <div className="rq-formula-stats__segmented" aria-label="统计动作">
+          <div className="rq-formula-stats__segmented rq-segmented-control" aria-label="统计动作">
             {actionOptions.map((option) => (
-              <button
+              <Button
                 key={option.value}
                 type="button"
+                size="sm"
+                variant={action === option.value ? "primary" : "ghost"}
                 aria-pressed={action === option.value}
-                className={cn(action === option.value && "is-active", option.value === "exclude" ? "is-exclude" : "is-include")}
                 onClick={() => changeAction(option.value)}
               >
                 {option.label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
 
         {actionGroups.length ? (
           <>
-            <div className="rq-formula-stats__type-scroll" role="tablist" aria-label="公式结果类型">
+            <div className="rq-formula-stats__type-scroll rq-segmented-control" role="tablist" aria-label="公式结果类型">
               {actionGroups.map((group) => (
-                <button
+                <Button
                   key={group.targetType}
                   type="button"
+                  size="sm"
+                  variant={activeTargetType === group.targetType ? "primary" : "ghost"}
                   role="tab"
                   aria-selected={activeTargetType === group.targetType}
-                  className={cn(activeTargetType === group.targetType && "is-active")}
                   onClick={() => startTransition(() => {
                     setRequestedTargetType(group.targetType);
                     setRequestedTarget("");
@@ -309,7 +312,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
                 >
                   <span>{formulaSummaryTargetLabel(group.targetType)}</span>
                   <small>{group.items.length}</small>
-                </button>
+                </Button>
               ))}
             </div>
 
@@ -377,7 +380,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
       {visualizationOpen && activeTargetType && (
         <Suspense fallback={<div className="rq-formula-viz-loading" role="status">正在打开完整可视化…</div>}>
           <LazyFormulaResultVisualizationDialog
-            periods={visiblePeriods}
+            periods={report.periods}
             action={action}
             targetType={activeTargetType}
             selectedTargetKey={activeTarget}

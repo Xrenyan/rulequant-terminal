@@ -82,8 +82,11 @@ describe("formula result visualization", () => {
     const dialog = document.body.querySelector('[role="dialog"]') as HTMLElement | null;
     expect(dialog).not.toBeNull();
     expect(dialog?.getAttribute("aria-modal")).toBe("true");
+    expect(dialog?.textContent).toContain("分析概览");
+    expect(dialog?.textContent).toContain("结果构成");
     expect(dialog?.textContent).toContain("公式贡献排行");
     expect(dialog?.textContent).toContain("最近十期变化");
+    expect(dialog?.textContent).toContain("公式贡献结构");
     expect(dialog?.textContent).toContain("贡献公式明细");
     expect(document.body.style.overflow).toBe("hidden");
 
@@ -94,6 +97,31 @@ describe("formula result visualization", () => {
     expect(document.body.querySelector('[role="dialog"]')).toBeNull();
     expect(document.body.style.overflow).toBe("");
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it("cross-filters the dashboard when a chart result or period is selected", async () => {
+    await renderView();
+    await act(async () => {
+      buttonByText(host!, "最近十期").click();
+      buttonByText(host!, "查看可视化").click();
+      await import("@/components/formula-result-visualization");
+    });
+
+    const dialog = document.body.querySelector('[role="dialog"]')!;
+    const targetControl = dialog.querySelector<HTMLButtonElement>('button[data-chart-target]');
+    expect(targetControl).not.toBeNull();
+    await act(async () => targetControl?.click());
+    expect(targetControl?.getAttribute("aria-pressed")).toBe("true");
+
+    const periodControl = dialog.querySelector<HTMLButtonElement>('button[data-period-issue]');
+    expect(periodControl).not.toBeNull();
+    await act(async () => periodControl?.click());
+    expect(dialog.textContent).toContain("已聚焦计算期");
+    expect(dialog.textContent).toContain(periodControl?.dataset.periodIssue);
+    expect(dialog.querySelector(".rq-formula-viz__overview")?.textContent).toContain("/1");
+
+    await act(async () => buttonByText(dialog, "清除期次筛选").click());
+    expect(dialog.textContent).not.toContain("已聚焦计算期");
   });
 
   it("closes through the accessible backdrop control and restores focus again", async () => {
