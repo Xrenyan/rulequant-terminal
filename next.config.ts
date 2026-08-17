@@ -1,12 +1,20 @@
 import type { NextConfig } from "next";
 
 const isStaticExport = process.env.NEXT_OUTPUT === "export";
-const githubPagesBasePath = process.env.GITHUB_PAGES === "true" ? (process.env.GITHUB_PAGES_BASE_PATH ?? "/rulequant-terminal-pages") : "";
+const configuredBasePath = (
+  process.env.NEXT_PUBLIC_BASE_PATH
+  || process.env.GITHUB_PAGES_BASE_PATH
+  || ""
+).trim();
+const basePath = configuredBasePath && configuredBasePath !== "/"
+  ? `/${configuredBasePath.replace(/^\/+|\/+$/g, "")}`
+  : "";
 
 const nextConfig: NextConfig = {
+  reactStrictMode: true,
   output: isStaticExport ? "export" : "standalone",
-  basePath: githubPagesBasePath || undefined,
-  assetPrefix: githubPagesBasePath || undefined,
+  basePath: isStaticExport ? basePath : "",
+  assetPrefix: isStaticExport ? basePath : "",
   trailingSlash: isStaticExport,
   allowedDevOrigins: ["127.0.0.1"],
   typescript: {

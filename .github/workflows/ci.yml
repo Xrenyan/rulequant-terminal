@@ -1,0 +1,52 @@
+name: RuleQuant CI
+
+on:
+  push:
+    branches: [main, "recovery/**"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rulequant-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.19.0
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm test -- --run
+
+      - name: Check types
+        run: pnpm typecheck
+
+      - name: Lint source
+        run: pnpm lint
+
+      - name: Build Next.js application
+        run: pnpm build
+
+      - name: Build GitHub Pages output
+        run: pnpm build:static

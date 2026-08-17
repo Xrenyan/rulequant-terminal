@@ -79,6 +79,8 @@ import { Panel } from "@/components/ui/panel";
 import { SpecialAnalysisView } from "@/components/special-analysis-view";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
+import { paginateItems } from "@/lib/pagination";
+import { fetchJsonWithSessionCache } from "@/lib/network/urls";
 
 let exportersPromise: ReturnType<typeof importExporters> | undefined;
 const formulaDiscoveryCache = new Map<string, FormulaDiscoveryCandidate[]>();
@@ -1230,6 +1232,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const referenceAutoSavedSignature = useRef("");
   const [candidateTab, setCandidateTab] = useState<"numbers8" | "numbers12" | "numbers18" | "numbers16" | "numbers49" | "zodiacs12" | "zodiacs9" | "zodiacs8" | "zodiacs7">("numbers8");
   const [candidateWorkspaceTab, setCandidateWorkspaceTab] = useState<"results" | "evidence" | "history" | "combo" | "operations">("results");
+  const [evidencePage, setEvidencePage] = useState(0);
   const [rulesWorkspaceTab, setRulesWorkspaceTab] = useState<"library" | "health" | "reconcile">("library");
   const [candidateFocus, setCandidateFocus] = useState<CandidateFocus>(null);
   const [referenceGeneratedAt, setReferenceGeneratedAt] = useState("");
@@ -1255,6 +1258,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     error: string;
   }>({ key: "", loading: false, error: "" });
   const [discoveryFocusId, setDiscoveryFocusId] = useState("");
+  const [discoveryPage, setDiscoveryPage] = useState(0);
   const [discoveryStatus, setDiscoveryStatus] = useState("");
   const [discoveryDepth, setDiscoveryDepth] = useState<"balanced" | "deep" | "advanced">("balanced");
   const [discoveryResult, setDiscoveryResult] = useState<{ key: string; candidates: FormulaDiscoveryCandidate[] }>({ key: "", candidates: [] });
@@ -1641,6 +1645,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     };
   }, [shouldBuildCandidateReport, candidateReportKey, researchDraws, rules, config, candidateBacktest, ruleValidationSummaries]);
   const candidateReport = candidateReportState.key === candidateReportKey && candidateReportState.report ? candidateReportState.report : EMPTY_CANDIDATE_REPORT;
+  const evidencePagination = useMemo(
+    () => paginateItems(candidateReport.signals, evidencePage, 15),
+    [candidateReport.signals, evidencePage],
+  );
   const isCandidateReportCalculating = shouldBuildCandidateReport && (candidateReportState.key !== candidateReportKey || candidateReportState.loading);
   const candidateReportError = shouldBuildCandidateReport && candidateReportState.key === candidateReportKey ? candidateReportState.error : "";
   const isCandidateReferencePreparing = isBackgroundBacktestCalculating || isCandidateReportCalculating;
@@ -1725,6 +1733,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const discoveryCandidates = useMemo(
     () => discoveryResult.key === discoveryRequestKey ? discoveryResult.candidates : cachedDiscoveryCandidates ?? [],
     [cachedDiscoveryCandidates, discoveryRequestKey, discoveryResult],
+  );
+  const discoveryPagination = useMemo(
+    () => paginateItems(discoveryCandidates, discoveryPage, 10),
+    [discoveryCandidates, discoveryPage],
   );
   const discoveryLoading = activeView === "formula-discovery" && isFormulaDiscoveryReady && !cachedDiscoveryCandidates && discoveryResult.key !== discoveryRequestKey;
 
@@ -1854,9 +1866,11 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         let lastError = "";
         for (const url of staticCloudStateUrls()) {
           try {
-            const response = await fetchWithTimeout(`${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`, { cache: "no-store" }, 8000);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const state = (await response.json()) as { draws?: DrawRecord[]; meta?: UrlImportResponse["state"] };
+            const state = await fetchJsonWithSessionCache<{ draws?: DrawRecord[]; meta?: UrlImportResponse["state"] }>(url, {
+              baseUrl: window.location.href,
+              timeoutMs: 8000,
+              force: syncPreview,
+            });
             if (!Array.isArray(state.draws) || !state.draws.length) throw new Error("static snapshot missing draws");
             return {
               records: state.draws,
@@ -2865,13 +2879,14 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-500">本地算法按 60% 训练期、20% 验证期、20% 独立留出期筛选，并比较最近表现与稳定差。推荐结果只代表历史筛选，不接入大模型，也不代表未来一定有效；确认加入公式库后才参与综合参考。</p>
                     </div>
                     <div className="rq-discovery-actions">
-                      <Button size="sm" variant={discoveryDepth === "balanced" ? "primary" : "secondary"} onClick={() => { setDiscoveryElapsedSeconds(0); setDiscoveryDepth("balanced"); }}>稳健 · 2-3项</Button>
-                      <Button size="sm" variant={discoveryDepth === "deep" ? "primary" : "secondary"} onClick={() => { setDiscoveryElapsedSeconds(0); setDiscoveryDepth("deep"); }}>深度 · 2-4项</Button>
-                      <Button size="sm" variant={discoveryDepth === "advanced" ? "primary" : "secondary"} onClick={() => { setDiscoveryElapsedSeconds(0); setDiscoveryDepth("advanced"); }}>高级 · 2-5项</Button>
+                      <Button size="sm" variant={discoveryDepth === "balanced" ? "primary" : "secondary"} onClick={() => { setDiscoveryElapsedSeconds(0); setDiscoveryPage(0); setDiscoveryDepth("balanced"); }}>稳健 · 2-3项</Button>
+                      <Button size="sm" variant={discoveryDepth === "deep" ? "primary" : "secondary"} onClick={() => { setDiscoveryElapsedSeconds(0); setDiscoveryPage(0); setDiscoveryDepth("deep"); }}>深度 · 2-4项</Button>
+                      <Button size="sm" variant={discoveryDepth === "advanced" ? "primary" : "secondary"} onClick={() => { setDiscoveryElapsedSeconds(0); setDiscoveryPage(0); setDiscoveryDepth("advanced"); }}>高级 · 2-5项</Button>
                       <Button size="sm" disabled={discoveryLoading} onClick={() => {
                         setDiscoveryElapsedSeconds(0);
                         setDiscoveryStatus("");
                         setDiscoveryFocusId("");
+                        setDiscoveryPage(0);
                         setDiscoveryRefreshId((value) => value + 1);
                       }}><RefreshCw className={cn("h-4 w-4", discoveryLoading && "animate-spin")} />重新筛选</Button>
                       <Badge tone="cyan">{discoveryLoading ? `正在筛选 · ${discoveryElapsedSeconds}秒` : `已生成 ${discoveryCandidates.length} 条候选`}</Badge>
@@ -2888,8 +2903,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   <FormulaDiscoveryPendingPanel depth={discoveryDepth} elapsedSeconds={discoveryElapsedSeconds} preparing={isFormulaDiscoveryPreparing} />
                 ) : (
                   <div className="rq-discovery-layout grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-                    <div className="rq-discovery-list grid grid-cols-1 gap-3">
-                      {discoveryCandidates.map((candidate) => {
+                    <div className="space-y-3">
+                      <div className="rq-discovery-list grid grid-cols-1 gap-3">
+                      {discoveryPagination.items.map((candidate) => {
                       const active = focusedDiscoveryCandidate?.rule.id === candidate.rule.id;
                       return (
                         <button
@@ -2916,6 +2932,23 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                         </button>
                       );
                       })}
+                      </div>
+                      <div className="rq-pagination" aria-label="公式筛选候选分页">
+                        <span className="rq-pagination__count">显示 {discoveryPagination.start}-{discoveryPagination.end} / {discoveryCandidates.length} 条</span>
+                        <div className="rq-pagination__controls">
+                          <Button size="sm" disabled={discoveryPagination.page === 0} onClick={() => {
+                            const page = Math.max(0, discoveryPagination.page - 1);
+                            setDiscoveryPage(page);
+                            setDiscoveryFocusId(discoveryCandidates[page * 10]?.rule.id ?? "");
+                          }}><ChevronLeft className="h-4 w-4" />上一页</Button>
+                          <span className="rq-pagination__page">第 {discoveryPagination.page + 1} / {discoveryPagination.pageCount} 页</span>
+                          <Button size="sm" disabled={discoveryPagination.page >= discoveryPagination.pageCount - 1} onClick={() => {
+                            const page = Math.min(discoveryPagination.pageCount - 1, discoveryPagination.page + 1);
+                            setDiscoveryPage(page);
+                            setDiscoveryFocusId(discoveryCandidates[page * 10]?.rule.id ?? "");
+                          }}>下一页<ChevronRight className="h-4 w-4" /></Button>
+                        </div>
+                      </div>
                     </div>
                     <DiscoveryDetailPanel
                       candidate={focusedDiscoveryCandidate}
@@ -3361,7 +3394,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     ["combo", "自选公式组合", `${selectedComboRuleIds.length || Math.min(6, referenceRuleCount)} 条已选`],
                     ["operations", "运行状态", isCandidateReferencePreparing ? "整理中" : exceptionRules.length ? `${exceptionRules.length} 条异常` : "状态正常"],
                   ].map(([key, label, hint]) => (
-                    <button key={key} type="button" role="tab" aria-selected={candidateWorkspaceTab === key} className={cn("rq-workspace-tab", candidateWorkspaceTab === key && "rq-workspace-tab--active")} onClick={() => setCandidateWorkspaceTab(key as typeof candidateWorkspaceTab)}>
+                    <button key={key} type="button" role="tab" aria-selected={candidateWorkspaceTab === key} className={cn("rq-workspace-tab", candidateWorkspaceTab === key && "rq-workspace-tab--active")} onClick={() => {
+                      setCandidateWorkspaceTab(key as typeof candidateWorkspaceTab);
+                      if (key === "evidence") setEvidencePage(0);
+                    }}>
                       <span>{label}</span><small>{hint}</small>
                     </button>
                   ))}
@@ -3532,8 +3568,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     <p className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-4 text-sm text-slate-500">暂无公式依据。请检查公式是否已启用、可计算且未被手动排除。</p>
                   ) : (
                     <div className="rq-signal-table rq-scrollbar">
-                      {candidateReport.signals.map((signal, index) => (
-                      <div key={`${signal.ruleId}-${signal.action}-${index}`} className="rq-signal-row">
+                      {evidencePagination.items.map((signal, index) => (
+                      <div key={`${signal.ruleId}-${signal.action}-${evidencePagination.start + index}`} className="rq-signal-row">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <h4 className="min-w-0 break-words font-medium text-white sm:truncate">{signal.ruleName}</h4>
                           <div className="flex min-w-0 flex-wrap gap-2 sm:shrink-0">
@@ -3545,6 +3581,16 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                         <p className="mt-2 text-sm text-slate-400">对象：{signal.targets.join("、")} · 权重 {signal.weight} · 历史 {signal.successRate}% · 近10期 {signal.recentRate}%</p>
                       </div>
                       ))}
+                    </div>
+                  )}
+                  {candidateReport.signals.length > 15 && (
+                    <div className="rq-pagination mt-4" aria-label="公式依据分页">
+                      <span className="rq-pagination__count">显示 {evidencePagination.start}-{evidencePagination.end} / {candidateReport.signals.length} 条</span>
+                      <div className="rq-pagination__controls">
+                        <Button size="sm" disabled={evidencePagination.page === 0} onClick={() => setEvidencePage((page) => Math.max(0, page - 1))}><ChevronLeft className="h-4 w-4" />上一页</Button>
+                        <span className="rq-pagination__page">第 {evidencePagination.page + 1} / {evidencePagination.pageCount} 页</span>
+                        <Button size="sm" disabled={evidencePagination.page >= evidencePagination.pageCount - 1} onClick={() => setEvidencePage((page) => Math.min(evidencePagination.pageCount - 1, page + 1))}>下一页<ChevronRight className="h-4 w-4" /></Button>
+                      </div>
                     </div>
                   )}
                 </Panel>

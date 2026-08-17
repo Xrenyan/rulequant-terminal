@@ -19,6 +19,7 @@ import {
 } from "@/lib/rules/rule-library";
 import type { RuleQuantCloudState } from "@/lib/cloud/cloud-state";
 import type { DrawRecord, OperationLog, ReferenceHistoryItem, RuleLibraryBackup, RuleQuantConfig, RuleRecord, RuleSourceType, SampleCase } from "@/types/domain";
+import { fetchJsonWithSessionCache, uniqueResolvedUrls } from "@/lib/network/urls";
 
 const REMOTE_CLOUD_STATE_ENDPOINT = "https://rulequant-terminal.vercel.app/api/cloud/state";
 
@@ -319,7 +320,7 @@ async function loadCloudStateFromApi(): Promise<RuleQuantCloudState | null> {
   const staticBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
   const isStaticExport = process.env.NEXT_PUBLIC_STATIC_EXPORT === "true";
   const isGithubPagesHost = window.location.hostname.endsWith("github.io") || isStaticExport;
-  const endpoints = (
+  const endpointCandidates = (
     isGithubPagesHost
       ? [`${staticBasePath}/static-cloud-state.json`]
       : [
@@ -329,12 +330,20 @@ async function loadCloudStateFromApi(): Promise<RuleQuantCloudState | null> {
           "/static-cloud-state.json",
           "../static-cloud-state.json",
         ]
-  ).filter((endpoint, index, list) => endpoint && list.indexOf(endpoint) === index);
+  );
+  const endpoints = uniqueResolvedUrls(endpointCandidates, window.location.href);
 
   const states = await Promise.all(endpoints.map(async (endpoint) => {
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), isGithubPagesHost ? 5000 : 1800);
     try {
+      if (endpoint.includes("static-cloud-state.json")) {
+        const state = await fetchJsonWithSessionCache<RuleQuantCloudState>(endpoint, {
+          baseUrl: window.location.href,
+          timeoutMs: isGithubPagesHost ? 5000 : 1800,
+        });
+        return state.meta?.enabled ? state : null;
+      }
       const url = endpoint.includes("?") ? `${endpoint}&t=${Date.now()}` : `${endpoint}?t=${Date.now()}`;
       const response = await fetch(url, { cache: "no-store", signal: controller.signal });
       if (!response.ok) return null;

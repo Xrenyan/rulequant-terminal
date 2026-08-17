@@ -3,6 +3,7 @@
 import { LockKeyhole, ShieldCheck } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import {
+  isAccessTokenConfigured,
   isValidAccessToken,
   RULEQUANT_ACCESS_PARAM_NAMES,
   RULEQUANT_ACCESS_STORAGE_KEY,
@@ -110,7 +111,7 @@ export function PrivateAccessGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     let nextGateState: GateState = "blocked";
 
-    if (shouldBypassForLocalDevelopment()) {
+    if (!isAccessTokenConfigured() || shouldBypassForLocalDevelopment()) {
       nextGateState = "granted";
     } else {
       const tokenFromUrl = readTokenFromUrl();

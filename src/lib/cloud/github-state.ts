@@ -108,55 +108,60 @@ export async function loadGitHubState(): Promise<RuleQuantCloudState> {
 
 export async function saveGitHubStatePatch(patch: Partial<Omit<RuleQuantCloudState, "meta">>) {
   if (!isGitHubStateConfigured()) return loadGitHubState();
-  const currentFile = await fetchStateFile();
-  const current = currentFile.state ?? EMPTY_CLOUD_STATE;
-  const draws = patch.draws
-    ? mergeManualCloudDraws({
-        incomingDraws: patch.draws,
-        currentDraws: current.draws ?? [],
-        logs: patch.logs ?? current.logs ?? [],
-      })
-    : current.draws ?? [];
-  const summary = summarizeDraws(draws);
-  const rules = patch.rules
-    ? mergeUserCreatedCloudRules({
-        incomingRules: patch.rules,
-        currentRules: current.rules ?? [],
-        logs: patch.logs ?? current.logs ?? [],
-      })
-    : current.rules ?? [];
-  const nextState: RuleQuantCloudState = {
-    draws,
-    rules,
-    samples: patch.samples ?? current.samples ?? [],
-    config: patch.config ?? current.config,
-    logs: patch.logs ?? current.logs ?? [],
-    backups: patch.backups ?? current.backups ?? [],
-    referenceHistory: patch.referenceHistory ?? current.referenceHistory ?? [],
-    meta: {
-      enabled: true,
-      source: "github",
-      updatedAt: new Date().toISOString(),
-      latestIssue: summary.latestIssue,
-      recordCount: summary.recordCount,
-    },
-  };
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const currentFile = await fetchStateFile();
+    if (currentFile.error) throw new Error(currentFile.error);
+    const current = currentFile.state ?? EMPTY_CLOUD_STATE;
+    const draws = patch.draws
+      ? mergeManualCloudDraws({
+          incomingDraws: patch.draws,
+          currentDraws: current.draws ?? [],
+          logs: patch.logs ?? current.logs ?? [],
+        })
+      : current.draws ?? [];
+    const summary = summarizeDraws(draws);
+    const rules = patch.rules
+      ? mergeUserCreatedCloudRules({
+          incomingRules: patch.rules,
+          currentRules: current.rules ?? [],
+          logs: patch.logs ?? current.logs ?? [],
+        })
+      : current.rules ?? [];
+    const nextState: RuleQuantCloudState = {
+      draws,
+      rules,
+      samples: patch.samples ?? current.samples ?? [],
+      config: patch.config ?? current.config,
+      logs: patch.logs ?? current.logs ?? [],
+      backups: patch.backups ?? current.backups ?? [],
+      referenceHistory: patch.referenceHistory ?? current.referenceHistory ?? [],
+      meta: {
+        enabled: true,
+        source: "github",
+        updatedAt: new Date().toISOString(),
+        latestIssue: summary.latestIssue,
+        recordCount: summary.recordCount,
+      },
+    };
 
-  const response = await fetch(contentUrl(), {
-    method: "PUT",
-    headers: {
-      ...headers(),
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      message: `Update RuleQuant cloud state ${new Date().toISOString()}`,
-      content: encodeBase64(`${JSON.stringify(nextState, null, 2)}\n`),
-      sha: currentFile.sha,
-      branch: githubBranch(),
-    }),
-  });
-  if (!response.ok) {
-    throw new Error(`GitHub state write failed: HTTP ${response.status}`);
+    const response = await fetch(contentUrl(), {
+      method: "PUT",
+      headers: {
+        ...headers(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: `Update RuleQuant cloud state ${new Date().toISOString()}`,
+        content: encodeBase64(`${JSON.stringify(nextState, null, 2)}\n`),
+        sha: currentFile.sha,
+        branch: githubBranch(),
+      }),
+    });
+    if (response.ok) return nextState;
+    if (response.status !== 409 || attempt === 1) {
+      throw new Error(`GitHub state write failed: HTTP ${response.status}`);
+    }
   }
-  return nextState;
+
+  throw new Error("GitHub state write failed after retry");
 }
