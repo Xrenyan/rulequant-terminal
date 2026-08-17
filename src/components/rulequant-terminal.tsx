@@ -78,7 +78,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/field";
 import { Panel } from "@/components/ui/panel";
-import { SpecialAnalysisView } from "@/components/special-analysis-view";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 import { paginateItems } from "@/lib/pagination";
@@ -89,8 +88,17 @@ const FormulaResultStatisticsView = dynamic(
   { ssr: false, loading: FormulaResultStatisticsLoading },
 );
 
+const SpecialAnalysisView = dynamic(
+  () => import("@/components/special-analysis-view").then((module) => module.SpecialAnalysisView),
+  { loading: SpecialAnalysisLoading },
+);
+
 function preloadFormulaResultStatistics() {
   if (typeof window !== "undefined") void import("@/components/formula-result-statistics-view");
+}
+
+function preloadSpecialAnalysis() {
+  if (typeof window !== "undefined") void import("@/components/special-analysis-view");
 }
 
 function FormulaResultStatisticsLoading() {
@@ -106,6 +114,17 @@ function FormulaResultStatisticsLoading() {
         <div>{Array.from({ length: 7 }, (_, index) => <i key={index} />)}</div>
       </section>
       <p>正在载入完整统计、证据明细与可视化入口…</p>
+    </div>
+  );
+}
+
+function SpecialAnalysisLoading() {
+  return (
+    <div className="rq-special-analysis-loading" role="status" aria-busy="true" aria-label="正在准备完整的专项概率观察">
+      <section><span /><div><i /><i /><i /></div></section>
+      <section>{Array.from({ length: 6 }, (_, index) => <i key={index} />)}</section>
+      <section>{Array.from({ length: 9 }, (_, index) => <i key={index} />)}</section>
+      <p>正在载入完整观察、图表与历史依据…</p>
     </div>
   );
 }
@@ -2462,8 +2481,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                 <Link
                   key={item.key}
                   href={item.href}
-                  onMouseEnter={item.key === "formula-result-statistics" ? preloadFormulaResultStatistics : undefined}
-                  onFocus={item.key === "formula-result-statistics" ? preloadFormulaResultStatistics : undefined}
+                  onMouseEnter={item.key === "formula-result-statistics" ? preloadFormulaResultStatistics : item.key === "special-analysis" ? preloadSpecialAnalysis : undefined}
+                  onFocus={item.key === "formula-result-statistics" ? preloadFormulaResultStatistics : item.key === "special-analysis" ? preloadSpecialAnalysis : undefined}
                   className={cn("rq-nav-item flex h-10 items-center gap-3 rounded-xl px-3 text-sm transition", active && "rq-nav-item--active")}
                 >
                   <Icon className="h-4 w-4" />
@@ -2496,9 +2515,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     <Link
                       key={item.key}
                       href={item.href}
-                      onMouseEnter={item.key === "formula-result-statistics" ? preloadFormulaResultStatistics : undefined}
-                      onFocus={item.key === "formula-result-statistics" ? preloadFormulaResultStatistics : undefined}
-                      onTouchStart={item.key === "formula-result-statistics" ? preloadFormulaResultStatistics : undefined}
+                      onMouseEnter={item.key === "formula-result-statistics" ? preloadFormulaResultStatistics : item.key === "special-analysis" ? preloadSpecialAnalysis : undefined}
+                      onFocus={item.key === "formula-result-statistics" ? preloadFormulaResultStatistics : item.key === "special-analysis" ? preloadSpecialAnalysis : undefined}
+                      onTouchStart={item.key === "formula-result-statistics" ? preloadFormulaResultStatistics : item.key === "special-analysis" ? preloadSpecialAnalysis : undefined}
                       onClick={() => setMobileMoreOpen(false)}
                       className={cn("rq-mobile-more__item", active && "is-active")}
                     >

@@ -2,9 +2,10 @@
 
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { FormulaResultStatisticsView } from "@/components/formula-result-statistics-view";
 import { defaultConfig } from "@/lib/config/default-config";
+import { buildFormulaSummaryReport } from "@/lib/formula-summary/formula-summary";
 import type { DrawRecord, RuleRecord } from "@/types/domain";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -49,12 +50,16 @@ const rules = [
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
+let workerDescriptor: PropertyDescriptor | undefined;
 
 afterEach(async () => {
   if (root) await act(async () => root?.unmount());
   host?.remove();
   root = undefined;
   host = undefined;
+  if (workerDescriptor) Object.defineProperty(globalThis, "Worker", workerDescriptor);
+  else delete (globalThis as { Worker?: typeof Worker }).Worker;
+  workerDescriptor = undefined;
 });
 
 function findButton(label: string): HTMLButtonElement {
@@ -107,5 +112,33 @@ describe("formula result statistics view", () => {
     expect(includeButton.getAttribute("aria-pressed")).toBe("true");
     expect(host?.textContent).toContain("被支持次数");
     expect(host?.textContent).toContain("参考一肖");
+  });
+
+  it("builds the ten-period report off the main thread when Web Workers are available", async () => {
+    class WorkerStub {
+      static instance: WorkerStub | undefined;
+      onmessage: ((event: MessageEvent<{ ok: boolean; report?: ReturnType<typeof buildFormulaSummaryReport> }>) => void) | null = null;
+      onerror: ((event: ErrorEvent) => void) | null = null;
+      postMessage = vi.fn();
+      terminate = vi.fn();
+
+      constructor() {
+        WorkerStub.instance = this;
+      }
+    }
+
+    workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Worker");
+    Object.defineProperty(globalThis, "Worker", { configurable: true, writable: true, value: WorkerStub });
+    await renderView();
+
+    expect(WorkerStub.instance?.postMessage).toHaveBeenCalledWith({ draws, rules, config: defaultConfig, maxPeriods: 10 });
+    expect(host?.textContent).toContain("正在整理完整统计");
+
+    const report = buildFormulaSummaryReport({ draws, rules, config: defaultConfig, maxPeriods: 10 });
+    await act(async () => WorkerStub.instance?.onmessage?.({ data: { ok: true, report } } as MessageEvent));
+
+    expect(host?.textContent).toContain("最新输出");
+    await act(async () => findButton("最近十期").click());
+    expect(host?.textContent).toContain("3 个计算期");
   });
 });

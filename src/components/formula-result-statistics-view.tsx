@@ -1,6 +1,6 @@
 "use client";
 
-import { lazy, startTransition, Suspense, useCallback, useMemo, useRef, useState } from "react";
+import { lazy, startTransition, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   CalendarRange,
@@ -17,6 +17,7 @@ import {
   formulaSummaryTargetLabel,
   type FormulaSummaryAction,
   type FormulaSummaryContribution,
+  type FormulaSummaryReport,
   type FormulaSummaryTargetType,
 } from "@/lib/formula-summary/formula-summary";
 import type { DrawRecord, RuleQuantConfig, RuleRecord } from "@/types/domain";
@@ -30,6 +31,42 @@ const LazyFormulaResultVisualizationDialog = lazy(() => import("@/components/for
 
 function preloadFormulaVisualization() {
   if (typeof window !== "undefined") void import("@/components/formula-result-visualization");
+}
+
+type FormulaSummaryWorkerResponse = { ok: true; report: FormulaSummaryReport } | { ok: false; error: string };
+type FormulaSummaryCacheEntry = { rules: RuleRecord[]; config: RuleQuantConfig; report: FormulaSummaryReport };
+type FormulaSummaryAsyncState = FormulaSummaryCacheEntry & { draws: DrawRecord[]; error?: string };
+
+const formulaSummaryReportCache = new WeakMap<DrawRecord[], FormulaSummaryCacheEntry>();
+const EMPTY_FORMULA_SUMMARY_REPORT: FormulaSummaryReport = {
+  periods: [],
+  enabledRuleCount: 0,
+  formulaCount: 0,
+  ignoredRuleCount: 0,
+  contributionCount: 0,
+  skippedCount: 0,
+};
+
+function cachedFormulaSummary(draws: DrawRecord[], rules: RuleRecord[], config: RuleQuantConfig) {
+  const cached = formulaSummaryReportCache.get(draws);
+  return cached?.rules === rules && cached.config === config ? cached.report : undefined;
+}
+
+function FormulaSummaryLoading({ error }: { error?: string }) {
+  return (
+    <div className="rq-formula-stats-report-loading" role="status" aria-busy={!error}>
+      <section className="rq-formula-stats-report-loading__hero">
+        <span><BarChart3 className="h-5 w-5" /></span>
+        <div><h2>公式结果统计</h2><p>{error || "正在整理完整统计、精确次数与公式来源…"}</p></div>
+      </section>
+      <section className="rq-formula-stats-report-loading__status">{Array.from({ length: 5 }, (_, index) => <i key={index} />)}</section>
+      <section className="rq-formula-stats-report-loading__workspace">
+        <div>{Array.from({ length: 10 }, (_, index) => <i key={index} />)}</div>
+        <div>{Array.from({ length: 7 }, (_, index) => <i key={index} />)}</div>
+      </section>
+      <small>{error ? "刷新页面后会自动重新计算。" : "计算在后台线程完成，页面交互不会被阻塞。"}</small>
+    </div>
+  );
 }
 
 export type FormulaResultStatisticsViewProps = {
@@ -96,10 +133,60 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
   const [visualizationOpen, setVisualizationOpen] = useState(false);
   const visualizationTriggerRef = useRef<HTMLElement | null>(null);
 
-  const report = useMemo(
-    () => buildFormulaSummaryReport({ draws, rules, config, maxPeriods: 10 }),
-    [draws, rules, config],
+  const workerAvailable = typeof Worker !== "undefined";
+  const synchronousReport = useMemo(
+    () => workerAvailable ? undefined : buildFormulaSummaryReport({ draws, rules, config, maxPeriods: 10 }),
+    [workerAvailable, draws, rules, config],
   );
+  const [asyncState, setAsyncState] = useState<FormulaSummaryAsyncState>(() => ({
+    draws,
+    rules,
+    config,
+    report: cachedFormulaSummary(draws, rules, config) ?? EMPTY_FORMULA_SUMMARY_REPORT,
+  }));
+
+  useEffect(() => {
+    if (!workerAvailable) return;
+
+    const cached = cachedFormulaSummary(draws, rules, config);
+    if (cached) {
+      queueMicrotask(() => setAsyncState({ draws, rules, config, report: cached }));
+      return;
+    }
+
+    const worker = new Worker(new URL("../workers/formula-summary.worker.ts", import.meta.url));
+    let disposed = false;
+    queueMicrotask(() => {
+      if (!disposed) setAsyncState({ draws, rules, config, report: EMPTY_FORMULA_SUMMARY_REPORT });
+    });
+    worker.onmessage = (event: MessageEvent<FormulaSummaryWorkerResponse>) => {
+      if (disposed) return;
+      if (!event.data.ok) {
+        setAsyncState({ draws, rules, config, report: EMPTY_FORMULA_SUMMARY_REPORT, error: event.data.error });
+        worker.terminate();
+        return;
+      }
+      const nextReport = event.data.report;
+      formulaSummaryReportCache.set(draws, { rules, config, report: nextReport });
+      startTransition(() => setAsyncState({ draws, rules, config, report: nextReport }));
+      worker.terminate();
+    };
+    worker.onerror = () => {
+      if (!disposed) setAsyncState({ draws, rules, config, report: EMPTY_FORMULA_SUMMARY_REPORT, error: "统计线程暂时无法启动" });
+      worker.terminate();
+    };
+    worker.postMessage({ draws, rules, config, maxPeriods: 10 });
+    return () => {
+      disposed = true;
+      worker.terminate();
+    };
+  }, [workerAvailable, draws, rules, config]);
+
+  const asyncReport = asyncState.draws === draws && asyncState.rules === rules && asyncState.config === config && asyncState.report.periods.length
+    ? asyncState.report
+    : undefined;
+  const report = synchronousReport ?? asyncReport ?? EMPTY_FORMULA_SUMMARY_REPORT;
+  const reportError = asyncState.draws === draws && asyncState.rules === rules && asyncState.config === config ? asyncState.error : undefined;
   const visiblePeriods = useMemo(
     () => rangeMode === "latest" ? report.periods.slice(-1) : report.periods,
     [rangeMode, report.periods],
@@ -138,6 +225,8 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
 
   const closeVisualization = useCallback(() => setVisualizationOpen(false), []);
 
+  if (!synchronousReport && !asyncReport) return <FormulaSummaryLoading error={reportError} />;
+
   return (
     <div className="rq-formula-stats">
       <section className="rq-formula-stats__hero" aria-labelledby="formula-statistics-title">
@@ -157,6 +246,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
             disabled={!activeItem}
             onMouseEnter={preloadFormulaVisualization}
             onFocus={preloadFormulaVisualization}
+            onTouchStart={preloadFormulaVisualization}
             onClick={(event) => openVisualization(event.currentTarget)}
           >
             <Eye className="h-4 w-4" />查看可视化
@@ -241,6 +331,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
                   className={cn("rq-formula-stats__rank-row", activeTarget === item.targetKey && "is-active")}
                   onMouseEnter={preloadFormulaVisualization}
                   onFocus={preloadFormulaVisualization}
+                  onTouchStart={preloadFormulaVisualization}
                   onClick={(event) => openVisualization(event.currentTarget, item.targetKey)}
                 >
                   <span className="rq-formula-stats__rank-label"><small>{String(index + 1).padStart(2, "0")}</small><b>{item.label}</b></span>

@@ -119,6 +119,7 @@ export function FormulaResultVisualizationDialog({
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
+    const returnFocusElement = returnFocusRef.current;
     document.body.style.overflow = "hidden";
     queueMicrotask(() => closeRef.current?.focus());
 
@@ -147,7 +148,7 @@ export function FormulaResultVisualizationDialog({
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
-      queueMicrotask(() => returnFocusRef.current?.focus());
+      queueMicrotask(() => returnFocusElement?.focus());
     };
   }, [onClose, returnFocusRef]);
 

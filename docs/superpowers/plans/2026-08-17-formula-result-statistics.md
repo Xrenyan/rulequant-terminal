@@ -19,6 +19,8 @@
 - Derive results from live `activeDraws`, rules, and config so daily synchronization refreshes the page without a separate stored snapshot.
 - Preserve the existing RuleQuant iOS 26 visual language and complete both desktop and mobile states.
 - Do not add a chart dependency or a new backend/database endpoint.
+- Preserve full information density while optimizing the entire site; do not reduce visible records or formula evidence as a loading shortcut.
+- Keep heavy feature views and visualization drill-downs in explicit dynamic chunks, preload them on navigation intent, and move the measured formula-summary build off the main thread.
 - Do not push, deploy, or publish until the user explicitly says `发布`.
 - Keep the existing generated `next-env.d.ts` working-tree change out of feature commits.
 
@@ -545,7 +547,7 @@ Fix every material mismatch before continuing.
 
 - [ ] **Step 8: Check performance and refresh behavior**
 
-Measure or instrument one report build against the real current data. Confirm the report uses at most ten calculation periods, that ordinary filter changes do not rebuild formula calculations, the dialog mounts only while open, and changing the latest draw/rules/config produces a new report. If the real report build exceeds a visible interaction budget, move only the report calculation to a worker and repeat Tasks 1 and 5 checks.
+Measure or instrument one report build against the real current data. Confirm the report uses at most ten calculation periods, that ordinary filter changes do not rebuild formula calculations, the dialog mounts only while open, and changing the latest draw/rules/config produces a new report. If the real report build exceeds a visible interaction budget, move only the report calculation to a worker and repeat Tasks 1 and 5 checks. Record production chunk sizes before and after splitting, verify intent preloading, and preserve all rows/details while using `content-visibility` only to skip off-screen layout and paint.
 
 - [ ] **Step 9: Review scope and repository cleanliness**
 
