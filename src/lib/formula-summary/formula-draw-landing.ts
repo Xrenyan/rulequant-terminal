@@ -158,6 +158,10 @@ function requestedLimit(value: number | undefined, fallback: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.floor(value ?? fallback)) : fallback;
 }
 
+function newestWindow<T>(items: T[], limit: number): T[] {
+  return items.slice(Math.max(items.length - limit, 0));
+}
+
 function countsForPeriod(
   period: FormulaSummaryPeriod,
   action: FormulaSummaryAction,
@@ -213,7 +217,7 @@ export function buildFormulaDrawLandingAnalysis(
   const completedLimit = requestedLimit(input.completedLimit, DEFAULT_COMPLETED_LIMIT);
   const matrixLimit = requestedLimit(input.matrixLimit, DEFAULT_MATRIX_LIMIT);
   const domain = buildFormulaTargetDomain(input.targetType, input.config);
-  const matrixPeriods = input.periods.slice(-matrixLimit);
+  const matrixPeriods = newestWindow(input.periods, matrixLimit);
   const countsByPeriod = matrixPeriods.map((period) => (
     countsForPeriod(period, input.action, input.targetType)
   ));
@@ -224,7 +228,7 @@ export function buildFormulaDrawLandingAnalysis(
   });
 
   const completedPeriods = input.periods.filter((period) => period.targetResult);
-  const records = completedPeriods.slice(-completedLimit).map((period) => {
+  const records = newestWindow(completedPeriods, completedLimit).map((period) => {
     const result = period.targetResult!;
     const actualTarget = resolveFormulaActualTarget(result, input.targetType);
     const counts = countsForPeriod(period, input.action, input.targetType);
@@ -257,7 +261,7 @@ export function buildFormulaDrawLandingAnalysis(
   const actionCopy = input.action === "exclude" ? "被排除" : "被支持";
   const latest = records.at(-1);
   const insight = latest
-    ? `最近${records.length}个已开奖期中，实际结果平均${actionCopy}${averageCount}次，${topThreePeriods}期落在前三位；最近一期为${latest.actualLabel}，${actionCopy}${latest.count}次，${latest.rankLabel}。`
+    ? `最近${records.length}个已开奖期中，实际开奖落点平均${actionCopy}次数为${averageCount}次，${topThreePeriods}期落在前三位；最近一期实际开奖落点为${latest.actualLabel}，${actionCopy}次数为${latest.count}次，${latest.rankLabel}。`
     : "当前暂无已开奖期可验证实际结果。";
   const globalMax = series.reduce((maximum, item) => (
     Math.max(maximum, ...item.values)

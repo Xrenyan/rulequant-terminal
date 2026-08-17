@@ -119,7 +119,42 @@ describe("formula draw landing analysis", () => {
       averageRank: 1.3,
       maxCount: 2,
     });
-    expect(analysis.insight).toBe("最近3个已开奖期中，实际结果平均被排除1次，3期落在前三位；最近一期为龙，被排除0次，并列第 1 位。");
+    expect(analysis.insight).toBe("最近3个已开奖期中，实际开奖落点平均被排除次数为1次，3期落在前三位；最近一期实际开奖落点为龙，被排除次数为0次，并列第 1 位。");
+  });
+
+  it("uses neutral support terminology in insight copy", () => {
+    const analysis = buildFormulaDrawLandingAnalysis({
+      periods: [
+        completedPeriod("101", "龙", []),
+        completedPeriod("102", "龙", []),
+      ],
+      action: "include",
+      targetType: "zodiac",
+      config: defaultConfig,
+    });
+
+    expect(analysis.insight).toBe("最近2个已开奖期中，实际开奖落点平均被支持次数为0次，2期落在前三位；最近一期实际开奖落点为龙，被支持次数为0次，并列第 1 位。");
+  });
+
+  it("treats zero completed and matrix limits as empty windows", () => {
+    const periods = [
+      completedPeriod("101", "龙", []),
+      completedPeriod("102", "龙", []),
+    ];
+
+    const analysis = buildFormulaDrawLandingAnalysis({
+      periods,
+      action: "exclude",
+      targetType: "zodiac",
+      config: defaultConfig,
+      completedLimit: 0,
+      matrixLimit: 0,
+    });
+
+    expect(analysis.records).toEqual([]);
+    expect(analysis.matrixPeriods).toEqual([]);
+    expect(analysis.series.every((series) => series.values.length === 0 && series.total === 0)).toBe(true);
+    expect(analysis.insight).toBe("当前暂无已开奖期可验证实际结果。");
   });
 
   it("labels tied actual landings using standard competition rank", () => {
