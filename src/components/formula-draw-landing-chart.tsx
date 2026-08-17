@@ -16,6 +16,14 @@ function xAt(index: number, count: number, left: number, width: number): number 
   return count <= 1 ? left + width / 2 : left + index / (count - 1) * width;
 }
 
+function rankTicks(maxRank: number): number[] {
+  const tickCount = Math.min(5, maxRank);
+  if (tickCount === 1) return [1];
+  return Array.from({ length: tickCount }, (_, index) => (
+    Math.round(1 + index / (tickCount - 1) * (maxRank - 1))
+  )).filter((rank, index, ranks) => ranks.indexOf(rank) === index);
+}
+
 export function FormulaDrawLandingChart({
   records,
   focusedIssue,
@@ -45,15 +53,18 @@ export function FormulaDrawLandingChart({
   const yCount = (count: number) => top + plotHeight - count / maxCount * plotHeight;
   const yRank = (rank: number) => top + (rank - 1) / Math.max(1, maxRank - 1) * plotHeight;
   const barWidth = Math.min(48, plotWidth / Math.max(1, records.length) * .42);
+  const horizontalPadding = 36;
+  const dataLeft = left + horizontalPadding;
+  const dataWidth = plotWidth - horizontalPadding * 2;
   const baseline = top + plotHeight;
   const rankPoints = records.map((record, index) => ({
-    x: xAt(index, records.length, left, plotWidth),
+    x: xAt(index, records.length, dataLeft, dataWidth),
     y: yRank(record.rank),
   }));
   const countTicks = [maxCount, Math.round(maxCount / 2), 0].filter((value, index, values) => (
     values.indexOf(value) === index
   ));
-  const rankTicks = Array.from({ length: maxRank }, (_, index) => index + 1);
+  const visibleRankTicks = rankTicks(maxRank);
   const summary = records.map((record) => (
     `${record.targetIssue}期，实际${record.actualLabel}，特码${String(record.specialNumber).padStart(2, "0")}，${unitLabel}${record.count}，${record.rankLabel}`
   )).join("；");
@@ -69,7 +80,7 @@ export function FormulaDrawLandingChart({
     <div className="rq-formula-landing-chart">
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        role="img"
+        role="group"
         aria-label={`实际开奖落点组合图；柱形为${unitLabel}，折线为当期位置，第1位在上；${summary}`}
       >
         <text x={left} y={20} className="rq-formula-landing-chart__axis-title">次数</text>
@@ -87,7 +98,7 @@ export function FormulaDrawLandingChart({
           );
         })}
 
-        {rankTicks.map((rank) => (
+        {visibleRankTicks.map((rank) => (
           <text
             key={rank}
             x={width - right + 10}
@@ -117,10 +128,11 @@ export function FormulaDrawLandingChart({
         <path d={linePath(rankPoints)} className="rq-formula-landing-chart__rank-line" />
 
         {records.map((record, index) => {
-          const x = xAt(index, records.length, left, plotWidth);
+          const x = xAt(index, records.length, dataLeft, dataWidth);
           const countY = yCount(record.count);
           const rankY = yRank(record.rank);
           const isFocused = record.calculationIssue === focusedIssue;
+          const isLast = index === records.length - 1;
           const twoDigitNumber = String(record.specialNumber).padStart(2, "0");
           return (
             <g
@@ -146,7 +158,12 @@ export function FormulaDrawLandingChart({
                 {record.count}
               </text>
               <circle cx={x} cy={rankY} r={isFocused ? 6 : 5} className="rq-formula-landing-chart__rank-dot" />
-              <text x={x + 10} y={Math.max(top + 12, rankY - 9)} className="rq-formula-landing-chart__direct-label">
+              <text
+                x={x + (isLast ? -10 : 10)}
+                y={Math.max(top + 12, rankY - 9)}
+                textAnchor={isLast ? "end" : "start"}
+                className="rq-formula-landing-chart__direct-label"
+              >
                 {record.actualLabel} · {twoDigitNumber}
               </text>
               <text x={x} y={height - 30} textAnchor="middle" className="rq-formula-landing-chart__axis-label">

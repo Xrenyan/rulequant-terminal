@@ -46,6 +46,40 @@ async function renderChart(
 }
 
 describe("FormulaDrawLandingChart", () => {
+  it("exposes the chart as a group containing keyboard-operable point buttons", async () => {
+    const chart = await renderChart(records);
+
+    const svg = chart.querySelector('svg[role="group"]');
+    expect(svg).not.toBeNull();
+    expect(chart.querySelector('svg[role="img"]')).toBeNull();
+    expect(svg?.querySelectorAll('[role="button"][tabindex="0"]')).toHaveLength(3);
+    expect(svg?.getAttribute("aria-label")).toContain("实际开奖落点组合图");
+  });
+
+  it("band-centers edge bars and flips the final direct label into the plot", async () => {
+    const chart = await renderChart(records);
+    const bars = chart.querySelectorAll<SVGRectElement>(".rq-formula-landing-chart__bar");
+    const labels = chart.querySelectorAll<SVGTextElement>(".rq-formula-landing-chart__direct-label");
+
+    expect(bars[0].getAttribute("x")).toBe("74");
+    expect(bars[2].getAttribute("x")).toBe("622");
+    expect(labels[0].getAttribute("x")).toBe("108");
+    expect(labels[0].getAttribute("text-anchor")).toBe("start");
+    expect(labels[2].getAttribute("x")).toBe("636");
+    expect(labels[2].getAttribute("text-anchor")).toBe("end");
+  });
+
+  it("bounds a 49-rank axis while retaining its first and last ranks", async () => {
+    const chart = await renderChart([
+      records[0],
+      { ...records[1], rank: 49, rankLabel: "第 49 位" },
+    ]);
+    const rankTicks = [...chart.querySelectorAll<SVGTextElement>(".rq-formula-landing-chart__axis-label.is-rank")];
+
+    expect(rankTicks).toHaveLength(5);
+    expect(rankTicks.map((tick) => tick.textContent)).toEqual(["#1", "#13", "#25", "#37", "#49"]);
+  });
+
   it("renders truthful count and rank geometry with direct, accessible labels", async () => {
     const onFocusIssue = vi.fn();
     const chart = await renderChart(records, { focusedIssue: "102", onFocusIssue });
