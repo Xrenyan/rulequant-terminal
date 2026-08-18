@@ -114,6 +114,8 @@ describe("formula analysis comparison", () => {
     expect(view.textContent).toContain("最近10期");
     expect(view.textContent).toContain("最近30期");
     expect(view.querySelectorAll("[data-comparison-metric]")).toHaveLength(4);
+    expect(view.querySelectorAll('[data-comparison-series="current"]')).toHaveLength(4);
+    expect(view.querySelectorAll('[data-comparison-series="baseline"]')).toHaveLength(4);
     expect(view.textContent).toContain("平均次数变化");
   });
 });
@@ -175,6 +177,11 @@ describe("formula health workspace", () => {
     expect(view.textContent).toContain("样本不足");
     expect(view.querySelector("details")?.textContent).toContain("最近未通过期次");
     expect(view.querySelectorAll("[data-health-status-filter]")).toHaveLength(5);
+    const shares = [...view.querySelectorAll<HTMLElement>("[data-health-status-share]")]
+      .map((item) => Number(item.dataset.healthStatusShare));
+    expect(shares).toHaveLength(5);
+    expect(shares.reduce((total, share) => total + share, 0)).toBeCloseTo(100, 4);
+    expect(view.querySelector("[data-health-status-band]")?.getAttribute("aria-label")).toContain(`${report.health.counts.normal} 条状态正常`);
     const firstStatus = row.status;
     await click(view.querySelector(`[data-health-status-filter="${firstStatus}"]`)!);
     expect(view.querySelectorAll("[data-health-row]")).toHaveLength(report.health.counts[firstStatus]);

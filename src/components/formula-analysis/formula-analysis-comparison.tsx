@@ -43,8 +43,8 @@ export function FormulaAnalysisComparison({ current, comparison }: { current: Fo
         const Direction = difference < 0 ? TrendingDown : TrendingUp;
         return <article key={metric.key} data-comparison-metric={metric.key}>
           <header><span>{metric.label}</span><em className={Math.abs(difference) < .05 ? "is-flat" : favorable ? "is-positive" : "is-negative"}>{Math.abs(difference) >= .05 && <Direction className="h-3.5 w-3.5" />}{delta(difference)}</em></header>
-          <div><span><i style={{ width: `${metric.current / maximum * 100}%` }} /></span><b>{display(metric.current, metric.suffix)}</b></div>
-          <div className="is-baseline"><span><i style={{ width: `${metric.baseline / maximum * 100}%` }} /></span><b>{display(metric.baseline, metric.suffix)}</b></div>
+          <div data-comparison-series="current"><small>最近{current.window}期</small><span><i style={{ width: `${metric.current / maximum * 100}%` }} /></span><b>{display(metric.current, metric.suffix)}</b></div>
+          <div className="is-baseline" data-comparison-series="baseline"><small>最近{comparison.window}期</small><span><i style={{ width: `${metric.baseline / maximum * 100}%` }} /></span><b>{display(metric.baseline, metric.suffix)}</b></div>
         </article>;
       })}
     </div>

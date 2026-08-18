@@ -48,6 +48,18 @@ async function renderChart(
 }
 
 describe("FormulaDrawLandingChart", () => {
+  it("separates count and rank into aligned small multiples instead of a dual-axis overlay", async () => {
+    const chart = await renderChart(records);
+    const svg = chart.querySelector<SVGSVGElement>('svg[data-chart-layout="small-multiples"]');
+
+    expect(svg).not.toBeNull();
+    expect(svg?.getAttribute("aria-label")).toContain("上下分图");
+    expect(svg?.querySelector('[data-chart-panel="count"]')).not.toBeNull();
+    expect(svg?.querySelector('[data-chart-panel="rank"]')).not.toBeNull();
+    expect(chart.textContent).toContain("上图 · 被排除次数");
+    expect(chart.textContent).toContain("下图 · 当期位置");
+  });
+
   it("exposes a concise non-interactive chart summary alongside keyboard-operable point controls", async () => {
     const chart = await renderChart(records);
 
@@ -109,7 +121,7 @@ describe("FormulaDrawLandingChart", () => {
 
     const svg = chart.querySelector('svg[aria-label*="第1位在上"]');
     expect(svg).not.toBeNull();
-    expect(svg?.getAttribute("viewBox")).toBe("0 0 760 300");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 760 360");
     expect(svg?.getAttribute("aria-label")).toContain("102期，实际龙，特码14，被排除次数2，第 1 位");
     expect(svg?.getAttribute("aria-label")).toContain("104期，实际虎，特码28，被排除次数3，并列第 2 位");
     expect(chart.querySelectorAll(".rq-formula-landing-chart__bar")).toHaveLength(3);

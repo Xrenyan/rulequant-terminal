@@ -58,6 +58,9 @@ export function FormulaHealthWorkspace({ report, onOpenIssue }: { report: Formul
         || right.currentFailureStreak - left.currentFailureStreak;
     });
   }, [query, report.health.rows, sort, status]);
+  const healthTotal = report.health.rows.length;
+  const healthSummary = STATUS_ORDER.map((key) => `${report.health.counts[key]} 条${STATUS_LABELS[key].label}`).join("，");
+  const attentionCount = healthTotal - report.health.counts.normal;
   return (
     <div className="rq-health-workspace">
       <Panel className="rq-health-workspace__head">
@@ -68,12 +71,38 @@ export function FormulaHealthWorkspace({ report, onOpenIssue }: { report: Formul
       </Panel>
 
       <ExpandableVisualization title="公式健康状态分布"><section className="rq-health-status-overview" aria-label="公式健康状态分布">
-        {STATUS_ORDER.map((key) => {
-          const item = STATUS_LABELS[key];
-          const count = report.health.counts[key];
-          const percentage = report.health.rows.length ? count / report.health.rows.length * 100 : 0;
-          return <button key={key} type="button" data-health-status-filter={key} aria-pressed={status === key} onClick={() => setStatus((current) => current === key ? "all" : key)}><span><i className={`is-${key}`} /><b>{item.label}</b><small>{count} 条</small></span><em><i style={{ width: `${percentage}%` }} /></em><p>{item.explanation}</p></button>;
-        })}
+        <header className="rq-health-status-overview__summary">
+          <div><span>全部公式状态构成</span><strong>{report.health.counts.normal} 条正常<small> · {attentionCount} 条需检查</small></strong></div>
+          <div
+            className="rq-health-status-overview__band"
+            data-health-status-band
+            role="img"
+            aria-label={`公式健康状态占比：${healthSummary}`}
+          >
+            {STATUS_ORDER.map((key) => {
+              const count = report.health.counts[key];
+              const percentage = healthTotal ? count / healthTotal * 100 : 0;
+              return <i key={key} className={`is-${key}`} style={{ width: `${percentage}%` }} title={`${STATUS_LABELS[key].label} ${count}条`} />;
+            })}
+          </div>
+          <p>整条代表全部公式；下方按状态列出精确数量和占比，点击即可筛选。</p>
+        </header>
+        <div className="rq-health-status-overview__rows">
+          {STATUS_ORDER.map((key) => {
+            const item = STATUS_LABELS[key];
+            const count = report.health.counts[key];
+            const percentage = healthTotal ? count / healthTotal * 100 : 0;
+            return <button
+              key={key}
+              type="button"
+              data-health-status-filter={key}
+              data-health-status-share={percentage}
+              aria-label={`${item.label}，${count}条，占${percentage.toFixed(1)}%，${item.explanation}`}
+              aria-pressed={status === key}
+              onClick={() => setStatus((current) => current === key ? "all" : key)}
+            ><span><i className={`is-${key}`} /><b>{item.label}</b></span><strong>{count}<small>条 · {percentage.toFixed(1)}%</small></strong><em><i style={{ width: `${percentage}%` }} /></em><p>{item.explanation}</p></button>;
+          })}
+        </div>
       </section></ExpandableVisualization>
 
       <section className="rq-health-toolbar" aria-label="公式健康筛选">

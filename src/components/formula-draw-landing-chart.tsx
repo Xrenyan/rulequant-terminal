@@ -45,23 +45,26 @@ export function FormulaDrawLandingChart({
   }
 
   const width = 760;
-  const height = 300;
+  const height = 360;
   const left = 62;
   const right = 78;
-  const top = 42;
-  const bottom = 58;
+  const countTop = 42;
+  const countBottom = 148;
+  const rankTop = 214;
+  const rankBottom = 306;
   const plotWidth = width - left - right;
-  const plotHeight = height - top - bottom;
+  const countHeight = countBottom - countTop;
+  const rankHeight = rankBottom - rankTop;
   const maxCount = Math.max(1, ...records.map((record) => record.count));
   const maxRank = Math.max(1, ...records.map((record) => record.rank));
   const average = records.reduce((sum, record) => sum + record.count, 0) / records.length;
-  const yCount = (count: number) => top + plotHeight - count / maxCount * plotHeight;
-  const yRank = (rank: number) => top + (rank - 1) / Math.max(1, maxRank - 1) * plotHeight;
+  const yCount = (count: number) => countBottom - count / maxCount * countHeight;
+  const yRank = (rank: number) => rankTop + (rank - 1) / Math.max(1, maxRank - 1) * rankHeight;
   const barWidth = Math.min(48, plotWidth / Math.max(1, records.length) * .42);
   const horizontalPadding = 36;
   const dataLeft = left + horizontalPadding;
   const dataWidth = plotWidth - horizontalPadding * 2;
-  const baseline = top + plotHeight;
+  const baseline = countBottom;
   const rankPoints = records.map((record, index) => ({
     x: xAt(index, records.length, dataLeft, dataWidth),
     y: yRank(record.rank),
@@ -93,85 +96,101 @@ export function FormulaDrawLandingChart({
         <svg
           viewBox={`0 0 ${width} ${height}`}
           role="img"
-          aria-label={`实际开奖落点组合图，${records.length}个已开奖期；柱形为${unitLabel}，折线为当期位置，第1位在上；${summary}`}
+          data-chart-layout="small-multiples"
+          aria-label={`实际开奖落点组合图（上下分图），${records.length}个已开奖期；上图柱形为${unitLabel}，下图折线为当期位置，第1位在上；${summary}`}
         >
-        <text x={left} y={20} className="rq-formula-landing-chart__axis-title">次数</text>
-        <text x={width - right} y={20} textAnchor="end" className="rq-formula-landing-chart__axis-title">
-          当期位置 · 第1位在上
-        </text>
-
-        {countTicks.map((count) => {
-          const y = yCount(count);
-          return (
-            <g key={count}>
-              <line x1={left} y1={y} x2={width - right} y2={y} className="rq-formula-landing-chart__grid-line" />
-              <text x={left - 10} y={y + 4} textAnchor="end" className="rq-formula-landing-chart__axis-label">{count}</text>
+        <g data-chart-panel="count">
+          <text x={left} y={20} className="rq-formula-landing-chart__panel-title">上图 · {unitLabel}</text>
+          {countTicks.map((count) => {
+            const y = yCount(count);
+            return (
+              <g key={count}>
+                <line x1={left} y1={y} x2={width - right} y2={y} className="rq-formula-landing-chart__grid-line" />
+                <text x={left - 10} y={y + 4} textAnchor="end" className="rq-formula-landing-chart__axis-label">{count}</text>
+              </g>
+            );
+          })}
+          {records.length >= 2 && (
+            <g className="rq-formula-landing-chart__average">
+              <line
+                x1={left}
+                y1={yCount(average)}
+                x2={width - right}
+                y2={yCount(average)}
+                strokeDasharray="6 5"
+                className="rq-formula-landing-chart__average-line"
+              />
+              <text x={left + 6} y={yCount(average) - 6} className="rq-formula-landing-chart__average-label">
+                平均 {average.toFixed(1)}
+              </text>
             </g>
-          );
-        })}
+          )}
+          {records.map((record, index) => {
+            const x = xAt(index, records.length, dataLeft, dataWidth);
+            const countY = yCount(record.count);
+            const isFocused = record.calculationIssue === focusedIssue;
+            return (
+              <g key={record.calculationIssue} aria-hidden="true">
+                <rect
+                  x={x - barWidth / 2}
+                  y={countY}
+                  width={barWidth}
+                  height={baseline - countY}
+                  rx="5"
+                  className={cn("rq-formula-landing-chart__bar", isFocused && "is-focused")}
+                />
+                <text x={x} y={Math.max(countTop + 13, countY - 7)} textAnchor="middle" className="rq-formula-landing-chart__count-label">
+                  {record.count}
+                </text>
+              </g>
+            );
+          })}
+        </g>
 
-        {visibleRankTicks.map((rank) => (
-          <text
-            key={rank}
-            x={width - right + 10}
-            y={yRank(rank) + 4}
-            className="rq-formula-landing-chart__axis-label is-rank"
-          >
-            #{rank}
-          </text>
-        ))}
+        <line x1={left} y1={181} x2={width - right} y2={181} className="rq-formula-landing-chart__panel-divider" />
 
-        {records.length >= 2 && (
-          <g className="rq-formula-landing-chart__average">
-            <line
-              x1={left}
-              y1={yCount(average)}
-              x2={width - right}
-              y2={yCount(average)}
-              strokeDasharray="6 5"
-              className="rq-formula-landing-chart__average-line"
-            />
-            <text x={left + 6} y={yCount(average) - 6} className="rq-formula-landing-chart__average-label">
-              平均 {average.toFixed(1)}
-            </text>
-          </g>
-        )}
-
-        <path d={linePath(rankPoints)} className="rq-formula-landing-chart__rank-line" />
+        <g data-chart-panel="rank">
+          <text x={left} y={199} className="rq-formula-landing-chart__panel-title">下图 · 当期位置 · 第1位在上</text>
+          {visibleRankTicks.map((rank) => {
+            const y = yRank(rank);
+            return (
+              <g key={rank}>
+                <line x1={left} y1={y} x2={width - right} y2={y} className="rq-formula-landing-chart__rank-grid-line" />
+                <text x={left - 10} y={y + 4} textAnchor="end" className="rq-formula-landing-chart__axis-label is-rank">#{rank}</text>
+              </g>
+            );
+          })}
+          <path d={linePath(rankPoints)} className="rq-formula-landing-chart__rank-line" />
+          {records.map((record, index) => {
+            const x = xAt(index, records.length, dataLeft, dataWidth);
+            const rankY = yRank(record.rank);
+            const isFocused = record.calculationIssue === focusedIssue;
+            const isLast = index === records.length - 1;
+            const twoDigitNumber = String(record.specialNumber).padStart(2, "0");
+            const labelY = rankY < rankTop + 18 ? rankY + 20 : rankY - 9;
+            return (
+              <g key={record.calculationIssue} aria-hidden="true">
+                {isFocused && <line x1={x} y1={countTop} x2={x} y2={rankBottom} className="rq-formula-landing-chart__focus-guide" />}
+                <circle cx={x} cy={rankY} r={isFocused ? 6 : 5} className={cn("rq-formula-landing-chart__rank-dot", isFocused && "is-focused")} />
+                <text
+                  x={x + (isLast ? -10 : 10)}
+                  y={labelY}
+                  textAnchor={isLast ? "end" : "start"}
+                  className="rq-formula-landing-chart__direct-label"
+                >
+                  {record.actualLabel} · {twoDigitNumber}
+                </text>
+              </g>
+            );
+          })}
+        </g>
 
         {records.map((record, index) => {
           const x = xAt(index, records.length, dataLeft, dataWidth);
-          const countY = yCount(record.count);
-          const rankY = yRank(record.rank);
-          const isFocused = record.calculationIssue === focusedIssue;
-          const isLast = index === records.length - 1;
-          const twoDigitNumber = String(record.specialNumber).padStart(2, "0");
           return (
-            <g key={record.calculationIssue} aria-hidden="true">
-              <rect
-                x={x - barWidth / 2}
-                y={countY}
-                width={barWidth}
-                height={baseline - countY}
-                rx="5"
-                className={cn("rq-formula-landing-chart__bar", isFocused && "is-focused")}
-              />
-              <text x={x} y={Math.max(top + 13, countY - 7)} textAnchor="middle" className="rq-formula-landing-chart__count-label">
-                {record.count}
-              </text>
-              <circle cx={x} cy={rankY} r={isFocused ? 6 : 5} className={cn("rq-formula-landing-chart__rank-dot", isFocused && "is-focused")} />
-              <text
-                x={x + (isLast ? -10 : 10)}
-                y={Math.max(top + 12, rankY - 9)}
-                textAnchor={isLast ? "end" : "start"}
-                className="rq-formula-landing-chart__direct-label"
-              >
-                {record.actualLabel} · {twoDigitNumber}
-              </text>
-              <text x={x} y={height - 30} textAnchor="middle" className="rq-formula-landing-chart__axis-label is-target-issue">
-                {record.targetIssue}
-              </text>
-            </g>
+            <text key={record.calculationIssue} x={x} y={height - 30} textAnchor="middle" className="rq-formula-landing-chart__axis-label is-target-issue">
+              {record.targetIssue}
+            </text>
           );
         })}
 
@@ -214,9 +233,9 @@ export function FormulaDrawLandingChart({
         </div>
       </div>
       <div className="rq-formula-landing-chart__legend" aria-label="组合图图例">
-        <span className="is-count"><i />柱 · {unitLabel}</span>
-        <span className="is-rank"><i />线 · 当期位置</span>
-        {records.length >= 2 && <span className="is-average"><i />平均次数</span>}
+        <span className="is-count"><i />上图 · {unitLabel}</span>
+        <span className="is-rank"><i />下图 · 当期位置</span>
+        {records.length >= 2 && <span className="is-average"><i />虚线 · 平均次数</span>}
       </div>
     </div>
   );
