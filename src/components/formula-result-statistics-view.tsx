@@ -156,10 +156,17 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
       return;
     }
 
-    const worker = new Worker(new URL("../workers/formula-summary.worker.ts", import.meta.url));
     let disposed = false;
+    let settled = false;
+    let worker: Worker | undefined;
+    const settle = (nextReport: FormulaSummaryReport, error?: string) => {
+      if (disposed || settled) return;
+      settled = true;
+      startTransition(() => setAsyncState({ draws, rules, config, report: nextReport, error }));
+      worker?.terminate();
+    };
     const recoverFromWorkerFailure = (error: unknown) => {
-      if (disposed) return;
+      if (disposed || settled) return;
       try {
         const fallbackReport = buildFormulaSummaryReport({
           draws,
@@ -168,38 +175,40 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
           maxPeriods: FORMULA_SUMMARY_PREPARED_PERIODS,
         });
         formulaSummaryReportCache.set(draws, { rules, config, report: fallbackReport });
-        setAsyncState({ draws, rules, config, report: fallbackReport });
+        settle(fallbackReport);
       } catch (fallbackError) {
         const message = fallbackError instanceof Error
           ? fallbackError.message
           : error instanceof Error
             ? error.message
             : "统计线程暂时无法启动";
-        setAsyncState({ draws, rules, config, report: EMPTY_FORMULA_SUMMARY_REPORT, error: message });
+        settle(EMPTY_FORMULA_SUMMARY_REPORT, message);
       }
-      worker.terminate();
     };
     queueMicrotask(() => {
-      if (!disposed) setAsyncState({ draws, rules, config, report: EMPTY_FORMULA_SUMMARY_REPORT });
+      if (!disposed && !settled) setAsyncState({ draws, rules, config, report: EMPTY_FORMULA_SUMMARY_REPORT });
     });
-    worker.onmessage = (event: MessageEvent<FormulaSummaryWorkerResponse>) => {
-      if (disposed) return;
-      if (!event.data.ok) {
-        recoverFromWorkerFailure(event.data.error);
-        return;
-      }
-      const nextReport = event.data.report;
-      formulaSummaryReportCache.set(draws, { rules, config, report: nextReport });
-      startTransition(() => setAsyncState({ draws, rules, config, report: nextReport }));
-      worker.terminate();
-    };
-    worker.onerror = () => {
-      recoverFromWorkerFailure(new Error("统计线程暂时无法启动"));
-    };
-    worker.postMessage({ draws, rules, config, maxPeriods: FORMULA_SUMMARY_PREPARED_PERIODS });
+    try {
+      worker = new Worker(new URL("../workers/formula-summary.worker.ts", import.meta.url));
+      worker.onmessage = (event: MessageEvent<FormulaSummaryWorkerResponse>) => {
+        if (disposed || settled) return;
+        if (!event.data.ok) {
+          recoverFromWorkerFailure(event.data.error);
+          return;
+        }
+        const nextReport = event.data.report;
+        formulaSummaryReportCache.set(draws, { rules, config, report: nextReport });
+        settle(nextReport);
+      };
+      worker.onerror = () => recoverFromWorkerFailure(new Error("统计线程暂时无法启动"));
+      worker.onmessageerror = () => recoverFromWorkerFailure(new Error("统计线程消息无法读取"));
+      worker.postMessage({ draws, rules, config, maxPeriods: FORMULA_SUMMARY_PREPARED_PERIODS });
+    } catch (error) {
+      recoverFromWorkerFailure(error);
+    }
     return () => {
       disposed = true;
-      worker.terminate();
+      if (!settled) worker?.terminate();
     };
   }, [workerAvailable, draws, rules, config]);
 

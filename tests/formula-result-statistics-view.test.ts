@@ -165,6 +165,129 @@ describe("formula result statistics view", () => {
     expect(host?.textContent).not.toContain("正在整理完整统计");
   });
 
+  it("falls back when the worker reports an unsuccessful payload", async () => {
+    class UnsuccessfulWorkerStub {
+      static instance: UnsuccessfulWorkerStub | undefined;
+      onmessage: ((event: MessageEvent<{ ok: boolean; error?: string }>) => void) | null = null;
+      onerror: ((event: ErrorEvent) => void) | null = null;
+      onmessageerror: ((event: MessageEvent) => void) | null = null;
+      postMessage = vi.fn();
+      terminate = vi.fn();
+
+      constructor() {
+        UnsuccessfulWorkerStub.instance = this;
+      }
+    }
+
+    workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Worker");
+    Object.defineProperty(globalThis, "Worker", { configurable: true, writable: true, value: UnsuccessfulWorkerStub });
+    await renderView({ draws: [...draws] });
+
+    await act(async () => UnsuccessfulWorkerStub.instance?.onmessage?.({ data: { ok: false, error: "worker summary failed" } } as MessageEvent));
+
+    expect(host?.textContent).toContain("最新输出");
+    expect(UnsuccessfulWorkerStub.instance?.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back when Worker construction throws", async () => {
+    class ConstructorThrowingWorker {
+      constructor() {
+        throw new Error("Worker construction failed");
+      }
+    }
+
+    workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Worker");
+    Object.defineProperty(globalThis, "Worker", { configurable: true, writable: true, value: ConstructorThrowingWorker });
+    await renderView({ draws: [...draws] });
+
+    expect(host?.textContent).toContain("最新输出");
+    expect(host?.textContent).not.toContain("正在整理完整统计");
+  });
+
+  it("falls back when the Worker cannot clone the input message", async () => {
+    class PostMessageThrowingWorker {
+      static instance: PostMessageThrowingWorker | undefined;
+      onmessage: ((event: MessageEvent<{ ok: boolean }>) => void) | null = null;
+      onerror: ((event: ErrorEvent) => void) | null = null;
+      onmessageerror: ((event: MessageEvent) => void) | null = null;
+      postMessage = vi.fn(() => {
+        throw new DOMException("Cannot clone request", "DataCloneError");
+      });
+      terminate = vi.fn();
+
+      constructor() {
+        PostMessageThrowingWorker.instance = this;
+      }
+    }
+
+    workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Worker");
+    Object.defineProperty(globalThis, "Worker", { configurable: true, writable: true, value: PostMessageThrowingWorker });
+    await renderView({ draws: [...draws] });
+
+    expect(host?.textContent).toContain("最新输出");
+    expect(PostMessageThrowingWorker.instance?.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back when the Worker emits a messageerror event", async () => {
+    class MessageErrorWorkerStub {
+      static instance: MessageErrorWorkerStub | undefined;
+      onmessage: ((event: MessageEvent<{ ok: boolean }>) => void) | null = null;
+      onerror: ((event: ErrorEvent) => void) | null = null;
+      onmessageerror: ((event: MessageEvent) => void) | null = null;
+      postMessage = vi.fn();
+      terminate = vi.fn();
+
+      constructor() {
+        MessageErrorWorkerStub.instance = this;
+      }
+    }
+
+    workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Worker");
+    Object.defineProperty(globalThis, "Worker", { configurable: true, writable: true, value: MessageErrorWorkerStub });
+    await renderView({ draws: [...draws] });
+
+    await act(async () => MessageErrorWorkerStub.instance?.onmessageerror?.(new MessageEvent("messageerror")));
+
+    expect(host?.textContent).toContain("最新输出");
+    expect(MessageErrorWorkerStub.instance?.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it("settles once and ignores late Worker events after recovery or unmount", async () => {
+    class LateEventWorkerStub {
+      static instance: LateEventWorkerStub | undefined;
+      onmessage: ((event: MessageEvent<{ ok: boolean; report?: ReturnType<typeof buildFormulaSummaryReport> }>) => void) | null = null;
+      onerror: ((event: ErrorEvent) => void) | null = null;
+      onmessageerror: ((event: MessageEvent) => void) | null = null;
+      postMessage = vi.fn();
+      terminate = vi.fn();
+
+      constructor() {
+        LateEventWorkerStub.instance = this;
+      }
+    }
+
+    workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Worker");
+    Object.defineProperty(globalThis, "Worker", { configurable: true, writable: true, value: LateEventWorkerStub });
+    await renderView({ draws: [...draws] });
+
+    const instance = LateEventWorkerStub.instance;
+    await act(async () => instance?.onerror?.(new ErrorEvent("error")));
+    expect(host?.textContent).toContain("最新输出");
+    expect(instance?.terminate).toHaveBeenCalledTimes(1);
+
+    const lateReport = { ...buildFormulaSummaryReport({ draws, rules, config: defaultConfig, maxPeriods: 11 }), formulaCount: 999 };
+    await act(async () => instance?.onmessage?.({ data: { ok: true, report: lateReport } } as MessageEvent));
+    await act(async () => instance?.onmessageerror?.(new MessageEvent("messageerror")));
+
+    expect(host?.textContent).not.toContain("999 条");
+    expect(instance?.terminate).toHaveBeenCalledTimes(1);
+
+    await act(async () => root?.unmount());
+    root = undefined;
+    await act(async () => instance?.onerror?.(new ErrorEvent("error")));
+    expect(instance?.terminate).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps the page recent range at ten calculation periods", async () => {
     const longDraws = Array.from({ length: 12 }, (_, index) => ({
       issue: String(101 + index),
