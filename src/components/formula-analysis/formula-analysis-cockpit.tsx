@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, startTransition, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Activity, BarChart3, CircleAlert, ListChecks, ShieldCheck, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -22,10 +22,11 @@ import { Panel } from "@/components/ui/panel";
 import { FormulaAnalysisLoading } from "@/components/formula-analysis/formula-analysis-loading";
 import { FormulaAnalysisToolbar } from "@/components/formula-analysis/formula-analysis-toolbar";
 import { FormulaAnalysisOverview } from "@/components/formula-analysis/formula-analysis-overview";
-import { FormulaLandingWorkspace } from "@/components/formula-analysis/formula-landing-workspace";
-import { FormulaHealthWorkspace } from "@/components/formula-analysis/formula-health-workspace";
-import { FormulaEvidenceWorkspace } from "@/components/formula-analysis/formula-evidence-workspace";
 import type { FormulaDrawLandingRecord } from "@/lib/formula-summary/formula-draw-landing";
+
+const LazyFormulaLandingWorkspace = lazy(() => import("@/components/formula-analysis/formula-landing-workspace").then((module) => ({ default: module.FormulaLandingWorkspace })));
+const LazyFormulaHealthWorkspace = lazy(() => import("@/components/formula-analysis/formula-health-workspace").then((module) => ({ default: module.FormulaHealthWorkspace })));
+const LazyFormulaEvidenceWorkspace = lazy(() => import("@/components/formula-analysis/formula-evidence-workspace").then((module) => ({ default: module.FormulaEvidenceWorkspace })));
 
 const TABS: Array<{ key: FormulaAnalysisTab; label: string; description: string; icon: typeof Activity }> = [
   { key: "overview", label: "概览", description: "先看重点结论", icon: Activity },
@@ -151,18 +152,18 @@ export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, 
     changeFilters({ ...filters, tab: "evidence" });
   };
 
-  const workspace = report && (
-    filters.tab === "overview"
+  const workspace = report && <Suspense fallback={<FormulaAnalysisLoading message="正在打开当前分析区域…" />}>
+    {filters.tab === "overview"
       ? <FormulaAnalysisOverview report={report} onOpenEvidence={openEvidence} />
       : filters.tab === "landing"
-        ? <FormulaLandingWorkspace report={report} onSelectRecord={openEvidence} />
+        ? <LazyFormulaLandingWorkspace report={report} onSelectRecord={openEvidence} />
         : filters.tab === "diagnostics"
-          ? <FormulaHealthWorkspace report={report} onOpenIssue={openIssueEvidence} />
-          : <FormulaEvidenceWorkspace report={report} initialRecord={focusedRecord} initialIssue={focusedEvidenceIssue} />
-  );
+          ? <LazyFormulaHealthWorkspace report={report} onOpenIssue={openIssueEvidence} />
+          : <LazyFormulaEvidenceWorkspace report={report} initialRecord={focusedRecord} initialIssue={focusedEvidenceIssue} />}
+  </Suspense>;
 
   return (
-    <div className="rq-analysis-cockpit">
+    <div className={`rq-analysis-cockpit ${filters.action === "exclude" ? "is-exclude" : "is-include"}`}>
       <Panel className="rq-analysis-cockpit__hero">
         <div><Badge tone="cyan">六合彩公式分析</Badge><h2>公式分析驾驶舱</h2><p>先看实际开奖落在“被排除/被支持几次”的位置，再追到具体公式和计算期。这里只描述历史表现，不承诺未来结果。</p></div>
         <div className="rq-analysis-cockpit__source"><small>当前数据</small><strong>{dataSourceLabel}</strong><span>最近更新：{cloudStateMeta?.updatedAt ?? lastSyncAt ?? "等待首次同步"}</span></div>
