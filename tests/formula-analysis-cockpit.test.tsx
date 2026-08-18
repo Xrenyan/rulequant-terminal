@@ -5,6 +5,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FormulaAnalysisOverview } from "@/components/formula-analysis/formula-analysis-overview";
 import { FormulaLandingWorkspace } from "@/components/formula-analysis/formula-landing-workspace";
+import { FormulaHealthWorkspace } from "@/components/formula-analysis/formula-health-workspace";
+import { FormulaEvidenceWorkspace } from "@/components/formula-analysis/formula-evidence-workspace";
 import { defaultConfig } from "@/lib/config/default-config";
 import { seedDraws, seedRules } from "@/lib/data/seed";
 import { buildFormulaAnalysisReport, clearFormulaAnalysisReportCache } from "@/lib/formula-analysis/build-analysis-report";
@@ -129,5 +131,81 @@ describe("formula landing workspace", () => {
     expect(rankBins.some((bin) => bin.dataset.rankBin === "1" && bin.textContent?.includes("并列"))).toBe(true);
     expect(rankBins.reduce((total, bin) => total + Number(bin.dataset.periods), 0)).toBe(10);
     expect(view.textContent).toContain("只统计已开奖期，待开奖期不进入分布");
+  });
+});
+
+describe("formula health workspace", () => {
+  it("shows exact 10/30/50 samples, understandable status copy, filters, and technical disclosure", async () => {
+    const report = makeReport();
+    const row = report.health.rows[0];
+    const view = await render(<FormulaHealthWorkspace report={report} onOpenIssue={vi.fn()} />);
+
+    expect(view.querySelector('input[aria-label="搜索公式"]')).not.toBeNull();
+    expect(view.textContent).toContain("状态筛选");
+    expect(view.textContent).toContain("排序方式");
+    expect(view.querySelectorAll("[data-health-row]").length).toBe(report.health.rows.length);
+    expect(view.textContent).toContain(`${row.windows[10].successRate}%`);
+    expect(view.textContent).toContain(`${row.windows[10].successes}/${row.windows[10].sampleSize}`);
+    expect(view.textContent).toContain(`${row.windows[30].successes}/${row.windows[30].sampleSize}`);
+    expect(view.textContent).toContain(`${row.windows[50].successes}/${row.windows[50].sampleSize}`);
+    expect(view.textContent).toContain("连续未通过");
+    expect(view.textContent).toContain("样本不足");
+    expect(view.querySelector("details")?.textContent).toContain("最近未通过期次");
+  });
+
+  it("explains duplicate and conflict thresholds with common samples and issue drill-down", async () => {
+    const base = makeReport();
+    const pair = {
+      kind: "duplicate" as const,
+      leftRuleId: "left",
+      leftRuleName: "公式甲",
+      rightRuleId: "right",
+      rightRuleName: "公式乙",
+      targetType: "zodiac" as const,
+      commonPeriods: 10,
+      score: 0.86,
+      exactMatchPeriods: 8,
+      overlapPeriods: 9,
+      exampleIssues: ["2026210"],
+    };
+    const report = { ...base, pairs: { ...base.pairs, duplicates: [pair], conflicts: [{ ...pair, kind: "conflict" as const }] } };
+    const onOpenIssue = vi.fn();
+    const view = await render(<FormulaHealthWorkspace report={report} onOpenIssue={onOpenIssue} />);
+
+    expect(view.textContent).toContain("高度重复");
+    expect(view.textContent).toContain("方向冲突");
+    expect(view.textContent).toContain("共同样本 10 期");
+    expect(view.textContent).toContain("相似度 86%");
+    expect(view.textContent).toContain("重复阈值 80%");
+    const issue = view.querySelector<HTMLButtonElement>('[data-pair-issue="2026210"]')!;
+    await click(issue);
+    expect(onOpenIssue).toHaveBeenCalledWith("2026210");
+  });
+});
+
+describe("formula evidence workspace", () => {
+  it("keeps the complete domain, pending period, one toolbar, searchable rows, and one selected detail", async () => {
+    const report = makeReport();
+    const view = await render(<FormulaEvidenceWorkspace report={report} initialRecord={report.landing.records[0]} />);
+
+    expect(view.querySelectorAll("[data-matrix-target]")).toHaveLength(12);
+    expect(view.textContent).toContain("待开奖");
+    expect(view.querySelectorAll("[data-evidence-toolbar]")).toHaveLength(1);
+    expect(view.querySelector('input[aria-label="搜索贡献公式"]')).not.toBeNull();
+    expect(view.textContent).toContain("期次 × 全部结果");
+    expect(view.querySelectorAll("[data-evidence-detail]").length).toBeLessThanOrEqual(1);
+    expect((view.textContent?.match(/查看/g) ?? [])).toHaveLength(0);
+  });
+
+  it("shows honest zero evidence after selecting a zero-count matrix cell", async () => {
+    const report = makeReport();
+    const view = await render(<FormulaEvidenceWorkspace report={report} />);
+    const zeroCell = [...view.querySelectorAll<HTMLButtonElement>("[data-matrix-cell]")]
+      .find((cell) => cell.textContent?.trim() === "0");
+    expect(zeroCell).toBeDefined();
+    await click(zeroCell!);
+
+    expect(view.textContent).toContain("当前选择是 0 次，没有贡献公式");
+    expect(view.querySelectorAll("[data-evidence-row]")).toHaveLength(0);
   });
 });

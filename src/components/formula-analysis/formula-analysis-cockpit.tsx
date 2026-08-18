@@ -23,6 +23,8 @@ import { FormulaAnalysisLoading } from "@/components/formula-analysis/formula-an
 import { FormulaAnalysisToolbar } from "@/components/formula-analysis/formula-analysis-toolbar";
 import { FormulaAnalysisOverview } from "@/components/formula-analysis/formula-analysis-overview";
 import { FormulaLandingWorkspace } from "@/components/formula-analysis/formula-landing-workspace";
+import { FormulaHealthWorkspace } from "@/components/formula-analysis/formula-health-workspace";
+import { FormulaEvidenceWorkspace } from "@/components/formula-analysis/formula-evidence-workspace";
 import type { FormulaDrawLandingRecord } from "@/lib/formula-summary/formula-draw-landing";
 
 const TABS: Array<{ key: FormulaAnalysisTab; label: string; description: string; icon: typeof Activity }> = [
@@ -61,6 +63,7 @@ export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, 
   const [selectedViewId, setSelectedViewId] = useState("");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [focusedRecord, setFocusedRecord] = useState<FormulaDrawLandingRecord>();
+  const [focusedEvidenceIssue, setFocusedEvidenceIssue] = useState("");
   const mobileCloseRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => setSavedViews(readSavedViews()), []);
@@ -139,6 +142,12 @@ export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, 
   };
   const openEvidence = (record: FormulaDrawLandingRecord) => {
     setFocusedRecord(record);
+    setFocusedEvidenceIssue(record.calculationIssue);
+    changeFilters({ ...filters, tab: "evidence" });
+  };
+  const openIssueEvidence = (issue: string) => {
+    setFocusedEvidenceIssue(issue);
+    setFocusedRecord(report?.landing.records.find((record) => record.calculationIssue === issue));
     changeFilters({ ...filters, tab: "evidence" });
   };
 
@@ -147,7 +156,9 @@ export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, 
       ? <FormulaAnalysisOverview report={report} onOpenEvidence={openEvidence} />
       : filters.tab === "landing"
         ? <FormulaLandingWorkspace report={report} onSelectRecord={openEvidence} />
-        : <AnalysisPlaceholder tab={filters.tab} report={report} />
+        : filters.tab === "diagnostics"
+          ? <FormulaHealthWorkspace report={report} onOpenIssue={openIssueEvidence} />
+          : <FormulaEvidenceWorkspace report={report} initialRecord={focusedRecord} initialIssue={focusedEvidenceIssue} />
   );
 
   return (
