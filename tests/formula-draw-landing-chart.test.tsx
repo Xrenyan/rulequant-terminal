@@ -157,6 +157,20 @@ describe("FormulaDrawLandingChart", () => {
     expect(onFocusRecord).toHaveBeenLastCalledWith(records[1]);
   });
 
+  it("opens the chart in a readable full-screen dialog and closes with Escape", async () => {
+    const chart = await renderChart(records);
+    const expand = [...chart.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("放大图表"));
+    expect(expand).toBeDefined();
+    await act(async () => expand?.click());
+
+    const dialog = document.body.querySelector('[role="dialog"][aria-label="放大实际落点图"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.querySelectorAll("[data-landing-issue]")).toHaveLength(3);
+
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(document.body.querySelector('[role="dialog"][aria-label="放大实际落点图"]')).toBeNull();
+  });
+
   it("omits an average reference for a single record and pads the special number", async () => {
     const chart = await renderChart([{ ...records[0], specialNumber: 7 }]);
 

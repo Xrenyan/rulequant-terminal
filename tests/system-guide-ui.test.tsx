@@ -35,6 +35,9 @@ describe("system guide UI", () => {
     expect(view.textContent).toContain("页面功能");
     expect(view.textContent).toContain("图表怎么看");
     expect(view.textContent).toContain("常见问题");
+    expect(view.querySelector('[data-guide-reading-path]')).not.toBeNull();
+    expect(view.textContent).toContain("推荐阅读路线");
+    expect(view.textContent).toContain("先学会操作，再理解图表");
   });
 
   it("renders breadcrumbs, standard sections, screenshot text, contents, and related learning", async () => {

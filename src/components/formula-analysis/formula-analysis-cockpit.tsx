@@ -2,8 +2,9 @@
 
 import { lazy, startTransition, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Activity, BarChart3, CircleAlert, ListChecks, ShieldCheck, X } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { Activity, ArrowLeft, BarChart3, CircleAlert, ListChecks, LoaderCircle, ShieldCheck, X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import type { DrawRecord, RuleQuantConfig, RuleRecord } from "@/types/domain";
 import type { FormulaAnalysisFilters, FormulaAnalysisReport, FormulaAnalysisTab, SavedFormulaAnalysisView } from "@/lib/formula-analysis/types";
 import { formulaAnalysisInputKey, type FormulaAnalysisReportInput } from "@/lib/formula-analysis/build-analysis-report";
@@ -17,18 +18,30 @@ import {
   serializeAnalysisSearchParams,
   writeSavedViews,
 } from "@/lib/formula-analysis/saved-views";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { FormulaAnalysisLoading } from "@/components/formula-analysis/formula-analysis-loading";
 import { FormulaAnalysisToolbar } from "@/components/formula-analysis/formula-analysis-toolbar";
 import { FormulaAnalysisOverview } from "@/components/formula-analysis/formula-analysis-overview";
-import { ContextHelpLink, FORMULA_ANALYSIS_GUIDE_TARGETS } from "@/components/system-guide/context-help-link";
+import { FormulaAnalysisComparison } from "@/components/formula-analysis/formula-analysis-comparison";
+import { ExpandableVisualization } from "@/components/ui/expandable-visualization";
 import type { FormulaDrawLandingRecord } from "@/lib/formula-summary/formula-draw-landing";
 
-const LazyFormulaLandingWorkspace = lazy(() => import("@/components/formula-analysis/formula-landing-workspace").then((module) => ({ default: module.FormulaLandingWorkspace })));
-const LazyFormulaHealthWorkspace = lazy(() => import("@/components/formula-analysis/formula-health-workspace").then((module) => ({ default: module.FormulaHealthWorkspace })));
-const LazyFormulaEvidenceWorkspace = lazy(() => import("@/components/formula-analysis/formula-evidence-workspace").then((module) => ({ default: module.FormulaEvidenceWorkspace })));
+const loadFormulaLandingWorkspace = () => import("@/components/formula-analysis/formula-landing-workspace");
+const loadFormulaHealthWorkspace = () => import("@/components/formula-analysis/formula-health-workspace");
+const loadFormulaEvidenceWorkspace = () => import("@/components/formula-analysis/formula-evidence-workspace");
+
+const LazyFormulaLandingWorkspace = lazy(() => loadFormulaLandingWorkspace().then((module) => ({ default: module.FormulaLandingWorkspace })));
+const LazyFormulaHealthWorkspace = lazy(() => loadFormulaHealthWorkspace().then((module) => ({ default: module.FormulaHealthWorkspace })));
+const LazyFormulaEvidenceWorkspace = lazy(() => loadFormulaEvidenceWorkspace().then((module) => ({ default: module.FormulaEvidenceWorkspace })));
+
+function preloadAnalysisWorkspaces() {
+  return Promise.all([
+    loadFormulaLandingWorkspace(),
+    loadFormulaHealthWorkspace(),
+    loadFormulaEvidenceWorkspace(),
+  ]);
+}
 
 const TABS: Array<{ key: FormulaAnalysisTab; label: string; description: string; icon: typeof Activity }> = [
   { key: "overview", label: "概览", description: "先看重点结论", icon: Activity },
@@ -37,7 +50,11 @@ const TABS: Array<{ key: FormulaAnalysisTab; label: string; description: string;
   { key: "evidence", label: "明细核验", description: "逐期追到原公式", icon: ListChecks },
 ];
 
-const TAB_HELP = FORMULA_ANALYSIS_GUIDE_TARGETS;
+function formatUpdatedAt(value?: string): string {
+  if (!value) return "等待同步";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("zh-CN", { hour12: false });
+}
 
 export type FormulaAnalysisCockpitProps = {
   draws: DrawRecord[];
@@ -49,9 +66,9 @@ export type FormulaAnalysisCockpitProps = {
 };
 
 export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, lastSyncAt, cloudStateMeta }: FormulaAnalysisCockpitProps) {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const filters = useMemo(() => parseAnalysisSearchParams(new URLSearchParams(searchParams.toString())), [searchParams]);
+  const routeFilters = useMemo(() => parseAnalysisSearchParams(new URLSearchParams(searchParams.toString())), [searchParams]);
+  const [filters, setFilters] = useState<FormulaAnalysisFilters>(routeFilters);
   const analysisInput = useMemo<FormulaAnalysisReportInput>(() => ({
     draws,
     rules,
@@ -68,23 +85,52 @@ export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, 
     },
   }), [cloudStateMeta, config, dataSourceLabel, draws, filters.action, filters.ruleIds, filters.targetType, filters.window, lastSyncAt, rules]);
   const analysisRequestKey = useMemo(() => formulaAnalysisInputKey(analysisInput), [analysisInput]);
+  const comparisonInput = useMemo<FormulaAnalysisReportInput | undefined>(() => filters.compare.kind === "window"
+    ? { ...analysisInput, window: filters.compare.value }
+    : undefined, [analysisInput, filters.compare]);
+  const comparisonRequestKey = useMemo(() => comparisonInput ? formulaAnalysisInputKey(comparisonInput) : "", [comparisonInput]);
   const [analysisState, setAnalysisState] = useState<{ key: string; report?: FormulaAnalysisReport; error?: string }>({ key: "" });
+  const [comparisonState, setComparisonState] = useState<{ key: string; report?: FormulaAnalysisReport }>({ key: "" });
   const [savedViews, setSavedViews] = useState<SavedFormulaAnalysisView[]>(readSavedViews);
   const [selectedViewId, setSelectedViewId] = useState("");
+  const [toolbarStatus, setToolbarStatus] = useState("");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [focusedRecord, setFocusedRecord] = useState<FormulaDrawLandingRecord>();
   const [focusedEvidenceIssue, setFocusedEvidenceIssue] = useState("");
   const mobileCloseRef = useRef<HTMLButtonElement>(null);
-  const analysisReturnTo = `/formula-result-statistics/analysis?${serializeAnalysisSearchParams(filters)}`;
-  const report = analysisState.key === analysisRequestKey ? analysisState.report : undefined;
+  const urlUpdateTimer = useRef<number | undefined>(undefined);
+  const report = analysisState.report;
+  const refreshing = Boolean(report && analysisState.key !== analysisRequestKey);
   const error = analysisState.key === analysisRequestKey ? analysisState.error ?? "" : "";
+  const comparisonReport = comparisonState.key === comparisonRequestKey ? comparisonState.report : undefined;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setFilters((current) => serializeAnalysisSearchParams(current) === serializeAnalysisSearchParams(routeFilters) ? current : routeFilters);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [routeFilters]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void preloadAnalysisWorkspaces().catch(() => undefined);
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     return startFormulaAnalysisReportRequest(analysisInput, {
       onResult: (nextReport) => startTransition(() => setAnalysisState({ key: analysisRequestKey, report: nextReport })),
-      onError: (message) => startTransition(() => setAnalysisState({ key: analysisRequestKey, error: message })),
+      onError: (message) => startTransition(() => setAnalysisState((current) => ({ key: analysisRequestKey, report: current.report, error: message }))),
     });
   }, [analysisInput, analysisRequestKey]);
+
+  useEffect(() => {
+    if (!comparisonInput) return;
+    return startFormulaAnalysisReportRequest(comparisonInput, {
+      onResult: (nextReport) => startTransition(() => setComparisonState({ key: comparisonRequestKey, report: nextReport })),
+    });
+  }, [comparisonInput, comparisonRequestKey]);
 
   useEffect(() => {
     if (!mobileFiltersOpen) return;
@@ -101,8 +147,19 @@ export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, 
     };
   }, [mobileFiltersOpen]);
 
+  useEffect(() => () => {
+    if (urlUpdateTimer.current) window.clearTimeout(urlUpdateTimer.current);
+  }, []);
+
   const changeFilters = (next: FormulaAnalysisFilters) => {
-    startTransition(() => router.replace(`/formula-result-statistics/analysis?${serializeAnalysisSearchParams(next)}`, { scroll: false }));
+    setFilters(next);
+    setToolbarStatus("");
+    if (typeof window !== "undefined") {
+      if (urlUpdateTimer.current) window.clearTimeout(urlUpdateTimer.current);
+      urlUpdateTimer.current = window.setTimeout(() => {
+        window.history.replaceState(window.history.state, "", `/formula-result-statistics/analysis?${serializeAnalysisSearchParams(next)}`);
+      }, 320);
+    }
   };
   const saveCurrentView = () => {
     const now = new Date().toISOString();
@@ -117,6 +174,7 @@ export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, 
     writeSavedViews(next);
     setSavedViews(next);
     setSelectedViewId(id);
+    setToolbarStatus(`已保存“常用视图 ${savedViews.length + 1}”`);
   };
   const restoreView = (id: string) => {
     if (id === "none") {
@@ -128,12 +186,14 @@ export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, 
     const restored = restoreAnalysisView(view, new Set(rules.map((rule) => rule.id)));
     setSelectedViewId(id);
     changeFilters(restored.filters);
+    setToolbarStatus(`已恢复“${view.name}”`);
   };
   const deleteView = (id: string) => {
     const next = deleteAnalysisView(savedViews, id);
     writeSavedViews(next);
     setSavedViews(next);
     setSelectedViewId("");
+    setToolbarStatus("已删除当前保存视图");
   };
   const openEvidence = (record: FormulaDrawLandingRecord) => {
     setFocusedRecord(record);
@@ -148,7 +208,7 @@ export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, 
 
   const workspace = report && <Suspense fallback={<FormulaAnalysisLoading message="正在打开当前分析区域…" />}>
     {filters.tab === "overview"
-      ? <FormulaAnalysisOverview report={report} onOpenEvidence={openEvidence} />
+      ? <FormulaAnalysisOverview report={report} onOpenEvidence={openEvidence} onOpenLanding={() => changeFilters({ ...filters, tab: "landing" })} onOpenDiagnostics={() => changeFilters({ ...filters, tab: "diagnostics" })} />
       : filters.tab === "landing"
         ? <LazyFormulaLandingWorkspace report={report} onSelectRecord={openEvidence} />
         : filters.tab === "diagnostics"
@@ -158,16 +218,17 @@ export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, 
 
   return (
     <div className={`rq-analysis-cockpit ${filters.action === "exclude" ? "is-exclude" : "is-include"}`}>
-      <Panel className="rq-analysis-cockpit__hero">
-        <div><Badge tone="cyan">六合彩公式分析</Badge><h2>公式分析驾驶舱</h2><p>先看实际开奖落在“被排除/被支持几次”的位置，再追到具体公式和计算期。这里只描述历史表现，不承诺未来结果。</p></div>
-        <div className="rq-analysis-cockpit__source"><small>当前数据</small><strong>{dataSourceLabel}</strong><span>最近更新：{cloudStateMeta?.updatedAt ?? lastSyncAt ?? "等待首次同步"}</span><ContextHelpLink {...TAB_HELP[filters.tab]} returnTo={analysisReturnTo} label="本区说明" /></div>
-      </Panel>
+      <header className="rq-analysis-cockpit__header">
+        <Link href="/formula-result-statistics" className="rq-analysis-back"><ArrowLeft className="h-4 w-4" />返回公式结果统计</Link>
+        <div className="rq-analysis-cockpit__title"><strong>最近{filters.window}期 · {filters.action === "exclude" ? "排除结果" : "支持结果"}</strong><span>{dataSourceLabel} · 更新 {formatUpdatedAt(cloudStateMeta?.updatedAt ?? lastSyncAt)}</span></div>
+      </header>
 
       <FormulaAnalysisToolbar
         filters={filters}
         rules={rules}
         savedViews={savedViews}
         selectedViewId={selectedViewId}
+        statusMessage={toolbarStatus}
         onChange={changeFilters}
         onSave={saveCurrentView}
         onRestore={restoreView}
@@ -182,6 +243,11 @@ export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, 
         })}
       </nav>
 
+      {refreshing && <div className="rq-analysis-refresh" role="status"><LoaderCircle className="h-4 w-4" /><span>正在更新当前筛选，下面先保留上一次结果，不会整页空白。</span></div>}
+      {filters.compare.kind === "window" && report && comparisonReport
+        ? <ExpandableVisualization title="周期对比图"><FormulaAnalysisComparison current={report} comparison={comparisonReport} /></ExpandableVisualization>
+        : filters.compare.kind === "window" && <div className="rq-analysis-refresh" role="status"><LoaderCircle className="h-4 w-4" /><span>正在准备对比周期…</span></div>}
+
       {error ? <Panel className="rq-analysis-error" role="alert"><CircleAlert className="h-5 w-5" /><div><strong>分析暂时无法完成</strong><p>{error}</p></div></Panel>
         : report ? workspace
           : <FormulaAnalysisLoading />}
@@ -192,7 +258,7 @@ export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, 
           <button type="button" className="rq-analysis-filter-backdrop" aria-label="关闭分析筛选" onClick={() => setMobileFiltersOpen(false)} />
           <section className="rq-analysis-filter-sheet" role="dialog" aria-modal="true" aria-label="分析筛选">
             <header><div><strong>分析筛选</strong><small>结果类型、公式组、对比与保存视图</small></div><button ref={mobileCloseRef} type="button" className="rq-button rq-button--ghost inline-flex h-11 w-11 items-center justify-center border" aria-label="关闭分析筛选" onClick={() => setMobileFiltersOpen(false)}><X className="h-5 w-5" /></button></header>
-            <FormulaAnalysisToolbar filters={filters} rules={rules} savedViews={savedViews} selectedViewId={selectedViewId} onChange={changeFilters} onSave={saveCurrentView} onRestore={restoreView} onDelete={deleteView} onOpenMobileFilters={() => undefined} />
+            <FormulaAnalysisToolbar filters={filters} rules={rules} savedViews={savedViews} selectedViewId={selectedViewId} statusMessage={toolbarStatus} onChange={changeFilters} onSave={saveCurrentView} onRestore={restoreView} onDelete={deleteView} onOpenMobileFilters={() => undefined} />
           </section>
         </div>,
         document.body,

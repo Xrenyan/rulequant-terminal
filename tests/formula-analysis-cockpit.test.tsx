@@ -7,6 +7,7 @@ import { FormulaAnalysisOverview } from "@/components/formula-analysis/formula-a
 import { FormulaLandingWorkspace } from "@/components/formula-analysis/formula-landing-workspace";
 import { FormulaHealthWorkspace } from "@/components/formula-analysis/formula-health-workspace";
 import { FormulaEvidenceWorkspace } from "@/components/formula-analysis/formula-evidence-workspace";
+import { FormulaAnalysisComparison } from "@/components/formula-analysis/formula-analysis-comparison";
 import { defaultConfig } from "@/lib/config/default-config";
 import { seedDraws, seedRules } from "@/lib/data/seed";
 import { buildFormulaAnalysisReport, clearFormulaAnalysisReportCache } from "@/lib/formula-analysis/build-analysis-report";
@@ -67,7 +68,7 @@ function click(button: Element) {
 describe("formula analysis overview", () => {
   it("shows one primary KPI, three supporting KPIs, plain coverage, health, and stale data copy", async () => {
     const report = makeReport();
-    const view = await render(<FormulaAnalysisOverview report={report} onOpenEvidence={vi.fn()} />);
+    const view = await render(<FormulaAnalysisOverview report={report} onOpenEvidence={vi.fn()} onOpenLanding={vi.fn()} onOpenDiagnostics={vi.fn()} />);
 
     expect(view.querySelectorAll("[data-analysis-kpi]")).toHaveLength(4);
     expect(view.querySelector('[data-analysis-kpi="primary"]')?.textContent).toContain("实际落点平均被排除");
@@ -78,12 +79,15 @@ describe("formula analysis overview", () => {
     expect(view.textContent).toContain("数据超过36小时未更新");
     expect(view.textContent).toContain(report.landing.insight);
     expect(view.querySelectorAll("[data-overview-record]")).toHaveLength(3);
+    expect(view.querySelectorAll("[data-landing-issue]")).toHaveLength(10);
+    expect(view.textContent).toContain("查看完整落点趋势");
+    expect(view.textContent).toContain("查看公式诊断");
   });
 
   it("uses one contextual evidence action after a period is selected", async () => {
     const report = makeReport();
     const onOpenEvidence = vi.fn();
-    const view = await render(<FormulaAnalysisOverview report={report} onOpenEvidence={onOpenEvidence} />);
+    const view = await render(<FormulaAnalysisOverview report={report} onOpenEvidence={onOpenEvidence} onOpenLanding={vi.fn()} onOpenDiagnostics={vi.fn()} />);
     expect(view.textContent).not.toContain("查看此期明细");
 
     const row = view.querySelectorAll("[data-overview-record]")[1];
@@ -100,21 +104,36 @@ describe("formula analysis overview", () => {
   });
 });
 
+describe("formula analysis comparison", () => {
+  it("turns comparison mode into a visible current-versus-baseline analysis", async () => {
+    const current = makeReport();
+    const comparison = { ...makeReport(), window: 30 as const, landing: { ...makeReport().landing, kpis: { ...makeReport().landing.kpis, averageCount: 1.2, averageRank: 8 } } };
+    const view = await render(<FormulaAnalysisComparison current={current} comparison={comparison} />);
+
+    expect(view.textContent).toContain("对比结论");
+    expect(view.textContent).toContain("最近10期");
+    expect(view.textContent).toContain("最近30期");
+    expect(view.querySelectorAll("[data-comparison-metric]")).toHaveLength(4);
+    expect(view.textContent).toContain("平均次数变化");
+  });
+});
+
 describe("formula landing workspace", () => {
-  it("renders separate aligned count and rank charts with direct actual labels and 44px controls", async () => {
+  it("renders one coordinated count-and-rank chart with direct actual labels and 44px controls", async () => {
     const report = makeReport();
     const onSelectRecord = vi.fn();
     const view = await render(<FormulaLandingWorkspace report={report} onSelectRecord={onSelectRecord} />);
 
-    expect(view.textContent).toContain("被排除次数 · 越高代表同时排除它的公式越多");
-    expect(view.textContent).toContain("当期位置 · 第1位在最上方");
-    expect(view.querySelectorAll("[data-count-point]")).toHaveLength(10);
-    expect(view.querySelectorAll("[data-rank-point]")).toHaveLength(10);
-    expect(view.querySelectorAll("[data-landing-period-control]")).toHaveLength(10);
+    expect(view.textContent).toContain("柱形看次数，折线看位置");
+    expect(view.querySelectorAll("[data-landing-issue]")).toHaveLength(10);
     expect(view.textContent).toContain(`${report.landing.records[0].actualLabel} · ${String(report.landing.records[0].specialNumber).padStart(2, "0")}`);
-    const firstControl = view.querySelector<HTMLElement>("[data-landing-period-control]")!;
-    expect(firstControl.className).toContain("min-h-11");
+    const firstControl = view.querySelector<HTMLElement>("[data-landing-issue]")!;
+    expect(firstControl.getAttribute("style")).toContain("width: 44px");
     await click(firstControl);
+    expect(onSelectRecord).not.toHaveBeenCalled();
+    expect(view.textContent).toContain("查看这一期公式明细");
+    const evidenceAction = [...view.querySelectorAll("button")].find((button) => button.textContent?.includes("查看这一期公式明细"));
+    await click(evidenceAction!);
     expect(onSelectRecord).toHaveBeenCalledWith(report.landing.records[0]);
   });
 
@@ -124,9 +143,11 @@ describe("formula landing workspace", () => {
     const buttons = [...view.querySelectorAll("button")];
 
     await click(buttons.find((button) => button.textContent?.includes("次数分布"))!);
-    const countBins = [...view.querySelectorAll<HTMLElement>("[data-count-bin]")];
+    const countBins = [...view.querySelectorAll<HTMLButtonElement>("[data-count-bin]")];
     expect(countBins[0].dataset.countBin).toBe("0");
     expect(countBins.reduce((total, bin) => total + Number(bin.dataset.periods), 0)).toBe(10);
+    await click(countBins[0]);
+    expect(view.textContent).toContain("符合这个区间的期次");
 
     await click([...view.querySelectorAll("button")].find((button) => button.textContent?.includes("位置分布"))!);
     const rankBins = [...view.querySelectorAll<HTMLElement>("[data-rank-bin]")];
@@ -153,6 +174,10 @@ describe("formula health workspace", () => {
     expect(view.textContent).toContain("连续未通过");
     expect(view.textContent).toContain("样本不足");
     expect(view.querySelector("details")?.textContent).toContain("最近未通过期次");
+    expect(view.querySelectorAll("[data-health-status-filter]")).toHaveLength(5);
+    const firstStatus = row.status;
+    await click(view.querySelector(`[data-health-status-filter="${firstStatus}"]`)!);
+    expect(view.querySelectorAll("[data-health-row]")).toHaveLength(report.health.counts[firstStatus]);
   });
 
   it("explains duplicate and conflict thresholds with common samples and issue drill-down", async () => {

@@ -156,7 +156,7 @@ describe("formula result statistics view", () => {
   it("opens the route-based analysis cockpit with the current action and type", async () => {
     await renderView();
 
-    const link = findLink("进入分析驾驶舱");
+    const link = findLink("进入公式结果分析");
     expect(link.getAttribute("href")).toContain("/formula-result-statistics/analysis?");
     expect(link.getAttribute("href")).toContain("action=exclude");
     expect(link.getAttribute("href")).not.toContain("parity");

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
-describe("formula analysis cockpit navigation", () => {
+describe("formula result analysis navigation", () => {
   it("binds the nested route to a hidden terminal view and one statistics nav highlight", () => {
     const route = read("src/app/formula-result-statistics/analysis/page.tsx");
     const terminal = read("src/components/rulequant-terminal.tsx");
@@ -20,7 +20,7 @@ describe("formula analysis cockpit navigation", () => {
     const statistics = read("src/components/formula-result-statistics-view.tsx");
 
     expect(statistics).toContain('href={analysisHref}');
-    expect(statistics).toContain("进入分析驾驶舱");
+    expect(statistics).toContain("进入公式结果分析");
     expect(statistics).not.toContain("LazyFormulaResultVisualizationDialog");
     expect(statistics).not.toContain("visualizationOpen");
   });
@@ -37,5 +37,20 @@ describe("formula analysis cockpit navigation", () => {
     }
     expect(toolbar).not.toContain("单双");
     expect(toolbar).not.toContain("大小");
+  });
+
+  it("uses an instant client-side state change and exposes a clear return action", () => {
+    const analysis = read("src/components/formula-analysis/formula-analysis-cockpit.tsx");
+    const terminal = read("src/components/rulequant-terminal.tsx");
+
+    expect(analysis).toContain('href="/formula-result-statistics"');
+    expect(analysis).toContain("返回公式结果统计");
+    expect(analysis).toContain("window.history.replaceState");
+    expect(analysis).not.toContain("useRouter");
+    expect(analysis).toContain("preloadAnalysisWorkspaces");
+    expect(analysis).not.toContain("ContextHelpLink");
+    expect(analysis).not.toContain('label="说明"');
+    expect(analysis).not.toContain("公式分析驾驶舱");
+    expect(terminal).toContain('"formula-analysis": "公式结果分析"');
   });
 });

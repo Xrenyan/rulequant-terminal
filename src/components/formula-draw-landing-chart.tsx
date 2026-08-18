@@ -3,6 +3,7 @@
 import { useState, type KeyboardEvent } from "react";
 import type { FormulaDrawLandingRecord } from "@/lib/formula-summary/formula-draw-landing";
 import { cn } from "@/lib/utils";
+import { ExpandableVisualization } from "@/components/ui/expandable-visualization";
 
 type Point = { x: number; y: number };
 
@@ -86,7 +87,7 @@ export function FormulaDrawLandingChart({
     }
   };
 
-  return (
+  const chart = (
     <div className="rq-formula-landing-chart">
       <div className="rq-formula-landing-chart__plot">
         <svg
@@ -219,4 +220,5 @@ export function FormulaDrawLandingChart({
       </div>
     </div>
   );
+  return <ExpandableVisualization title="实际落点图">{chart}</ExpandableVisualization>;
 }

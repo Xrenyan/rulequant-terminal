@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
 import { Panel } from "@/components/ui/panel";
+import { ExpandableVisualization } from "@/components/ui/expandable-visualization";
 
 const STATUS_LABELS: Record<FormulaHealthStatus, { label: string; explanation: string; tone: "green" | "yellow" | "rose" | "slate" }> = {
   normal: { label: "状态正常", explanation: "样本足够，近期未出现明显连续未通过或大幅波动。", tone: "green" },
@@ -20,6 +21,7 @@ const STATUS_LABELS: Record<FormulaHealthStatus, { label: string; explanation: s
   volatile: { label: "近期波动", explanation: "最近10期和较长窗口相差至少15个百分点。", tone: "yellow" },
   "calculation-error": { label: "计算异常", explanation: "公式在当前数据或配置下无法完成计算。", tone: "rose" },
 };
+const STATUS_ORDER: FormulaHealthStatus[] = ["normal", "sample-low", "consecutive-failure", "volatile", "calculation-error"];
 
 function metricText(row: FormulaHealthRow, window: 10 | 30 | 50): string {
   const metric = row.windows[window];
@@ -64,6 +66,15 @@ export function FormulaHealthWorkspace({ report, onOpenIssue }: { report: Formul
           {Object.entries(STATUS_LABELS).map(([key, item]) => <span key={key}><i className={`is-${key}`} />{item.label}<small>{item.explanation}</small></span>)}
         </div>
       </Panel>
+
+      <ExpandableVisualization title="公式健康状态分布"><section className="rq-health-status-overview" aria-label="公式健康状态分布">
+        {STATUS_ORDER.map((key) => {
+          const item = STATUS_LABELS[key];
+          const count = report.health.counts[key];
+          const percentage = report.health.rows.length ? count / report.health.rows.length * 100 : 0;
+          return <button key={key} type="button" data-health-status-filter={key} aria-pressed={status === key} onClick={() => setStatus((current) => current === key ? "all" : key)}><span><i className={`is-${key}`} /><b>{item.label}</b><small>{count} 条</small></span><em><i style={{ width: `${percentage}%` }} /></em><p>{item.explanation}</p></button>;
+        })}
+      </section></ExpandableVisualization>
 
       <section className="rq-health-toolbar" aria-label="公式健康筛选">
         <label><span><Search className="h-4 w-4" />搜索公式</span><Input aria-label="搜索公式" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="输入公式名称" /></label>

@@ -32,6 +32,7 @@ export function FormulaAnalysisToolbar({
   rules,
   savedViews,
   selectedViewId,
+  statusMessage,
   onChange,
   onSave,
   onRestore,
@@ -42,6 +43,7 @@ export function FormulaAnalysisToolbar({
   rules: RuleRecord[];
   savedViews: SavedFormulaAnalysisView[];
   selectedViewId: string;
+  statusMessage?: string;
   onChange: (filters: FormulaAnalysisFilters) => void;
   onSave: () => void;
   onRestore: (id: string) => void;
@@ -100,7 +102,7 @@ export function FormulaAnalysisToolbar({
         <span><b>{TARGET_TYPES.find((item) => item.value === filters.targetType)?.label}</b><small>{selectedRule === "all" ? "全部公式" : "自选公式"} · {filters.compare.kind === "none" ? "不对比" : "已对比"}</small></span>
         <GitCompareArrows className="h-4 w-4" />
       </button>
-      <span className="sr-only"><Bookmark />当前筛选可保存为常用视图</span>
+      <span className={statusMessage ? "rq-analysis-toolbar__status" : "sr-only"}><Bookmark className="h-4 w-4" />{statusMessage || "当前筛选可保存为常用视图"}</span>
     </section>
   );
 }

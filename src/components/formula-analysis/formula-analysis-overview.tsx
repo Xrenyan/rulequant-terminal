@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Database, ShieldCheck, Target } from "lucide-react";
+import { AlertTriangle, ArrowRight, BarChart3, CheckCircle2, Clock3, Database, ShieldCheck, Target } from "lucide-react";
 import type { FormulaAnalysisReport } from "@/lib/formula-analysis/types";
 import type { FormulaDrawLandingRecord } from "@/lib/formula-summary/formula-draw-landing";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
+import { FormulaDrawLandingChart } from "@/components/formula-draw-landing-chart";
 import { cn } from "@/lib/utils";
 
 function formatNumber(value: number): string {
@@ -16,9 +17,13 @@ function formatNumber(value: number): string {
 export function FormulaAnalysisOverview({
   report,
   onOpenEvidence,
+  onOpenLanding,
+  onOpenDiagnostics,
 }: {
   report: FormulaAnalysisReport;
   onOpenEvidence: (record: FormulaDrawLandingRecord) => void;
+  onOpenLanding: () => void;
+  onOpenDiagnostics: () => void;
 }) {
   const [selectedIssue, setSelectedIssue] = useState("");
   const records = report.landing.records;
@@ -43,6 +48,20 @@ export function FormulaAnalysisOverview({
         <article data-analysis-kpi="secondary" className="rq-analysis-kpi"><span>最高{actionWord}</span><strong>{report.landing.kpis.maxCount}<small>次</small></strong><p>最近范围内单期实际落点的最高次数。</p></article>
       </section>
 
+      <Panel className="rq-analysis-overview__chart">
+        <header>
+          <div><span>最近 {records.length} 个已开奖期</span><h2>实际落点：柱形看次数，折线看位置</h2><p>柱越高，表示当期有更多公式同时得到实际结果；折线越靠上，表示实际结果的名次越靠前。点击任一期可继续核验。</p></div>
+          <Button size="sm" onClick={onOpenLanding}><BarChart3 className="h-4 w-4" />查看完整落点趋势</Button>
+        </header>
+        <FormulaDrawLandingChart
+          records={records}
+          focusedIssue={selectedIssue}
+          unitLabel={`${actionWord}次数`}
+          onFocusRecord={(record) => setSelectedIssue(record.calculationIssue)}
+        />
+        {selected && <div className="rq-analysis-overview__chart-selection" role="status"><span><b>{selected.targetIssue} 期</b>：{String(selected.specialNumber).padStart(2, "0")} · {selected.actualLabel}，{actionWord}{selected.count}次，{selected.rankLabel}。</span><Button size="sm" onClick={() => onOpenEvidence(selected)}>核验这一期<ArrowRight className="h-4 w-4" /></Button></div>}
+      </Panel>
+
       <Panel className="rq-analysis-overview__insight">
         <div className="rq-analysis-overview__insight-icon"><ShieldCheck className="h-5 w-5" /></div>
         <div><span>本次可直接读出的结论</span><h2>{report.landing.insight}</h2><p>这是对已开奖数据的描述，不代表下一期一定重复相同趋势。</p></div>
@@ -65,6 +84,8 @@ export function FormulaAnalysisOverview({
           <p>{coverageComplete ? `已覆盖最近${report.window}个已开奖期；待开奖期单独保留，不计入指标。` : `当前只有${records.length}个可验证期，比例与连续表现需要谨慎理解。`}</p>
         </article>
       </section>
+
+      <div className="rq-analysis-overview__health-action"><Button size="sm" variant="ghost" onClick={onOpenDiagnostics}><ShieldCheck className="h-4 w-4" />查看公式诊断</Button></div>
 
       <Panel className="rq-analysis-overview__recent">
         <header><div><span>最近三期</span><h2>实际落点记录</h2></div><p>点击一行后，下方只出现一个明确的核验入口。</p></header>

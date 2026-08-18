@@ -1,5 +1,6 @@
 import {
   buildFormulaAnalysisReport,
+  formulaAnalysisInputKey,
   type FormulaAnalysisReportInput,
 } from "@/lib/formula-analysis/build-analysis-report";
 import type { FormulaAnalysisReport } from "@/lib/formula-analysis/types";
@@ -18,9 +19,26 @@ export type FormulaAnalysisWorkerPort = {
 
 type StartFormulaAnalysisReportOptions = {
   createWorker?: () => FormulaAnalysisWorkerPort;
-  onResult(report: FormulaAnalysisReport, source: "worker" | "fallback"): void;
+  onResult(report: FormulaAnalysisReport, source: "worker" | "fallback" | "cache"): void;
   onError?: (message: string) => void;
 };
+
+const MAX_CLIENT_CACHE_ENTRIES = 8;
+const completedReports = new Map<string, FormulaAnalysisReport>();
+
+function rememberReport(key: string, report: FormulaAnalysisReport): void {
+  completedReports.delete(key);
+  completedReports.set(key, report);
+  while (completedReports.size > MAX_CLIENT_CACHE_ENTRIES) {
+    const oldest = completedReports.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    completedReports.delete(oldest);
+  }
+}
+
+export function clearFormulaAnalysisWorkerResultCache(): void {
+  completedReports.clear();
+}
 
 function defaultWorker(): FormulaAnalysisWorkerPort {
   return new Worker(
@@ -32,6 +50,17 @@ export function startFormulaAnalysisReportRequest(
   input: FormulaAnalysisReportInput,
   options: StartFormulaAnalysisReportOptions,
 ): () => void {
+  const inputKey = formulaAnalysisInputKey(input);
+  const cached = completedReports.get(inputKey);
+  if (cached) {
+    completedReports.delete(inputKey);
+    completedReports.set(inputKey, cached);
+    let disposed = false;
+    queueMicrotask(() => {
+      if (!disposed) options.onResult(cached, "cache");
+    });
+    return () => { disposed = true; };
+  }
   let worker: FormulaAnalysisWorkerPort | undefined;
   let settled = false;
   let disposed = false;
@@ -42,6 +71,7 @@ export function startFormulaAnalysisReportRequest(
   const settle = (report: FormulaAnalysisReport, source: "worker" | "fallback") => {
     if (settled || disposed) return;
     settled = true;
+    rememberReport(inputKey, report);
     terminate();
     options.onResult(report, source);
   };

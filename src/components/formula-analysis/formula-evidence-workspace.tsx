@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
 import { Panel } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
+import { ExpandableVisualization } from "@/components/ui/expandable-visualization";
 
 function displayTarget(target: number | string): string {
   return typeof target === "number" ? String(target).padStart(2, "0") : String(target);
@@ -64,7 +65,7 @@ export function FormulaEvidenceWorkspace({ report, initialRecord, initialIssue }
 
       <Panel className="rq-evidence-matrix-panel">
         <header><div><span>完整结果域 · 0 次也保留</span><h2>分布矩阵</h2></div><div className="rq-evidence-legend"><span><Target className="h-4 w-4" />实际开奖</span><span><i />次数越高颜色越深</span></div></header>
-        <FormulaCompleteMatrix analysis={report.landing} targetType={report.targetType} selectedTargetKey={selectedTargetKey} focusedIssue={focusedIssue} onFocusActualRecord={focusActual} onSelectTarget={changeTarget} onFocusIssue={changeIssue} />
+        <ExpandableVisualization title="完整结果分布矩阵"><FormulaCompleteMatrix analysis={report.landing} targetType={report.targetType} selectedTargetKey={selectedTargetKey} focusedIssue={focusedIssue} onFocusActualRecord={focusActual} onSelectTarget={changeTarget} onFocusIssue={changeIssue} /></ExpandableVisualization>
       </Panel>
 
       <Panel className="rq-evidence-list-panel">

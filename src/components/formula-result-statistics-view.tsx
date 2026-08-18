@@ -255,7 +255,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
             <p className="mt-1 text-sm text-slate-500">按最新一期或最近十期，统计每条启用公式产生的排除与支持次数。</p>
           </div>
           <Link href={analysisHref} className="rq-button rq-button--primary inline-flex h-10 min-h-10 w-full items-center justify-center gap-2 border px-4 text-sm font-medium sm:w-auto">
-            <ChartSpline className="h-4 w-4" />进入分析驾驶舱
+             <ChartSpline className="h-4 w-4" />进入公式结果分析
           </Link>
         </div>
         <div className="rq-formula-stats__sync-note mt-4">

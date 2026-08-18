@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultConfig } from "@/lib/config/default-config";
 import { seedDraws, seedRules } from "@/lib/data/seed";
 import {
@@ -8,6 +8,7 @@ import {
   type FormulaAnalysisReportInput,
 } from "@/lib/formula-analysis/build-analysis-report";
 import {
+  clearFormulaAnalysisWorkerResultCache,
   startFormulaAnalysisReportRequest,
   type FormulaAnalysisWorkerPort,
 } from "@/lib/formula-analysis/formula-analysis-worker-client";
@@ -96,6 +97,26 @@ describe("formula analysis report", () => {
 });
 
 describe("formula analysis worker client", () => {
+  beforeEach(() => clearFormulaAnalysisWorkerResultCache());
+
+  it("returns repeated analysis combinations from the client cache without creating another worker", async () => {
+    clearFormulaAnalysisWorkerResultCache();
+    const firstWorker = new WorkerStub();
+    const input = reportInput();
+    const report = buildFormulaAnalysisReport(input);
+    const firstResult = vi.fn();
+    startFormulaAnalysisReportRequest(input, { createWorker: () => firstWorker, onResult: firstResult });
+    firstWorker.onmessage?.({ data: { ok: true, report } } as MessageEvent);
+
+    const createAgain = vi.fn(() => new WorkerStub());
+    const cachedResult = vi.fn();
+    startFormulaAnalysisReportRequest(input, { createWorker: createAgain, onResult: cachedResult });
+    await Promise.resolve();
+
+    expect(createAgain).not.toHaveBeenCalled();
+    expect(cachedResult).toHaveBeenCalledWith(report, "cache");
+  });
+
   it("uses a worker result once and terminates the settled worker", () => {
     clearFormulaAnalysisReportCache();
     const worker = new WorkerStub();

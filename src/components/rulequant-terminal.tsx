@@ -328,7 +328,7 @@ const viewLabels: Record<ViewKey, string> = {
   dashboard: "首页",
   "one-click": "一键算公式",
   "formula-result-statistics": "公式结果统计",
-  "formula-analysis": "公式分析驾驶舱",
+  "formula-analysis": "公式结果分析",
   "formula-detail": "公式逐期明细",
   "formula-discovery": "公式筛选",
   "special-analysis": "专项概率观察",
@@ -1506,16 +1506,16 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     : websiteDraws.length
         ? "网站全年数据"
         : isCloudData && hasManualDraws
-          ? "云端数据库 + 人工录入"
+          ? "已同步开奖记录 + 人工补充"
           : isCloudData
-            ? "云端数据库"
+            ? "已同步开奖记录"
             : hasLiveDraws
-              ? "实时网址"
+              ? "实时开奖记录"
               : hasManualDraws
-                ? "本地库 + 人工录入"
+                ? "本机开奖记录 + 人工补充"
               : isSeedOnly
                 ? "示例数据"
-                : "本地库";
+                : "本机开奖记录";
   const sourceRecordBadgeTone = sourceRecords.length || (isStaticShareHost && hasSharedDraws) ? "green" : "slate";
   const sourceRecordBadgeLabel = sourceRecords.length
     ? `${sourceRecords.length} 条网址记录${hasManualDraws ? ` + ${manualLocalDraws.length} 条人工` : ""}`
@@ -2644,7 +2644,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
               <div className="rq-topbar-actions flex min-w-0 max-w-full flex-wrap items-center gap-2 text-xs text-slate-400">
                 <Badge tone={hasSharedDraws ? "green" : "slate"}>{dataSourceLabel}</Badge>
                 <span className="shrink-0">最新期：{latestRawDraw?.issue ?? "-"}</span>
-                {activeGuideTarget ? <ContextHelpLink {...activeGuideTarget} returnTo={activeReturnPath} /> : null}
+                {activeGuideTarget && activeView !== "formula-analysis" && activeView !== "config" ? <ContextHelpLink {...activeGuideTarget} returnTo={activeReturnPath} /> : null}
                 <ThemeToggle />
                 {showCloudPublishControls && cloudPublishStatus === "failed" && cloudPublishMessage && <Badge tone="rose">{cloudPublishMessage}</Badge>}
               </div>

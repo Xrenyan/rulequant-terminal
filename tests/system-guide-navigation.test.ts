@@ -41,13 +41,14 @@ describe("system guide navigation", () => {
     expect(terminal).toContain("<ContextHelpLink");
   });
 
-  it("keeps each formula analysis area attached to its own plain-language explanation", () => {
+  it("keeps formula analysis explanations in Settings without another page-level help button", () => {
     expect(FORMULA_ANALYSIS_GUIDE_TARGETS).toEqual({
       overview: { topic: "formula-result-statistics" },
       landing: { topic: "landing-trend" },
       diagnostics: { topic: "formula-health" },
       evidence: { topic: "evidence-matrix" },
     });
-    expect(cockpit).toContain("returnTo={analysisReturnTo}");
+    expect(cockpit).not.toContain("ContextHelpLink");
+    expect(terminal).toContain('activeView !== "formula-analysis" && activeView !== "config"');
   });
 });
