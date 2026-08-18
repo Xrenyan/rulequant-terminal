@@ -1,8 +1,10 @@
 import type { RuleRecord } from "@/types/domain";
 import type {
   FormulaSummaryAction,
+  FormulaSummaryReport,
   FormulaSummaryTargetType,
 } from "@/lib/formula-summary/formula-summary";
+import type { FormulaDrawLandingAnalysis } from "@/lib/formula-summary/formula-draw-landing";
 
 export type FormulaAnalysisWindow = 10 | 30 | 50;
 
@@ -121,4 +123,18 @@ export type DataHealthReport = {
   formulaErrors: DataHealthFormulaError[];
   missingIssueStatus: "known" | "unknown";
   missingIssues: string[];
+};
+
+export type FormulaAnalysisReport = {
+  cacheKey: string;
+  generatedAt: string;
+  window: FormulaAnalysisWindow;
+  action: FormulaSummaryAction;
+  targetType: FormulaSummaryTargetType;
+  selectedRuleIds: string[];
+  summary: FormulaSummaryReport;
+  landing: FormulaDrawLandingAnalysis;
+  health: FormulaHealthReport;
+  pairs: FormulaPairDiagnosticsReport;
+  dataHealth: DataHealthReport;
 };
