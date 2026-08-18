@@ -47,6 +47,7 @@ export type FormulaDrawLandingAnalysis = {
   series: FormulaLandingSeries[];
   records: FormulaDrawLandingRecord[];
   pendingPeriod?: FormulaSummaryPeriod;
+  retainedMatrixIssue?: string;
   kpis: FormulaLandingKpis;
   insight: string;
   globalMax: number;
@@ -60,6 +61,7 @@ export type FormulaDrawLandingInput = {
   config: RuleQuantConfig;
   completedLimit?: number;
   matrixLimit?: number;
+  focusedCalculationIssue?: string;
 };
 
 const DEFAULT_COMPLETED_LIMIT = 10;
@@ -217,7 +219,16 @@ export function buildFormulaDrawLandingAnalysis(
   const completedLimit = requestedLimit(input.completedLimit, DEFAULT_COMPLETED_LIMIT);
   const matrixLimit = requestedLimit(input.matrixLimit, DEFAULT_MATRIX_LIMIT);
   const domain = buildFormulaTargetDomain(input.targetType, input.config);
-  const matrixPeriods = newestWindow(input.periods, matrixLimit);
+  const defaultMatrixPeriods = newestWindow(input.periods, matrixLimit);
+  const focusedMatrixPeriod = input.focusedCalculationIssue && input.focusedCalculationIssue !== "all"
+    ? input.periods.find((period) => period.calculationIssue === input.focusedCalculationIssue)
+    : undefined;
+  const retainedMatrixIssue = focusedMatrixPeriod && !defaultMatrixPeriods.includes(focusedMatrixPeriod)
+    ? focusedMatrixPeriod.calculationIssue
+    : undefined;
+  const matrixPeriods = retainedMatrixIssue
+    ? input.periods.filter((period) => period.calculationIssue === retainedMatrixIssue || defaultMatrixPeriods.includes(period))
+    : defaultMatrixPeriods;
   const countsByPeriod = matrixPeriods.map((period) => (
     countsForPeriod(period, input.action, input.targetType)
   ));
@@ -273,6 +284,7 @@ export function buildFormulaDrawLandingAnalysis(
     series,
     records,
     pendingPeriod,
+    retainedMatrixIssue,
     kpis,
     insight,
     globalMax,

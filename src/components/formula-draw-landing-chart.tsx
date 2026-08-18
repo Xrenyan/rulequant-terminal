@@ -78,7 +78,7 @@ export function FormulaDrawLandingChart({
     else onFocusIssue?.(record.calculationIssue);
   };
 
-  const handleKeyDown = (event: KeyboardEvent<SVGGElement>, record: FormulaDrawLandingRecord) => {
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, record: FormulaDrawLandingRecord) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       setFocusedControlIssue(record.calculationIssue);
@@ -88,11 +88,12 @@ export function FormulaDrawLandingChart({
 
   return (
     <div className="rq-formula-landing-chart">
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        role="group"
-        aria-label={`实际开奖落点组合图；柱形为${unitLabel}，折线为当期位置，第1位在上；${summary}`}
-      >
+      <div className="rq-formula-landing-chart__plot">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          role="img"
+          aria-label={`实际开奖落点组合图，${records.length}个已开奖期；柱形为${unitLabel}，折线为当期位置，第1位在上；${summary}`}
+        >
         <text x={left} y={20} className="rq-formula-landing-chart__axis-title">次数</text>
         <text x={width - right} y={20} textAnchor="end" className="rq-formula-landing-chart__axis-title">
           当期位置 · 第1位在上
@@ -142,62 +143,22 @@ export function FormulaDrawLandingChart({
           const countY = yCount(record.count);
           const rankY = yRank(record.rank);
           const isFocused = record.calculationIssue === focusedIssue;
-          const isKeyboardFocused = record.calculationIssue === focusedControlIssue;
           const isLast = index === records.length - 1;
           const twoDigitNumber = String(record.specialNumber).padStart(2, "0");
-          const hitSize = 44;
-          const hitX = Math.max(left, Math.min(x - hitSize / 2, width - right - hitSize));
-          const hitY = Math.max(top, Math.min(rankY - hitSize / 2, baseline - hitSize));
           return (
-            <g
-              key={record.calculationIssue}
-              role="button"
-              tabIndex={0}
-              data-landing-issue={record.calculationIssue}
-              aria-pressed={isFocused}
-              aria-label={`${record.targetIssue}期，实际${record.actualLabel}，特码${twoDigitNumber}，${unitLabel}${record.count}，${record.rankLabel}`}
-              className={cn(
-                "rq-formula-landing-chart__point",
-                isFocused && "is-focused",
-                isKeyboardFocused && "is-keyboard-focused",
-              )}
-              onClick={() => focusRecord(record)}
-              onKeyDown={(event) => handleKeyDown(event, record)}
-              onFocus={() => setFocusedControlIssue(record.calculationIssue)}
-              onBlur={() => setFocusedControlIssue((current) => (
-                current === record.calculationIssue ? null : current
-              ))}
-            >
-              <rect
-                x={hitX}
-                y={hitY}
-                width={hitSize}
-                height={hitSize}
-                rx="10"
-                className="rq-formula-landing-chart__hit-area"
-                aria-hidden="true"
-              />
-              <rect
-                x={hitX}
-                y={hitY}
-                width={hitSize}
-                height={hitSize}
-                rx="10"
-                className="rq-formula-landing-chart__focus-halo"
-                aria-hidden="true"
-              />
+            <g key={record.calculationIssue} aria-hidden="true">
               <rect
                 x={x - barWidth / 2}
                 y={countY}
                 width={barWidth}
                 height={baseline - countY}
                 rx="5"
-                className="rq-formula-landing-chart__bar"
+                className={cn("rq-formula-landing-chart__bar", isFocused && "is-focused")}
               />
               <text x={x} y={Math.max(top + 13, countY - 7)} textAnchor="middle" className="rq-formula-landing-chart__count-label">
                 {record.count}
               </text>
-              <circle cx={x} cy={rankY} r={isFocused ? 6 : 5} className="rq-formula-landing-chart__rank-dot" />
+              <circle cx={x} cy={rankY} r={isFocused ? 6 : 5} className={cn("rq-formula-landing-chart__rank-dot", isFocused && "is-focused")} />
               <text
                 x={x + (isLast ? -10 : 10)}
                 y={Math.max(top + 12, rankY - 9)}
@@ -206,17 +167,51 @@ export function FormulaDrawLandingChart({
               >
                 {record.actualLabel} · {twoDigitNumber}
               </text>
-              <text x={x} y={height - 30} textAnchor="middle" className="rq-formula-landing-chart__axis-label">
-                {record.calculationIssue}
+              <text x={x} y={height - 30} textAnchor="middle" className="rq-formula-landing-chart__axis-label is-target-issue">
+                {record.targetIssue}
               </text>
             </g>
           );
         })}
 
         <text x={left + plotWidth / 2} y={height - 8} textAnchor="middle" className="rq-formula-landing-chart__axis-title">
-          计算期
+          开奖期
         </text>
-      </svg>
+        </svg>
+        <div className="rq-formula-landing-chart__controls" aria-label="实际开奖落点期次控制">
+          {records.map((record, index) => {
+            const x = xAt(index, records.length, dataLeft, dataWidth);
+            const rankY = yRank(record.rank);
+            const twoDigitNumber = String(record.specialNumber).padStart(2, "0");
+            const isFocused = record.calculationIssue === focusedIssue;
+            const isKeyboardFocused = record.calculationIssue === focusedControlIssue;
+            return (
+              <button
+                key={record.calculationIssue}
+                type="button"
+                data-landing-issue={record.calculationIssue}
+                aria-pressed={isFocused}
+                aria-label={`${record.targetIssue}期，实际${record.actualLabel}，特码${twoDigitNumber}，${unitLabel}${record.count}，${record.rankLabel}`}
+                className={cn(
+                  "rq-formula-landing-chart__point",
+                  isFocused && "is-focused",
+                  isKeyboardFocused && "is-keyboard-focused",
+                )}
+                style={{ left: `${x / width * 100}%`, top: `${rankY / height * 100}%`, width: 44, height: 44 }}
+                onClick={() => focusRecord(record)}
+                onKeyDown={(event) => handleKeyDown(event, record)}
+                onFocus={() => setFocusedControlIssue(record.calculationIssue)}
+                onBlur={() => setFocusedControlIssue((current) => (
+                  current === record.calculationIssue ? null : current
+                ))}
+              >
+                <span className="rq-formula-landing-chart__focus-halo" aria-hidden="true" />
+                <span className="sr-only">选择 {record.targetIssue} 期开奖落点</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
       <div className="rq-formula-landing-chart__legend" aria-label="组合图图例">
         <span className="is-count"><i />柱 · {unitLabel}</span>
         <span className="is-rank"><i />线 · 当期位置</span>

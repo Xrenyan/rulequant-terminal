@@ -3702,7 +3702,8 @@ option { background: var(--rq-panel-strong); color: var(--rq-text); }
   scrollbar-color: color-mix(in srgb, var(--rq-viz-mark) 48%, var(--rq-border)) transparent;
 }
 
-.rq-formula-landing-chart > svg {
+.rq-formula-landing-chart__plot { position: relative; min-width: 680px; }
+.rq-formula-landing-chart__plot > svg {
   display: block;
   width: 100%;
   min-width: 680px;
@@ -3715,17 +3716,15 @@ option { background: var(--rq-panel-strong); color: var(--rq-text); }
 .rq-formula-landing-chart__axis-title { fill: var(--rq-text-soft); font: 720 10px var(--font-sans); }
 .rq-formula-landing-chart__axis-label { fill: var(--rq-muted); font: 600 9px var(--font-mono); }
 .rq-formula-landing-chart__axis-label.is-rank { fill: var(--rq-accent-strong); }
-.rq-formula-landing-chart__hit-area { fill: transparent; pointer-events: all; }
-.rq-formula-landing-chart__focus-halo { fill: color-mix(in srgb, var(--rq-focus-ring) 12%, transparent); stroke: var(--rq-focus-ring); stroke-width: 3; opacity: 0; pointer-events: none; }
+.rq-formula-landing-chart__controls { position: absolute; inset: 0; pointer-events: none; }
+.rq-formula-landing-chart__point { position: absolute; z-index: 1; width: 44px; height: 44px; border: 0; border-radius: 10px; padding: 0; transform: translate(-50%, -50%); background: transparent; color: transparent; cursor: pointer; outline: none; pointer-events: auto; }
+.rq-formula-landing-chart__focus-halo { position: absolute; inset: 0; border: 3px solid var(--rq-focus-ring); border-radius: 10px; background: color-mix(in srgb, var(--rq-focus-ring) 12%, transparent); opacity: 0; pointer-events: none; }
 .rq-formula-landing-chart__bar { fill: color-mix(in srgb, var(--rq-viz-mark) 76%, var(--rq-accent)); }
-.rq-formula-landing-chart__point { cursor: pointer; outline: none; }
 .rq-formula-landing-chart__point.is-keyboard-focused .rq-formula-landing-chart__focus-halo { opacity: 1; }
-.rq-formula-landing-chart__point:hover .rq-formula-landing-chart__bar,
-.rq-formula-landing-chart__point.is-focused .rq-formula-landing-chart__bar { fill: var(--rq-viz-mark); }
-.rq-formula-landing-chart__point.is-focused .rq-formula-landing-chart__bar { filter: drop-shadow(0 3px 4px color-mix(in srgb, var(--rq-viz-mark) 30%, transparent)); }
+.rq-formula-landing-chart__bar.is-focused { fill: var(--rq-viz-mark); filter: drop-shadow(0 3px 4px color-mix(in srgb, var(--rq-viz-mark) 30%, transparent)); }
 .rq-formula-landing-chart__rank-line { fill: none; stroke: var(--rq-accent); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.5; }
 .rq-formula-landing-chart__rank-dot { fill: var(--rq-content-raised); stroke: var(--rq-accent); stroke-width: 2.5; }
-.rq-formula-landing-chart__point.is-focused .rq-formula-landing-chart__rank-dot { fill: var(--rq-accent); stroke: var(--rq-content); stroke-width: 3; }
+.rq-formula-landing-chart__rank-dot.is-focused { fill: var(--rq-accent); stroke: var(--rq-content); stroke-width: 3; }
 .rq-formula-landing-chart__average-line { stroke: var(--rq-warn); stroke-dasharray: 5 5; stroke-width: 1.5; }
 .rq-formula-landing-chart__average-label { fill: var(--rq-warn); font: 700 9px var(--font-mono); }
 .rq-formula-landing-chart__count-label { fill: var(--rq-text); font: 740 10px var(--font-mono); }
@@ -3779,6 +3778,7 @@ option { background: var(--rq-panel-strong); color: var(--rq-text); }
 .rq-formula-viz__landing-pending td { background: color-mix(in srgb, var(--rq-warn) 6%, var(--rq-content-grouped)); color: var(--rq-muted); font-size: 11px; text-align: center; }
 
 .rq-formula-complete-matrix { min-width: 0; }
+.rq-formula-complete-matrix__retained { margin: 10px 12px 0; color: var(--rq-muted); font-size: 11px; }
 .rq-formula-complete-matrix__scroll { overflow-x: auto; overscroll-behavior-x: contain; padding: 12px; scrollbar-color: color-mix(in srgb, var(--rq-viz-mark) 48%, var(--rq-border)) transparent; }
 .rq-formula-complete-matrix__grid { display: grid; min-width: max-content; gap: 5px; align-items: stretch; }
 .rq-formula-complete-matrix__corner,
@@ -3818,8 +3818,7 @@ option { background: var(--rq-panel-strong); color: var(--rq-text); }
 .rq-formula-complete-matrix__number-cell > small { position: absolute; top: 4px; left: 5px; color: var(--rq-muted); font: 650 8px var(--font-mono); }
 .rq-formula-complete-matrix__number-cell > strong { padding-top: 7px; }
 
-.rq-formula-landing-chart__point:focus-visible .rq-formula-landing-chart__bar,
-.rq-formula-landing-chart__point:focus-visible .rq-formula-landing-chart__rank-dot,
+.rq-formula-landing-chart__point:focus-visible,
 .rq-formula-viz__landing-records button:focus-visible,
 .rq-formula-complete-matrix button:focus-visible { outline: 2px solid var(--rq-focus-ring); outline-offset: 2px; }
 

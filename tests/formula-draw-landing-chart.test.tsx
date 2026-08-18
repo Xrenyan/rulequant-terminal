@@ -48,22 +48,22 @@ async function renderChart(
 }
 
 describe("FormulaDrawLandingChart", () => {
-  it("exposes the chart as a group containing keyboard-operable point buttons", async () => {
+  it("exposes a concise non-interactive chart summary alongside keyboard-operable point controls", async () => {
     const chart = await renderChart(records);
 
-    const svg = chart.querySelector('svg[role="group"]');
+    const svg = chart.querySelector('svg[role="img"]');
     expect(svg).not.toBeNull();
-    expect(chart.querySelector('svg[role="img"]')).toBeNull();
-    expect(svg?.querySelectorAll('[role="button"][tabindex="0"]')).toHaveLength(3);
+    expect(svg?.querySelector('[role="button"]')).toBeNull();
+    expect(chart.querySelectorAll<HTMLButtonElement>('button[data-landing-issue]')).toHaveLength(3);
     expect(svg?.getAttribute("aria-label")).toContain("实际开奖落点组合图");
+    expect(svg?.getAttribute("aria-label")).toContain("3个已开奖期");
 
-    const point = svg?.querySelector<SVGGElement>('[data-landing-issue="101"]');
+    const point = chart.querySelector<HTMLButtonElement>('[data-landing-issue="101"]');
     expect(point).not.toBeNull();
     if (!point) throw new Error("Expected first landing chart point");
-    const hitArea = point.querySelector<SVGRectElement>(".rq-formula-landing-chart__hit-area");
-    const focusHalo = point.querySelector<SVGRectElement>(".rq-formula-landing-chart__focus-halo");
-    expect(Number(hitArea?.getAttribute("width"))).toBeGreaterThanOrEqual(44);
-    expect(Number(hitArea?.getAttribute("height"))).toBeGreaterThanOrEqual(44);
+    const focusHalo = point.querySelector<HTMLElement>(".rq-formula-landing-chart__focus-halo");
+    expect(Number.parseFloat(getComputedStyle(point).width)).toBeGreaterThanOrEqual(44);
+    expect(Number.parseFloat(getComputedStyle(point).height)).toBeGreaterThanOrEqual(44);
     expect(focusHalo).not.toBeNull();
 
     await act(async () => point.focus());
@@ -81,6 +81,15 @@ describe("FormulaDrawLandingChart", () => {
     expect(labels[0].getAttribute("text-anchor")).toBe("start");
     expect(labels[2].getAttribute("x")).toBe("636");
     expect(labels[2].getAttribute("text-anchor")).toBe("end");
+  });
+
+  it("labels the x-axis and visible ticks with target draw issues rather than calculation issues", async () => {
+    const chart = await renderChart(records);
+    const ticks = [...chart.querySelectorAll<SVGTextElement>(".rq-formula-landing-chart__axis-label.is-target-issue")];
+
+    expect(chart.textContent).toContain("开奖期");
+    expect(ticks.map((tick) => tick.textContent)).toEqual(["102", "103", "104"]);
+    expect(ticks.map((tick) => tick.textContent)).not.toContain("101");
   });
 
   it("bounds a 49-rank axis while retaining its first and last ranks", async () => {
@@ -120,12 +129,12 @@ describe("FormulaDrawLandingChart", () => {
     expect(rankYs[0]).toBeLessThan(rankYs[2]);
     expect(rankYs[2]).toBeLessThan(rankYs[1]);
 
-    const focusedPoint = chart.querySelector<SVGGElement>('[data-landing-issue="102"]');
+    const focusedPoint = chart.querySelector<HTMLButtonElement>('[data-landing-issue="102"]');
     expect(focusedPoint?.classList.contains("is-focused")).toBe(true);
     expect(focusedPoint?.getAttribute("aria-pressed")).toBe("true");
     expect(focusedPoint?.getAttribute("aria-label")).toBe("103期，实际兔，特码21，被排除次数1，第 3 位");
 
-    const point = chart.querySelector<SVGGElement>('[data-landing-issue="101"]')!;
+    const point = chart.querySelector<HTMLButtonElement>('[data-landing-issue="101"]')!;
     await act(async () => point.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(onFocusIssue).toHaveBeenCalledWith("101");
     await act(async () => point.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
@@ -137,7 +146,7 @@ describe("FormulaDrawLandingChart", () => {
   it("passes the complete actual landing record to an atomic drill-down callback", async () => {
     const onFocusRecord = vi.fn();
     const chart = await renderChart(records, { onFocusRecord });
-    const point = chart.querySelector<SVGGElement>('[data-landing-issue="102"]');
+    const point = chart.querySelector<HTMLButtonElement>('[data-landing-issue="102"]');
     expect(point).not.toBeNull();
     if (!point) throw new Error("Expected second landing chart point");
 

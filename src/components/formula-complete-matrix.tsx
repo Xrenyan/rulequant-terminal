@@ -158,6 +158,11 @@ function NumberMatrix({
 
   return (
     <div className="rq-formula-complete-matrix is-number" role="region" aria-label="完整号码结果矩阵">
+      {analysis.retainedMatrixIssue && (
+        <p className="rq-formula-complete-matrix__retained" data-matrix-retained role="status">
+          已保留聚焦计算期 {analysis.retainedMatrixIssue}，矩阵额外显示该期。
+        </p>
+      )}
       {analysis.matrixPeriods.map((period, periodIndex) => {
         const isFocused = focusedIssue === period.calculationIssue;
         return (
@@ -229,6 +234,11 @@ export function FormulaCompleteMatrix({
 
   return (
     <div className={cn("rq-formula-complete-matrix", `is-${targetType}`)} role="region" aria-label="完整结果矩阵">
+      {analysis.retainedMatrixIssue && (
+        <p className="rq-formula-complete-matrix__retained" data-matrix-retained role="status">
+          已保留聚焦计算期 {analysis.retainedMatrixIssue}，矩阵额外显示该期。
+        </p>
+      )}
       <div className="rq-formula-complete-matrix__scroll">
         <div
           className="rq-formula-complete-matrix__grid"

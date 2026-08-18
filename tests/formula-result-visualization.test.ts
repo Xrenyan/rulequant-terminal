@@ -4,7 +4,9 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { FormulaResultStatisticsView } from "@/components/formula-result-statistics-view";
+import { FormulaResultVisualizationDialog } from "@/components/formula-result-visualization";
 import { defaultConfig } from "@/lib/config/default-config";
+import type { FormulaSummaryContribution, FormulaSummaryPeriod } from "@/lib/formula-summary/formula-summary";
 import type { DrawRecord, RuleQuantConfig, RuleRecord } from "@/types/domain";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -93,7 +95,94 @@ async function renderView({
   });
 }
 
+function landingWindowPeriods(): FormulaSummaryPeriod[] {
+  const completed = Array.from({ length: 10 }, (_, index) => {
+    const calculationIssue = String(101 + index);
+    const targetIssue = String(102 + index);
+    const contributions: FormulaSummaryContribution[] = Array.from({ length: index === 0 ? 3 : 1 }, (_, ruleIndex) => ({
+      id: `${calculationIssue}:r${ruleIndex}`,
+      calculationIssue,
+      targetIssue,
+      targetLabel: targetIssue,
+      isPending: false,
+      ruleId: `r${ruleIndex}`,
+      ruleName: `规则 ${ruleIndex}`,
+      category: "kill_zodiac",
+      formula: "平1",
+      expression: "平1",
+      action: "exclude",
+      targetType: "zodiac",
+      targets: ["龙"],
+      process: [],
+    }));
+    return {
+      calculationIssue,
+      targetIssue,
+      targetLabel: targetIssue,
+      isPending: false,
+      targetResult: {
+        issue: targetIssue,
+        number: 15,
+        zodiac: "龙",
+        tail: 5,
+        head: 1,
+        sum: 6,
+        segment: 3,
+        element: "水",
+        color: "蓝",
+        parity: "单",
+      },
+      contributions,
+      skippedRules: [],
+    } satisfies FormulaSummaryPeriod;
+  });
+  return [...completed, {
+    calculationIssue: "111",
+    targetLabel: "下期待开奖",
+    isPending: true,
+    contributions: [],
+    skippedRules: [],
+  }];
+}
+
+async function renderLandingWindowDialog() {
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () => {
+    root?.render(React.createElement(FormulaResultVisualizationDialog, {
+      periods: landingWindowPeriods(),
+      config: defaultConfig,
+      action: "exclude",
+      targetType: "zodiac",
+      selectedTargetKey: "string:龙",
+      onSelectTarget: () => {},
+      onClose: () => {},
+      returnFocusRef: { current: null },
+    }));
+  });
+  const dialog = document.body.querySelector('[role="dialog"]');
+  if (!dialog) throw new Error("Expected visualization dialog");
+  return dialog;
+}
+
 describe("formula result visualization", () => {
+  it("uses the visible matrix scale and retains an out-of-window focused landing row", async () => {
+    const dialog = await renderLandingWindowDialog();
+    expect(dialog.querySelector(".rq-formula-viz__heat-legend")?.getAttribute("aria-label")).toBe("统一色阶：最低0，最高1");
+    const matrix = dialog.querySelector(".rq-formula-complete-matrix");
+    expect(matrix?.querySelector('[data-period-issue="101"]')).toBeNull();
+
+    const oldestRecord = dialog.querySelector<HTMLTableRowElement>('[data-landing-record="101"]');
+    expect(oldestRecord).not.toBeNull();
+    if (!oldestRecord) throw new Error("Expected oldest landing record");
+    await act(async () => buttonByText(oldestRecord, "查看").click());
+
+    expect(matrix?.querySelector('[data-period-issue="101"]')).not.toBeNull();
+    expect(dialog.querySelector("[data-matrix-retained]")?.textContent).toContain("101");
+    expect(dialog.querySelector(".rq-formula-viz__heat-legend")?.getAttribute("aria-label")).toBe("统一色阶：最低0，最高3");
+  });
+
   it("opens a real modal, locks body scrolling, closes on Escape, and restores exact focus", async () => {
     await renderView();
     const trigger = buttonByText(host!, "查看可视化");

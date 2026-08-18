@@ -81,7 +81,8 @@ export function FormulaResultVisualizationDialog({
     config,
     completedLimit: 10,
     matrixLimit: 10,
-  }), [action, config, periods, targetType]);
+    focusedCalculationIssue: focusedLandingIssue,
+  }), [action, config, focusedLandingIssue, periods, targetType]);
   const group = groups.find((candidate) => candidate.action === action && candidate.targetType === targetType);
   const effectiveTargetKey = selectedTargetKey || model.series[0]?.targetKey || "";
   const selectedSeries = model.series.find((item) => item.targetKey === effectiveTargetKey);
@@ -307,8 +308,8 @@ export function FormulaResultVisualizationDialog({
           <section className="rq-formula-viz__matrix-panel" aria-labelledby="formula-matrix-title">
             <header>
               <div><span>期次 × 全部结果 · 点击交叉筛选</span><h3 id="formula-matrix-title">{periods.length > 1 ? "期次分布矩阵" : "本期结果对比"}</h3></div>
-              <div className="rq-formula-viz__heat-legend" aria-label={`统一色阶：最低0，最高${model.globalMax}`}>
-                <span>统一色阶</span><small>0</small><i aria-hidden="true" /><small>{model.globalMax}</small>
+              <div className="rq-formula-viz__heat-legend" aria-label={`统一色阶：最低0，最高${landing.globalMax}`}>
+                <span>统一色阶</span><small>0</small><i aria-hidden="true" /><small>{landing.globalMax}</small>
               </div>
             </header>
             <FormulaCompleteMatrix
