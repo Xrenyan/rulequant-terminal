@@ -88,6 +88,11 @@ const FormulaResultStatisticsView = dynamic(
   { ssr: false, loading: FormulaResultStatisticsLoading },
 );
 
+const FormulaAnalysisCockpit = dynamic(
+  () => import("@/components/formula-analysis/formula-analysis-cockpit").then((module) => module.FormulaAnalysisCockpit),
+  { ssr: false, loading: FormulaResultStatisticsLoading },
+);
+
 const SpecialAnalysisView = dynamic(
   () => import("@/components/special-analysis-view").then((module) => module.SpecialAnalysisView),
   { loading: SpecialAnalysisLoading },
@@ -240,6 +245,7 @@ export type ViewKey =
   | "dashboard"
   | "one-click"
   | "formula-result-statistics"
+  | "formula-analysis"
   | "formula-detail"
   | "formula-discovery"
   | "special-analysis"
@@ -271,6 +277,11 @@ const navItems: Array<{ key: ViewKey; href: string; label: string; icon: typeof 
 const mobileNavKeys: ViewKey[] = ["dashboard", "one-click", "candidate-pool", "rules"];
 const mobileNavItems = navItems.filter((item) => mobileNavKeys.includes(item.key));
 const mobileMoreItems = navItems.filter((item) => !mobileNavKeys.includes(item.key));
+
+export function isNavItemActive(itemKey: ViewKey, activeView: ViewKey): boolean {
+  return itemKey === activeView
+    || (itemKey === "formula-result-statistics" && activeView === "formula-analysis");
+}
 const REMOTE_DRAW_IMPORT_ENDPOINT = "https://rulequant-terminal.vercel.app/api/import-draws-from-url";
 const AUTO_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 const RESUME_SYNC_INTERVAL_MS = 60 * 1000;
@@ -304,6 +315,7 @@ const viewLabels: Record<ViewKey, string> = {
   dashboard: "首页",
   "one-click": "一键算公式",
   "formula-result-statistics": "公式结果统计",
+  "formula-analysis": "公式分析驾驶舱",
   "formula-detail": "公式逐期明细",
   "formula-discovery": "公式筛选",
   "special-analysis": "专项概率观察",
@@ -2476,7 +2488,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
           <nav className="space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const active = item.key === activeView;
+              const active = isNavItemActive(item.key, activeView);
               return (
                 <Link
                   key={item.key}
@@ -2510,7 +2522,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
               <div className="rq-mobile-more__grid">
                 {mobileMoreItems.map((item) => {
                   const Icon = item.icon;
-                  const active = item.key === activeView;
+                  const active = isNavItemActive(item.key, activeView);
                   return (
                     <Link
                       key={item.key}
@@ -2537,7 +2549,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
           <div className="rq-mobile-nav__grid grid min-w-0 gap-1">
             {mobileNavItems.map((item) => {
               const Icon = item.icon;
-              const active = item.key === activeView;
+              const active = isNavItemActive(item.key, activeView);
               return (
                 <Link
                   key={item.key}
@@ -2867,6 +2879,17 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
 
             {activeView === "formula-result-statistics" && (
               <FormulaResultStatisticsView draws={activeDraws} rules={rules} config={config} />
+            )}
+
+            {activeView === "formula-analysis" && (
+              <FormulaAnalysisCockpit
+                draws={activeDraws}
+                rules={rules}
+                config={config}
+                dataSourceLabel={dataSourceLabel}
+                lastSyncAt={displayLastSyncAt}
+                cloudStateMeta={cloudStateMeta}
+              />
             )}
 
             {activeView === "formula-detail" && (

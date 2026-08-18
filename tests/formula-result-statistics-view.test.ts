@@ -76,6 +76,13 @@ async function renderView({ draws: viewDraws = draws }: { draws?: DrawRecord[] }
   await rerenderView({ draws: viewDraws });
 }
 
+function findLink(label: string): HTMLAnchorElement {
+  const link = [...(host?.querySelectorAll("a") ?? [])]
+    .find((candidate) => candidate.textContent?.includes(label));
+  if (!link) throw new Error(`没有找到链接：${label}`);
+  return link as HTMLAnchorElement;
+}
+
 async function rerenderView({ draws: viewDraws = draws }: { draws?: DrawRecord[] } = {}) {
   await act(async () => {
     root?.render(React.createElement(FormulaResultStatisticsView, {
@@ -144,6 +151,16 @@ describe("formula result statistics view", () => {
     expect(host?.textContent).toContain("最新输出");
     await act(async () => findButton("最近十期").click());
     expect(host?.textContent).toContain("3 个计算期");
+  });
+
+  it("opens the route-based analysis cockpit with the current action and type", async () => {
+    await renderView();
+
+    const link = findLink("进入分析驾驶舱");
+    expect(link.getAttribute("href")).toContain("/formula-result-statistics/analysis?");
+    expect(link.getAttribute("href")).toContain("action=exclude");
+    expect(link.getAttribute("href")).not.toContain("parity");
+    expect(link.getAttribute("href")).not.toContain("size");
   });
 
   it("falls back to the synchronous report when the summary worker fails", async () => {

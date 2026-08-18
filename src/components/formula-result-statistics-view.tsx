@@ -1,6 +1,7 @@
 "use client";
 
-import { lazy, startTransition, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   BarChart3,
   CalendarRange,
@@ -8,7 +9,7 @@ import {
   CircleAlert,
   Layers3,
   ListChecks,
-  Eye,
+  ChartSpline,
 } from "lucide-react";
 import {
   buildFormulaSummaryGroups,
@@ -24,14 +25,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
-
-const LazyFormulaResultVisualizationDialog = lazy(() => import("@/components/formula-result-visualization").then((module) => ({
-  default: module.FormulaResultVisualizationDialog,
-})));
-
-function preloadFormulaVisualization() {
-  if (typeof window !== "undefined") void import("@/components/formula-result-visualization");
-}
 
 type FormulaSummaryWorkerResponse = { ok: true; report: FormulaSummaryReport } | { ok: false; error: string };
 type FormulaSummaryCacheEntry = { rules: RuleRecord[]; config: RuleQuantConfig; report: FormulaSummaryReport };
@@ -132,8 +125,6 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
   const [action, setAction] = useState<FormulaSummaryAction>("exclude");
   const [requestedTargetType, setRequestedTargetType] = useState<FormulaSummaryTargetType | "">("");
   const [requestedTarget, setRequestedTarget] = useState("");
-  const [visualizationOpen, setVisualizationOpen] = useState(false);
-  const visualizationTriggerRef = useRef<HTMLElement | null>(null);
 
   const workerAvailable = typeof Worker !== "undefined";
   const synchronousReport = useMemo(
@@ -234,6 +225,12 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
   const maxCount = activeGroup?.items[0]?.count ?? 1;
   const latest = report.latestPeriod;
   const actionCopy = actionOptions.find((option) => option.value === action)!;
+  const analysisHref = `/formula-result-statistics/analysis?${new URLSearchParams({
+    tab: "overview",
+    range: "10",
+    action,
+    type: activeTargetType || "zodiac",
+  })}`;
 
   const changeRange = (nextRange: RangeMode) => {
     startTransition(() => setRangeMode(nextRange));
@@ -247,14 +244,6 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
     });
   };
 
-  const openVisualization = (trigger: HTMLElement, targetKey = activeTarget) => {
-    visualizationTriggerRef.current = trigger;
-    if (targetKey) setRequestedTarget(targetKey);
-    setVisualizationOpen(true);
-  };
-
-  const closeVisualization = useCallback(() => setVisualizationOpen(false), []);
-
   if (!synchronousReport && !asyncReport) return <FormulaSummaryLoading error={reportError} />;
 
   return (
@@ -265,18 +254,9 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
             <h2 id="formula-statistics-title">公式结果统计</h2>
             <p className="mt-1 text-sm text-slate-500">按最新一期或最近十期，统计每条启用公式产生的排除与支持次数。</p>
           </div>
-          <Button
-            type="button"
-            className="w-full sm:w-auto"
-            variant="primary"
-            disabled={!activeItem}
-            onMouseEnter={preloadFormulaVisualization}
-            onFocus={preloadFormulaVisualization}
-            onTouchStart={preloadFormulaVisualization}
-            onClick={(event) => openVisualization(event.currentTarget)}
-          >
-            <Eye className="h-4 w-4" />查看可视化
-          </Button>
+          <Link href={analysisHref} className="rq-button rq-button--primary inline-flex h-10 min-h-10 w-full items-center justify-center gap-2 border px-4 text-sm font-medium sm:w-auto">
+            <ChartSpline className="h-4 w-4" />进入分析驾驶舱
+          </Link>
         </div>
         <div className="rq-formula-stats__sync-note mt-4">
           <Badge tone="green">实时统计</Badge>
@@ -362,10 +342,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
                   aria-pressed={activeTarget === item.targetKey}
                   aria-label={`查看${item.label}的公式明细`}
                   className={cn("rq-formula-stats__rank-row", activeTarget === item.targetKey && "is-active")}
-                  onMouseEnter={preloadFormulaVisualization}
-                  onFocus={preloadFormulaVisualization}
-                  onTouchStart={preloadFormulaVisualization}
-                  onClick={(event) => openVisualization(event.currentTarget, item.targetKey)}
+                  onClick={() => setRequestedTarget(item.targetKey)}
                 >
                   <span className="rq-formula-stats__rank-label"><small>{String(index + 1).padStart(2, "0")}</small><b>{item.label}</b></span>
                   <span className="rq-formula-stats__bar-track" aria-hidden="true">
@@ -406,21 +383,6 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
           <div className="rq-formula-stats__empty is-compact"><p>选择上方任一结果后，可查看贡献它的全部公式和计算过程。</p></div>
         )}
       </Panel>
-
-      {visualizationOpen && activeTargetType && (
-        <Suspense fallback={<div className="rq-formula-viz-loading" role="status">正在打开完整可视化…</div>}>
-          <LazyFormulaResultVisualizationDialog
-            periods={report.periods}
-            config={config}
-            action={action}
-            targetType={activeTargetType}
-            selectedTargetKey={activeTarget}
-            onSelectTarget={setRequestedTarget}
-            onClose={closeVisualization}
-            returnFocusRef={visualizationTriggerRef}
-          />
-        </Suspense>
-      )}
     </div>
   );
 }
