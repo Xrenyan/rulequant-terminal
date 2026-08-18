@@ -83,6 +83,7 @@ async function renderMatrix({
   targetType,
   selectedTargetKey = "",
   focusedIssue = "all",
+  onFocusActualRecord,
   onSelectTarget = vi.fn(),
   onFocusIssue = vi.fn(),
 }: {
@@ -90,6 +91,7 @@ async function renderMatrix({
   targetType: FormulaSummaryTargetType;
   selectedTargetKey?: string;
   focusedIssue?: string;
+  onFocusActualRecord?: (record: ReturnType<typeof buildFormulaDrawLandingAnalysis>["records"][number]) => void;
   onSelectTarget?: (targetKey: string) => void;
   onFocusIssue?: (issue: string) => void;
 }) {
@@ -108,6 +110,7 @@ async function renderMatrix({
       targetType={targetType}
       selectedTargetKey={selectedTargetKey}
       focusedIssue={focusedIssue}
+      onFocusActualRecord={onFocusActualRecord}
       onSelectTarget={onSelectTarget}
       onFocusIssue={onFocusIssue}
     />,
@@ -169,6 +172,36 @@ describe("FormulaCompleteMatrix", () => {
     await act(async () => zeroCell.click());
     expect(onSelectTarget).toHaveBeenLastCalledWith("string:马");
     expect(onFocusIssue).toHaveBeenLastCalledWith("101");
+  });
+
+  it("routes an actual matrix cell through its complete landing record without changing ordinary-cell behavior", async () => {
+    const onFocusActualRecord = vi.fn();
+    const onSelectTarget = vi.fn();
+    const onFocusIssue = vi.fn();
+    const period = completedPeriod("111", 15, "龙", [contribution("111", "r1", ["龙", "兔"])]);
+    const matrix = await renderMatrix({
+      periods: [period],
+      targetType: "zodiac",
+      onFocusActualRecord,
+      onSelectTarget,
+      onFocusIssue,
+    });
+
+    const actual = matrix.querySelector<HTMLButtonElement>('[data-actual-landing="true"]');
+    expect(actual).not.toBeNull();
+    if (!actual) throw new Error("Expected actual matrix cell");
+    await act(async () => actual.click());
+
+    expect(onFocusActualRecord).toHaveBeenCalledTimes(1);
+    expect(onFocusActualRecord.mock.calls[0][0]).toMatchObject({ calculationIssue: "111", actualTargetKey: "string:龙" });
+    expect(onSelectTarget).not.toHaveBeenCalled();
+    expect(onFocusIssue).not.toHaveBeenCalled();
+
+    const ordinary = matrix.querySelector<HTMLButtonElement>('[data-matrix-cell="string:兔"]');
+    expect(ordinary).not.toBeNull();
+    await act(async () => ordinary?.click());
+    expect(onSelectTarget).toHaveBeenCalledWith("string:兔");
+    expect(onFocusIssue).toHaveBeenCalledWith("111");
   });
 
   it("labels a pending period without fabricating an actual-draw marker", async () => {

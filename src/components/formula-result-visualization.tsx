@@ -278,7 +278,7 @@ export function FormulaResultVisualizationDialog({
               records={landing.records}
               focusedIssue={focusedLandingIssue}
               unitLabel={unitLabel}
-              onFocusIssue={setFocusedLandingIssue}
+              onFocusRecord={focusLandingRecord}
             />
             <div className="rq-formula-viz__landing-records">
               <header><div><span>逐期核验</span><h4>实际开奖落点记录</h4></div></header>
@@ -316,6 +316,7 @@ export function FormulaResultVisualizationDialog({
               targetType={targetType}
               selectedTargetKey={effectiveTargetKey}
               focusedIssue={focusedLandingIssue}
+              onFocusActualRecord={focusLandingRecord}
               onSelectTarget={onSelectTarget}
               onFocusIssue={setFocusedLandingIssue}
             />

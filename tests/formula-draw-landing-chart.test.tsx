@@ -26,9 +26,10 @@ afterEach(async () => {
 
 async function renderChart(
   chartRecords: FormulaDrawLandingRecord[],
-  { focusedIssue = "all", onFocusIssue = vi.fn() }: {
+  { focusedIssue = "all", onFocusIssue = vi.fn(), onFocusRecord }: {
     focusedIssue?: string;
     onFocusIssue?: (issue: string) => void;
+    onFocusRecord?: (record: FormulaDrawLandingRecord) => void;
   } = {},
 ) {
   host = document.createElement("div");
@@ -40,6 +41,7 @@ async function renderChart(
       focusedIssue={focusedIssue}
       unitLabel="被排除次数"
       onFocusIssue={onFocusIssue}
+      onFocusRecord={onFocusRecord}
     />,
   ));
   return host;
@@ -130,6 +132,20 @@ describe("FormulaDrawLandingChart", () => {
     expect(onFocusIssue).toHaveBeenCalledTimes(2);
     await act(async () => point.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true })));
     expect(onFocusIssue).toHaveBeenCalledTimes(3);
+  });
+
+  it("passes the complete actual landing record to an atomic drill-down callback", async () => {
+    const onFocusRecord = vi.fn();
+    const chart = await renderChart(records, { onFocusRecord });
+    const point = chart.querySelector<SVGGElement>('[data-landing-issue="102"]');
+    expect(point).not.toBeNull();
+    if (!point) throw new Error("Expected second landing chart point");
+
+    await act(async () => point.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await act(async () => point.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+
+    expect(onFocusRecord).toHaveBeenCalledTimes(2);
+    expect(onFocusRecord).toHaveBeenLastCalledWith(records[1]);
   });
 
   it("omits an average reference for a single record and pads the special number", async () => {

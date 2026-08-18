@@ -29,11 +29,13 @@ export function FormulaDrawLandingChart({
   focusedIssue,
   unitLabel,
   onFocusIssue,
+  onFocusRecord,
 }: {
   records: FormulaDrawLandingRecord[];
   focusedIssue: string;
   unitLabel: string;
-  onFocusIssue: (issue: string) => void;
+  onFocusIssue?: (issue: string) => void;
+  onFocusRecord?: (record: FormulaDrawLandingRecord) => void;
 }) {
   const [focusedControlIssue, setFocusedControlIssue] = useState<string | null>(null);
 
@@ -71,11 +73,16 @@ export function FormulaDrawLandingChart({
     `${record.targetIssue}期，实际${record.actualLabel}，特码${String(record.specialNumber).padStart(2, "0")}，${unitLabel}${record.count}，${record.rankLabel}`
   )).join("；");
 
-  const handleKeyDown = (event: KeyboardEvent<SVGGElement>, issue: string) => {
+  const focusRecord = (record: FormulaDrawLandingRecord) => {
+    if (onFocusRecord) onFocusRecord(record);
+    else onFocusIssue?.(record.calculationIssue);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<SVGGElement>, record: FormulaDrawLandingRecord) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      setFocusedControlIssue(issue);
-      onFocusIssue(issue);
+      setFocusedControlIssue(record.calculationIssue);
+      focusRecord(record);
     }
   };
 
@@ -154,8 +161,8 @@ export function FormulaDrawLandingChart({
                 isFocused && "is-focused",
                 isKeyboardFocused && "is-keyboard-focused",
               )}
-              onClick={() => onFocusIssue(record.calculationIssue)}
-              onKeyDown={(event) => handleKeyDown(event, record.calculationIssue)}
+              onClick={() => focusRecord(record)}
+              onKeyDown={(event) => handleKeyDown(event, record)}
               onFocus={() => setFocusedControlIssue(record.calculationIssue)}
               onBlur={() => setFocusedControlIssue((current) => (
                 current === record.calculationIssue ? null : current

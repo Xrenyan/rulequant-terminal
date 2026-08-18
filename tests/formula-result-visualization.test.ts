@@ -208,6 +208,20 @@ describe("formula result visualization", () => {
     const actualLabel = record.querySelector('td[data-label="实际特码 / 结果"] span')?.textContent?.replace(/^\s*·\s*/, "");
     expect(actualLabel).toBeTruthy();
     const viewButton = buttonByText(record, "查看");
+    const actualCell = [...dialog.querySelectorAll<HTMLButtonElement>('[data-actual-landing="true"]')]
+      .find((cell) => cell.getAttribute("aria-label")?.includes(`${issue}计算期`));
+    expect(actualCell).not.toBeNull();
+    if (!actualCell) throw new Error("fixture requires an actual landing cell");
+    const actualTargetKey = actualCell.dataset.matrixCell!;
+    const differentTarget = [...dialog.querySelectorAll<HTMLButtonElement>("button[data-chart-target]")]
+      .find((control) => control.dataset.chartTarget !== actualTargetKey);
+    expect(differentTarget).not.toBeNull();
+    if (!differentTarget) throw new Error("fixture requires a non-actual aggregate target");
+
+    const selectDifferentTarget = async () => {
+      await act(async () => differentTarget.click());
+      expect(differentTarget.getAttribute("aria-pressed")).toBe("true");
+    };
 
     const expectFocusedActualEvidence = () => {
       expect(dialog.querySelector(".rq-formula-viz__active-filter")?.textContent).toContain(issue);
@@ -217,17 +231,17 @@ describe("formula result visualization", () => {
       expect(evidenceRows.every((row) => row.querySelector(".rq-formula-viz__target-chips")?.textContent?.includes(actualLabel!))).toBe(true);
     };
 
+    await selectDifferentTarget();
     await act(async () => viewButton.click());
     expectFocusedActualEvidence();
 
+    await selectDifferentTarget();
     const chartPoint = dialog.querySelector<SVGGElement>(`[data-landing-issue="${issue}"]`);
     expect(chartPoint).not.toBeNull();
     await act(async () => chartPoint?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expectFocusedActualEvidence();
 
-    const actualCell = [...dialog.querySelectorAll<HTMLButtonElement>('[data-actual-landing="true"]')]
-      .find((cell) => cell.getAttribute("aria-label")?.includes(`${issue}计算期`));
-    expect(actualCell).not.toBeNull();
+    await selectDifferentTarget();
     await act(async () => actualCell?.click());
     expectFocusedActualEvidence();
   });

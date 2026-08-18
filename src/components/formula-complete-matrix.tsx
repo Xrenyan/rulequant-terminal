@@ -18,6 +18,7 @@ export type FormulaCompleteMatrixProps = {
   targetType: FormulaSummaryTargetType;
   selectedTargetKey: string;
   focusedIssue: string;
+  onFocusActualRecord?: (record: FormulaDrawLandingRecord) => void;
   onSelectTarget: (targetKey: string) => void;
   onFocusIssue: (issue: string) => void;
 };
@@ -31,6 +32,7 @@ type MatrixCellProps = {
   selectedTargetKey: string;
   focusedIssue: string;
   numberCell?: boolean;
+  onFocusActualRecord?: (record: FormulaDrawLandingRecord) => void;
   onSelectTarget: (targetKey: string) => void;
   onFocusIssue: (issue: string) => void;
 };
@@ -67,6 +69,7 @@ function MatrixCell({
   selectedTargetKey,
   focusedIssue,
   numberCell = false,
+  onFocusActualRecord,
   onSelectTarget,
   onFocusIssue,
 }: MatrixCellProps) {
@@ -98,6 +101,10 @@ function MatrixCell({
       )}
       style={heatStyle(count, globalMax)}
       onClick={() => {
+        if (isActual && actual && onFocusActualRecord) {
+          onFocusActualRecord(actual);
+          return;
+        }
         onSelectTarget(item.targetKey);
         onFocusIssue(period.calculationIssue);
       }}
@@ -142,6 +149,7 @@ function NumberMatrix({
   analysis,
   selectedTargetKey,
   focusedIssue,
+  onFocusActualRecord,
   onSelectTarget,
   onFocusIssue,
 }: Omit<FormulaCompleteMatrixProps, "targetType">) {
@@ -181,6 +189,7 @@ function NumberMatrix({
                   selectedTargetKey={selectedTargetKey}
                   focusedIssue={focusedIssue}
                   numberCell
+                  onFocusActualRecord={onFocusActualRecord}
                   onSelectTarget={onSelectTarget}
                   onFocusIssue={onFocusIssue}
                 />
@@ -198,6 +207,7 @@ export function FormulaCompleteMatrix({
   targetType,
   selectedTargetKey,
   focusedIssue,
+  onFocusActualRecord,
   onSelectTarget,
   onFocusIssue,
 }: FormulaCompleteMatrixProps) {
@@ -207,6 +217,7 @@ export function FormulaCompleteMatrix({
         analysis={analysis}
         selectedTargetKey={selectedTargetKey}
         focusedIssue={focusedIssue}
+        onFocusActualRecord={onFocusActualRecord}
         onSelectTarget={onSelectTarget}
         onFocusIssue={onFocusIssue}
       />
@@ -258,6 +269,7 @@ export function FormulaCompleteMatrix({
                   actual={recordByIssue.get(period.calculationIssue)}
                   selectedTargetKey={selectedTargetKey}
                   focusedIssue={focusedIssue}
+                  onFocusActualRecord={onFocusActualRecord}
                   onSelectTarget={onSelectTarget}
                   onFocusIssue={onFocusIssue}
                 />
