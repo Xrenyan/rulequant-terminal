@@ -201,9 +201,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
     ? requestedTargetType
     : (actionGroups[0]?.targetType ?? "");
   const activeGroup = actionGroups.find((group) => group.targetType === activeTargetType);
-  const activeTarget = activeGroup?.items.some((item) => item.targetKey === requestedTarget)
-    ? requestedTarget
-    : (activeGroup?.items[0]?.targetKey ?? "");
+  const activeTarget = requestedTarget || activeGroup?.items[0]?.targetKey || "";
   const activeItem = activeGroup?.items.find((item) => item.targetKey === activeTarget);
   const maxCount = activeGroup?.items[0]?.count ?? 1;
   const latest = report.latestPeriod;

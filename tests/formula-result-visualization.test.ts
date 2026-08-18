@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { FormulaResultStatisticsView } from "@/components/formula-result-statistics-view";
 import { defaultConfig } from "@/lib/config/default-config";
-import type { DrawRecord, RuleRecord } from "@/types/domain";
+import type { DrawRecord, RuleQuantConfig, RuleRecord } from "@/types/domain";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -15,6 +15,23 @@ const draws: DrawRecord[] = [
   { issue: "103", n1: 15, n2: 16, n3: 17, n4: 18, n5: 19, n6: 20, special: 21 },
   { issue: "104", n1: 22, n2: 23, n3: 24, n4: 25, n5: 26, n6: 27, special: 28 },
 ];
+
+const zeroLandingDraws: DrawRecord[] = [
+  { issue: "100", n1: 3, n2: 4, n3: 5, n4: 6, n5: 7, n6: 8, special: 49 },
+  { issue: "101", n1: 3, n2: 8, n3: 9, n4: 10, n5: 11, n6: 12, special: 7 },
+  { issue: "102", n1: 3, n2: 9, n3: 10, n4: 11, n5: 12, n6: 13, special: 14 },
+  { issue: "103", n1: 3, n2: 16, n3: 17, n4: 18, n5: 19, n6: 20, special: 21 },
+  { issue: "104", n1: 3, n2: 23, n3: 24, n4: 25, n5: 26, n6: 27, special: 28 },
+];
+
+const zeroLandingConfig: RuleQuantConfig = {
+  ...defaultConfig,
+  zodiacTable: {
+    ...defaultConfig.zodiacTable,
+    马: [7, ...defaultConfig.zodiacTable.马.filter((number) => number !== 7)],
+    鼠: defaultConfig.zodiacTable.鼠.filter((number) => number !== 7),
+  },
+};
 
 function makeRule(id: string, formula: string): RuleRecord {
   return {
@@ -55,15 +72,23 @@ function buttonByText(scope: ParentNode, text: string): HTMLButtonElement {
   return button as HTMLButtonElement;
 }
 
-async function renderView() {
+async function renderView({
+  viewDraws = draws,
+  rules = [makeRule("杀肖甲", "平1"), makeRule("杀肖乙", "平2"), makeRule("杀肖丙", "平3")],
+  config = defaultConfig,
+}: {
+  viewDraws?: DrawRecord[];
+  rules?: RuleRecord[];
+  config?: RuleQuantConfig;
+} = {}) {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
   await act(async () => {
     root?.render(React.createElement(FormulaResultStatisticsView, {
-      draws,
-      rules: [makeRule("杀肖甲", "平1"), makeRule("杀肖乙", "平2"), makeRule("杀肖丙", "平3")],
-      config: defaultConfig,
+      draws: viewDraws,
+      rules,
+      config,
     }));
   });
 }
@@ -174,7 +199,7 @@ describe("formula result visualization", () => {
     if (!record) throw new Error("fixture requires an actual landing with contributions");
 
     const issue = record.dataset.landingRecord!;
-    const actualLabel = record.querySelector('td[data-label="实际特码 / 结果"] span')?.textContent;
+    const actualLabel = record.querySelector('td[data-label="实际特码 / 结果"] span')?.textContent?.replace(/^\s*·\s*/, "");
     expect(actualLabel).toBeTruthy();
     const viewButton = buttonByText(record, "查看");
 
@@ -199,6 +224,33 @@ describe("formula result visualization", () => {
     expect(actualCell).not.toBeNull();
     await act(async () => actualCell?.click());
     expectFocusedActualEvidence();
+  });
+
+  it("keeps a zero-count actual landing selected with zero values and empty evidence", async () => {
+    await renderView({
+      viewDraws: zeroLandingDraws,
+      rules: [makeRule("杀肖甲", "平1"), makeRule("杀肖乙", "平1"), makeRule("杀肖丙", "平1")],
+      config: zeroLandingConfig,
+    });
+    await act(async () => {
+      buttonByText(host!, "最近十期").click();
+      buttonByText(host!, "查看可视化").click();
+      await import("@/components/formula-result-visualization");
+    });
+
+    const dialog = document.body.querySelector('[role="dialog"]')!;
+    const zeroRecord = dialog.querySelector<HTMLTableRowElement>('[data-landing-record="100"]');
+    expect(zeroRecord?.textContent).toContain("07 · 马");
+    expect(zeroRecord?.textContent).toContain("0次");
+
+    await act(async () => buttonByText(zeroRecord!, "查看").click());
+
+    expect(dialog.querySelector(".rq-formula-viz__overview")?.textContent).toContain("当前结果累计0次");
+    expect(dialog.querySelectorAll(".rq-formula-viz__evidence-row")).toHaveLength(0);
+    expect(dialog.querySelector(".rq-formula-viz__evidence-panel .rq-formula-viz__empty")?.textContent).toContain("当前筛选暂无可追溯贡献记录");
+    const actual = [...dialog.querySelectorAll<HTMLButtonElement>('[data-actual-landing="true"]')]
+      .find((cell) => cell.getAttribute("aria-label")?.includes("100计算期"));
+    expect(actual?.getAttribute("aria-pressed")).toBe("true");
   });
 
   it("closes through the accessible backdrop control and restores focus again", async () => {

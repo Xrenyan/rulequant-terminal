@@ -83,9 +83,9 @@ export function FormulaResultVisualizationDialog({
     matrixLimit: 10,
   }), [action, config, periods, targetType]);
   const group = groups.find((candidate) => candidate.action === action && candidate.targetType === targetType);
-  const selectedSeries = model.series.find((item) => item.targetKey === selectedTargetKey) ?? model.series[0];
-  const effectiveTargetKey = selectedSeries?.targetKey ?? selectedTargetKey;
-  const selectedItem = group?.items.find((item) => item.targetKey === effectiveTargetKey) ?? group?.items[0];
+  const effectiveTargetKey = selectedTargetKey || model.series[0]?.targetKey || "";
+  const selectedSeries = model.series.find((item) => item.targetKey === effectiveTargetKey);
+  const selectedItem = group?.items.find((item) => item.targetKey === effectiveTargetKey);
   const visibleSeries = selectRankSeries(model, effectiveTargetKey, 6);
   const selectedValues = selectedSeries?.values ?? [];
   const unitLabel = action === "exclude" ? "被排除次数" : "被支持次数";
@@ -290,7 +290,7 @@ export function FormulaResultVisualizationDialog({
                       <tr key={record.calculationIssue} data-landing-record={record.calculationIssue}>
                         <td data-label="计算期">{record.calculationIssue}</td>
                         <td data-label="开奖期">{record.targetIssue}</td>
-                        <td data-label="实际特码 / 结果"><strong>{String(record.specialNumber).padStart(2, "0")}</strong><span>{record.actualLabel}</span></td>
+                        <td data-label="实际特码 / 结果"><strong>{String(record.specialNumber).padStart(2, "0")}</strong><span> · {record.actualLabel}</span></td>
                         <td data-label="次数">{record.count}次</td>
                         <td data-label="当期位置">{record.rankLabel}</td>
                         <td data-label="贡献公式">{new Set(record.contributions.map((item) => item.ruleId)).size}条</td>
