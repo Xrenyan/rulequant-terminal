@@ -55,7 +55,9 @@ describe("FormulaDrawLandingChart", () => {
     expect(svg?.querySelectorAll('[role="button"][tabindex="0"]')).toHaveLength(3);
     expect(svg?.getAttribute("aria-label")).toContain("实际开奖落点组合图");
 
-    const point = svg?.querySelector<SVGGElement>('[data-landing-issue="101"]')!;
+    const point = svg?.querySelector<SVGGElement>('[data-landing-issue="101"]');
+    expect(point).not.toBeNull();
+    if (!point) throw new Error("Expected first landing chart point");
     const hitArea = point.querySelector<SVGRectElement>(".rq-formula-landing-chart__hit-area");
     const focusHalo = point.querySelector<SVGRectElement>(".rq-formula-landing-chart__focus-halo");
     expect(Number(hitArea?.getAttribute("width"))).toBeGreaterThanOrEqual(44);
