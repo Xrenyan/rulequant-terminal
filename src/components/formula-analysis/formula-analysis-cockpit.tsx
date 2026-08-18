@@ -21,6 +21,9 @@ import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { FormulaAnalysisLoading } from "@/components/formula-analysis/formula-analysis-loading";
 import { FormulaAnalysisToolbar } from "@/components/formula-analysis/formula-analysis-toolbar";
+import { FormulaAnalysisOverview } from "@/components/formula-analysis/formula-analysis-overview";
+import { FormulaLandingWorkspace } from "@/components/formula-analysis/formula-landing-workspace";
+import type { FormulaDrawLandingRecord } from "@/lib/formula-summary/formula-draw-landing";
 
 const TABS: Array<{ key: FormulaAnalysisTab; label: string; description: string; icon: typeof Activity }> = [
   { key: "overview", label: "概览", description: "先看重点结论", icon: Activity },
@@ -57,6 +60,7 @@ export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, 
   const [savedViews, setSavedViews] = useState<SavedFormulaAnalysisView[]>([]);
   const [selectedViewId, setSelectedViewId] = useState("");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [focusedRecord, setFocusedRecord] = useState<FormulaDrawLandingRecord>();
   const mobileCloseRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => setSavedViews(readSavedViews()), []);
@@ -133,6 +137,18 @@ export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, 
     setSavedViews(next);
     setSelectedViewId("");
   };
+  const openEvidence = (record: FormulaDrawLandingRecord) => {
+    setFocusedRecord(record);
+    changeFilters({ ...filters, tab: "evidence" });
+  };
+
+  const workspace = report && (
+    filters.tab === "overview"
+      ? <FormulaAnalysisOverview report={report} onOpenEvidence={openEvidence} />
+      : filters.tab === "landing"
+        ? <FormulaLandingWorkspace report={report} onSelectRecord={openEvidence} />
+        : <AnalysisPlaceholder tab={filters.tab} report={report} />
+  );
 
   return (
     <div className="rq-analysis-cockpit">
@@ -161,8 +177,9 @@ export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, 
       </nav>
 
       {error ? <Panel className="rq-analysis-error" role="alert"><CircleAlert className="h-5 w-5" /><div><strong>分析暂时无法完成</strong><p>{error}</p></div></Panel>
-        : report ? <AnalysisPlaceholder tab={filters.tab} report={report} />
+        : report ? workspace
           : <FormulaAnalysisLoading />}
+      {focusedRecord && <span className="sr-only" data-focused-landing-record={focusedRecord.calculationIssue}>已定位 {focusedRecord.targetIssue} 期 {focusedRecord.actualLabel}</span>}
 
       {mobileFiltersOpen && typeof document !== "undefined" && createPortal(
         <div className="rq-analysis-filter-layer">
