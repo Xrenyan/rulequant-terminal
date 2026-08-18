@@ -39,7 +39,7 @@ export function AnnotatedScreenshot({ screenshot }: { screenshot: GuideScreensho
 
   return <figure className="rq-guide-shot">
     <div className="rq-guide-shot__image">
-      {imageError ? <div className="rq-guide-shot__error" role="status"><ImageOff className="h-5 w-5" /><strong>界面图片暂时无法显示</strong><p>下方编号文字包含完整说明，可以继续阅读和操作。</p></div> : <picture><Image src={screenshot.src} width={screenshot.width} height={screenshot.height} alt={screenshot.alt} loading="lazy" decoding="async" unoptimized onError={() => setImageError(true)} /></picture>}
+      {imageError ? <div className="rq-guide-shot__error" role="status"><ImageOff className="h-5 w-5" /><strong>界面图片暂时无法显示</strong><p>下方编号文字包含完整说明，可以继续阅读和操作。</p></div> : <picture><Image src={screenshot.src} width={screenshot.width} height={screenshot.height} alt={screenshot.alt} loading="eager" fetchPriority="high" decoding="async" unoptimized onError={() => setImageError(true)} /></picture>}
       {!imageError && screenshot.callouts.map((callout) => <button key={callout.number} type="button" data-guide-callout={callout.number} className="rq-guide-shot__hotspot" style={{ left: `${callout.x}%`, top: `${callout.y}%` }} aria-label={`${callout.number}：${callout.title}。${callout.body}`}><span>{callout.number}</span></button>)}
       {!imageError && <button ref={openRef} type="button" className="rq-guide-shot__zoom" onClick={() => setZoomed(true)}><Maximize2 className="h-4 w-4" />放大界面图</button>}
     </div>

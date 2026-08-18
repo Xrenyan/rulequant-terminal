@@ -44,7 +44,7 @@ describe("system guide UI", () => {
       expect(view.textContent).toContain(heading);
     }
     expect(view.querySelector('nav[aria-label="本主题目录"]')).not.toBeNull();
-    expect(view.querySelector('img[loading="lazy"]')).not.toBeNull();
+    expect(view.querySelector('img[loading="eager"]')).not.toBeNull();
     expect(view.querySelectorAll("[data-guide-callout]")).toHaveLength(2);
     expect(view.textContent).toContain("相关说明");
   });
