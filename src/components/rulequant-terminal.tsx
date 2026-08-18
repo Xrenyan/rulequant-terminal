@@ -43,6 +43,7 @@ import { buildFormulaLedger, buildOneClickFormulaResults, type FormulaLedgerEntr
 import { parseDrawFile, parseDrawText } from "@/lib/parsers/draw-parser";
 import { parseRuleTextFile } from "@/lib/parsers/rule-text-parser";
 import { runSampleChecks } from "@/lib/sample-check/run-sample-checks";
+import { sampleDifferenceCopy } from "@/lib/sample-check/presentation";
 import { getNumberAttributes, normalizeDraw } from "@/lib/engine/attributes";
 import { seedDraws } from "@/lib/data/seed";
 import { buildRuleReconciliation, type RuleReconciliationRow } from "@/lib/rules/rule-reconciliation";
@@ -71,6 +72,7 @@ import type {
   RuleBacktestResult,
   RuleRecord,
   RuleQuantConfig,
+  RuleSignalTargetType,
   RuleSourceType,
   SampleCase,
 } from "@/types/domain";
@@ -547,6 +549,39 @@ function hasCalculation(item: NextOutputItem): item is { rule: RuleRecord; calcu
 
 function categoryLabel(category: RuleCategory) {
   return categories.find((item) => item.value === category)?.label ?? category;
+}
+
+function normalizerLabel(normalizer: string) {
+  if (normalizer === "auto") return "自动识别公式口径";
+  if (normalizer === "subtract_48_to_1_49" || normalizer === "zodiac_minus_48") return "按 1–49 循环归一";
+  if (normalizer === "mod_10") return "按尾数 0–9 循环";
+  if (normalizer === "mod_3") return "按三类结果循环";
+  if (normalizer.includes("half_head")) return "按半头口径处理";
+  if (normalizer.startsWith("tail_")) return "按尾数范围生成结果";
+  if (normalizer.includes("zodiac")) return "按生肖顺序生成结果";
+  if (normalizer.includes("eight_zodiac")) return "按八肖口径生成结果";
+  if (normalizer.includes("kill_three")) return "按杀三肖口径生成结果";
+  if (normalizer.includes("parity")) return "按单双口径处理";
+  if (/subtract_13/.test(normalizer)) return "按 1–13 循环归一";
+  if (/subtract_7/.test(normalizer)) return "按 1–7 循环归一";
+  if (/subtract_[56]/.test(normalizer)) return "按公式所属类别循环归一";
+  return "按原公式口径处理";
+}
+
+function targetLabel(target: string) {
+  if (target.includes("zodiac")) return "生肖";
+  if (target.includes("tail")) return "尾数";
+  if (target.includes("head")) return "头数";
+  if (target.includes("sum")) return "合数";
+  if (target.includes("element")) return "五行";
+  if (target.includes("segment")) return "段位";
+  if (target.includes("color")) return "波色";
+  if (target.includes("number")) return "号码";
+  return "特码结果";
+}
+
+function signalTargetTypeLabel(targetType: RuleSignalTargetType) {
+  return ({ number: "号码", zodiac: "生肖", color: "波色", parity: "单双", size: "大小", tail: "尾数", head: "头数", sum: "合数", element: "五行", segment: "段位" })[targetType];
 }
 
 type RuleHealthRow = {
@@ -1298,7 +1333,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const store = useRuleQuantStore();
   const { draws, rules, samples, operationLogs, ruleBackups, referenceHistory, config, selectedRuleId, cloudStateMeta, cloudPublishStatus, cloudPublishMessage, hasHydrated } = store;
   const hydrate = store.hydrate;
-  const [importText, setImportText] = useState("issue,n1,n2,n3,n4,n5,n6,special\n2026166,8,13,19,27,35,44,6");
+  const [importText, setImportText] = useState("期号,平1,平2,平3,平4,平5,平6,特码\n2026166,8,13,19,27,35,44,6");
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [previewDraws, setPreviewDraws] = useState<DrawRecord[]>([]);
   const [sourceUrl, setSourceUrl] = useState("https://thjffv.ag0rkv-4pnok-ljvvrg.xyz:16633/kj/3/2026.html");
@@ -1908,7 +1943,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const detailColumns: ColumnDef<BacktestDetail>[] = [
     { accessorKey: "currentIssue", header: "当前期" },
     { accessorKey: "nextIssue", header: "下期" },
-    { header: "raw", cell: ({ row }) => codeValue(row.original.rawResult) },
+    { header: "原始结果", cell: ({ row }) => codeValue(row.original.rawResult) },
     { header: "输出", cell: ({ row }) => row.original.mappedResult.join("、") },
     { accessorKey: "targetLabel", header: "对象 / 集合" },
     { header: "结果", cell: ({ row }) => <Badge tone={row.original.success ? "green" : "rose"}>{row.original.success ? "通过" : "失败"}</Badge> },
@@ -3144,7 +3179,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_420px]">
                 <Panel className="p-4 sm:p-5">
                   <h2 className="font-semibold text-white">导入开奖数据</h2>
-                  <p className="mb-4 text-sm text-slate-500">支持网址实时抓取、CSV、Excel、TXT、HTML、粘贴表格。字段可使用 issue/date/n1-n6/special 或中文字段。</p>
+                  <p className="mb-4 text-sm text-slate-500">支持网址同步、CSV、Excel、TXT、HTML 和粘贴表格。表头可直接使用期号、日期、平1到平6、特码。</p>
                   <div className="mb-5 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.04] p-4">
                     <h3 className="font-medium text-cyan-100">网址实时抓取</h3>
                     <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_96px_96px]">
@@ -3717,8 +3752,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     <Label>期号</Label>
                     <Input value={sampleDraft.issue} onChange={(event) => setSampleDraft({ ...sampleDraft, issue: event.target.value })} />
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <div><Label>手算 raw</Label><Input value={sampleDraft.expectedRawResult} onChange={(event) => setSampleDraft({ ...sampleDraft, expectedRawResult: event.target.value })} /></div>
-                      <div><Label>手算归一</Label><Input value={sampleDraft.expectedFinalResult} onChange={(event) => setSampleDraft({ ...sampleDraft, expectedFinalResult: event.target.value })} /></div>
+                      <div><Label>手算原始结果</Label><Input value={sampleDraft.expectedRawResult} onChange={(event) => setSampleDraft({ ...sampleDraft, expectedRawResult: event.target.value })} /></div>
+                      <div><Label>手算归一化结果</Label><Input value={sampleDraft.expectedFinalResult} onChange={(event) => setSampleDraft({ ...sampleDraft, expectedFinalResult: event.target.value })} /></div>
                     </div>
                     <Label>手算映射结果</Label>
                     <Input value={sampleDraft.expectedMappedResult} onChange={(event) => setSampleDraft({ ...sampleDraft, expectedMappedResult: event.target.value })} placeholder="鼠 或 6,7,8,9,0,1,3" />
@@ -3747,11 +3782,11 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     {sampleResults.map((result) => (
                       <div key={result.caseId} className={cn("rounded-lg border p-4", result.passed ? "border-emerald-300/20 bg-emerald-300/5" : "border-rose-300/25 bg-rose-300/8")}>
                         <div className="flex items-center justify-between">
-                          <span className="font-mono text-sm text-white">{result.caseId}</span>
+                          <span className="text-sm font-medium text-white">校验样例 · {result.issue}</span>
                           <Badge tone={result.passed ? "green" : "rose"}>{result.passed ? "通过" : "不一致"}</Badge>
                         </div>
                         {result.differences.map((diff) => (
-                          <p key={diff.type} className="mt-2 text-sm text-rose-100">{diff.type}: 期望 {String(diff.expected)}，程序 {String(diff.actual)}</p>
+                          <p key={diff.type} className="mt-2 text-sm text-rose-100">{sampleDifferenceCopy(diff.type, diff.expected, diff.actual)}</p>
                         ))}
                       </div>
                     ))}
@@ -4282,7 +4317,7 @@ function NewRuleBuilder({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <h2 className="font-semibold text-white">规则内容</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">普通用户只需要粘贴原文或选模板；平/落/特码这些同义词由系统内部统一处理。</p>
+            <p className="mt-2 text-sm leading-6 text-slate-500">普通用户只需要粘贴原文或选模板；平、落、特码等常见写法会自动识别。</p>
           </div>
           <div className="grid grid-cols-3 gap-2 rounded-md border border-white/[0.07] bg-black/15 p-1">
             {(["paste", "template", "advanced"] as BuilderMode[]).map((item) => (
@@ -4310,7 +4345,7 @@ function NewRuleBuilder({
           ) : (
           <div>
             <h3 className="font-semibold text-white">常用模板添加</h3>
-            <p className="mt-1 text-sm text-slate-500">选择规则用途、位置和取值方式，系统自动生成内部公式。</p>
+            <p className="mt-1 text-sm text-slate-500">选择规则用途、位置和取值方式，系统会自动整理成可计算公式。</p>
           </div>
           )}
         </div>
@@ -4422,16 +4457,16 @@ function NewRuleBuilder({
       </Panel>
 
       <Panel className="p-5 2xl:sticky 2xl:top-28 2xl:self-start">
-        <h3 className="font-semibold text-white">机器理解与试算</h3>
+        <h3 className="font-semibold text-white">公式说明与试算</h3>
         <div className="mt-4 space-y-3 text-sm text-slate-300">
           <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
             <p className="text-slate-500">我理解为</p>
             <p className="mt-2">取 {positionLabel(position)} 的 {builderValueOptions.find((item) => item.value === valueKind)?.label}，执行 {offset ? `${offset > 0 ? "+" : ""}${offset}` : "不加减"}，用途是 {builderIntentOptions.find((item) => item.value === intent)?.label}。</p>
           </div>
           <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
-            <p className="text-slate-500">内部公式</p>
+            <p className="text-slate-500">自动生成的公式</p>
             <p className="mt-2 font-mono text-cyan-100">{formula}</p>
-            <p className="mt-1 text-xs text-slate-500">归一化：{normalizer}</p>
+            <p className="mt-1 text-xs text-slate-500">计算口径：{normalizerLabel(normalizer)}</p>
           </div>
           <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
             <p className="text-slate-500">当前期试算</p>
@@ -4643,12 +4678,12 @@ function RuleForm({
                 <Badge tone="cyan">{trialResult.calculation.mappedResult.join("、")}</Badge>
               </div>
               <p className="mt-2 font-mono text-cyan-100">{trialResult.calculation.expression}</p>
-              <p className="mt-1 font-mono text-white">rawResult：{trialResult.calculation.rawResult}</p>
+              <p className="mt-1 font-mono text-white">原始结果：{trialResult.calculation.rawResult}</p>
             </div>
           )}
           <details className={cn("mt-3 rounded-lg border border-white/[0.08] bg-white/[0.025] p-3", compact && "max-h-[760px] overflow-auto pr-1")}>
             <summary className="cursor-pointer text-sm font-medium text-slate-300">高级变量按钮</summary>
-            <p className="mt-2 text-xs leading-5 text-slate-500">这里已经去掉重复同义词。显示“第1位”，内部仍插入引擎可识别的“平1”。</p>
+            <p className="mt-2 text-xs leading-5 text-slate-500">这里已经去掉重复同义词。选择“第1位”后，保存时会自动转换为可计算格式。</p>
             <div className="mt-3 space-y-3">
               {variableGroups.map((group) => (
                 <div key={group.title}>
@@ -4666,8 +4701,10 @@ function RuleForm({
           </details>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div><Label>归一化</Label><Input name="normalizer" defaultValue={selectedRule?.normalizer ?? "auto"} /></div>
-          <div><Label>目标</Label><Input name="target" defaultValue={selectedRule?.target ?? "special"} /></div>
+          <input type="hidden" name="normalizer" value={selectedRule?.normalizer ?? "auto"} readOnly />
+          <input type="hidden" name="target" value={selectedRule?.target ?? "special"} readOnly />
+          <div><Label>计算口径</Label><div className="rounded-lg border border-white/[0.08] bg-white/[0.035] px-3 py-2.5 text-sm text-slate-300">{normalizerLabel(selectedRule?.normalizer ?? "auto")}</div></div>
+          <div><Label>验证对象</Label><div className="rounded-lg border border-white/[0.08] bg-white/[0.035] px-3 py-2.5 text-sm text-slate-300">{targetLabel(selectedRule?.target ?? "special")}</div></div>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div><Label>管期</Label><Input name="periodSpan" type="number" min={1} max={2} defaultValue={selectedRule?.periodSpan ?? 1} /></div>
@@ -4724,7 +4761,7 @@ function RuleForm({
               <p className="mt-1 font-mono text-cyan-100">{trialResult.calculation.expression}</p>
             </div>
             <div className="rounded-md border border-white/[0.08] bg-black/20 p-3">
-              <p className="text-slate-500">rawResult</p>
+              <p className="text-slate-500">原始结果</p>
               <p className="mt-1 font-mono text-white">{trialResult.calculation.rawResult}</p>
             </div>
           </div>
@@ -4774,8 +4811,8 @@ function FormulaWorkbench({ rule, draw, config, periodIndex }: { rule: RuleRecor
             <p className="mt-2 text-[28px] font-semibold leading-tight text-cyan-100">{calculation.mappedResult.join("、")}</p>
           </div>
           <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-            <Panel className="p-4"><p className="text-slate-500">rawResult</p><p className="font-mono text-white">{calculation.rawResult}</p></Panel>
-            <Panel className="p-4"><p className="text-slate-500">finalResult</p><p className="font-mono text-white">{Array.isArray(calculation.finalResult) ? calculation.finalResult.join("、") : calculation.finalResult}</p></Panel>
+            <Panel className="p-4"><p className="text-slate-500">原始结果</p><p className="font-mono text-white">{calculation.rawResult}</p></Panel>
+            <Panel className="p-4"><p className="text-slate-500">归一化结果</p><p className="font-mono text-white">{Array.isArray(calculation.finalResult) ? calculation.finalResult.join("、") : calculation.finalResult}</p></Panel>
           </div>
           <div>
             <h3 className="mb-2 text-sm font-medium text-white">计算过程</h3>
@@ -5325,7 +5362,7 @@ function ReferenceHistoryPanel({
                           <div key={`${item.ruleId}-${index}`} className="rounded-md border border-white/[0.06] bg-white/[0.025] p-2 text-xs text-slate-300">
                             <span className={item.action === "include" ? "text-emerald-200" : "text-rose-200"}>{item.action === "include" ? "支持" : "排除"}</span>
                             <span className="ml-2 text-white">{item.ruleName}</span>
-                            <span className="ml-2 text-slate-500">{item.targetType}：{item.targets.join("、")} · 分 {item.scoreDelta} · 历史 {item.successRate}% · 近况 {item.recentRate}%</span>
+                            <span className="ml-2 text-slate-500">{signalTargetTypeLabel(item.targetType)}：{item.targets.join("、")} · 影响分 {item.scoreDelta} · 历史 {item.successRate}% · 近况 {item.recentRate}%</span>
                           </div>
                         ))}
                         {!record.evidenceSummary.length && <p className="text-xs text-slate-500">暂无证据摘要。</p>}

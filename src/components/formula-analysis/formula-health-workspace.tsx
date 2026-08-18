@@ -47,7 +47,7 @@ export function FormulaHealthWorkspace({ report, onOpenIssue }: { report: Formul
     const statusPriority: Record<FormulaHealthStatus, number> = { "calculation-error": 0, "consecutive-failure": 1, volatile: 2, "sample-low": 3, normal: 4 };
     return report.health.rows.filter((row) => (
       (status === "all" || row.status === status)
-      && (!normalized || `${row.ruleName} ${row.ruleId}`.toLocaleLowerCase("zh-CN").includes(normalized))
+      && (!normalized || row.ruleName.toLocaleLowerCase("zh-CN").includes(normalized))
     )).sort((left, right) => {
       if (sort === "rate10") return right.windows[10].successRate - left.windows[10].successRate;
       if (sort === "failure-streak") return right.currentFailureStreak - left.currentFailureStreak;
@@ -66,7 +66,7 @@ export function FormulaHealthWorkspace({ report, onOpenIssue }: { report: Formul
       </Panel>
 
       <section className="rq-health-toolbar" aria-label="公式健康筛选">
-        <label><span><Search className="h-4 w-4" />搜索公式</span><Input aria-label="搜索公式" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="输入公式名称或编号" /></label>
+        <label><span><Search className="h-4 w-4" />搜索公式</span><Input aria-label="搜索公式" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="输入公式名称" /></label>
         <label><span><ShieldCheck className="h-4 w-4" />状态筛选</span><Select aria-label="状态筛选" value={status} onChange={(event) => setStatus(event.target.value as FormulaHealthStatus | "all")}><option value="all">全部状态</option>{Object.entries(STATUS_LABELS).map(([value, item]) => <option key={value} value={value}>{item.label}</option>)}</Select></label>
         <label><span><ArrowDownUp className="h-4 w-4" />排序方式</span><Select aria-label="排序方式" value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="attention">需留意优先</option><option value="rate10">最近10期通过率</option><option value="failure-streak">连续未通过</option><option value="name">公式名称</option></Select></label>
       </section>
@@ -79,7 +79,7 @@ export function FormulaHealthWorkspace({ report, onOpenIssue }: { report: Formul
             <tbody>{rows.map((row) => {
               const state = STATUS_LABELS[row.status];
               return <tr key={row.ruleId} data-health-row={row.ruleId}>
-                <td data-label="公式"><strong>{row.ruleName}</strong><small>{row.ruleId}</small></td>
+                <td data-label="公式"><strong>{row.ruleName}</strong></td>
                 <td data-label="状态"><Badge tone={state.tone}>{state.label}</Badge><small>{state.explanation}</small></td>
                 <td data-label="最近10期"><b>{metricText(row, 10)}</b>{row.windows[10].sampleSize < 10 && <small>样本不足10期</small>}</td>
                 <td data-label="最近30期"><b>{metricText(row, 30)}</b></td>
@@ -87,7 +87,7 @@ export function FormulaHealthWorkspace({ report, onOpenIssue }: { report: Formul
                 <td data-label="当前连续通过">{row.currentSuccessStreak} 期</td>
                 <td data-label="当前连续未通过">{row.currentFailureStreak} 期</td>
                 <td data-label="最长连续未通过">{row.longestFailureStreak} 期</td>
-                <td data-label="计算说明"><details><summary>技术明细</summary><p><b>最近未通过期次</b>{row.latestFailureIssues.join("、") || "暂无"}</p>{row.error && <p><b>错误</b>{row.error}</p>}</details></td>
+                <td data-label="计算说明"><details><summary>查看异常期次</summary><p><b>最近未通过期次</b>{row.latestFailureIssues.join("、") || "暂无"}</p>{row.error && <p><b>问题说明</b>{row.error}</p>}</details></td>
               </tr>;
             })}</tbody>
           </table>

@@ -59,7 +59,7 @@ function FormulaSummaryLoading({ error }: { error?: string }) {
         <div>{Array.from({ length: 10 }, (_, index) => <i key={index} />)}</div>
         <div>{Array.from({ length: 7 }, (_, index) => <i key={index} />)}</div>
       </section>
-      <small>{error ? "刷新页面后会自动重新计算。" : "计算在后台线程完成，页面交互不会被阻塞。"}</small>
+      <small>{error ? "刷新页面后会自动重新计算。" : "系统会自动完成计算，页面交互不会被阻塞。"}</small>
     </div>
   );
 }
@@ -172,7 +172,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
           ? fallbackError.message
           : error instanceof Error
             ? error.message
-            : "统计线程暂时无法启动";
+            : "统计暂时无法完成";
         settle(EMPTY_FORMULA_SUMMARY_REPORT, message);
       }
     };
@@ -191,8 +191,8 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
         formulaSummaryReportCache.set(draws, { rules, config, report: nextReport });
         settle(nextReport);
       };
-      worker.onerror = () => recoverFromWorkerFailure(new Error("统计线程暂时无法启动"));
-      worker.onmessageerror = () => recoverFromWorkerFailure(new Error("统计线程消息无法读取"));
+      worker.onerror = () => recoverFromWorkerFailure(new Error("统计暂时无法完成"));
+      worker.onmessageerror = () => recoverFromWorkerFailure(new Error("统计结果暂时无法读取"));
       worker.postMessage({ draws, rules, config, maxPeriods: FORMULA_SUMMARY_PREPARED_PERIODS });
     } catch (error) {
       recoverFromWorkerFailure(error);

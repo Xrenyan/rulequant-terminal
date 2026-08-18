@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import { guideTopics } from "@/content/system-guide";
 
 const primaryTitles = ["首页", "一键算公式", "公式结果统计", "综合参考结果", "专项概率观察", "开奖数据", "公式管理", "公式校验", "公式筛选", "设置"];
@@ -38,5 +40,20 @@ describe("system guide catalog", () => {
       expect(text, topic.slug).toContain("示例");
       expect(text, topic.slug).toContain("不代表");
     }
+  });
+
+  it("ships optimized real WebP captures for every illustrated workflow", () => {
+    const sources = [...new Set(guideTopics.flatMap((topic) => topic.screenshot?.src ? [topic.screenshot.src] : []))];
+    expect(sources).toHaveLength(10);
+    let totalBytes = 0;
+    for (const source of sources) {
+      const path = resolve(process.cwd(), "public", source.replace(/^\//, ""));
+      const bytes = readFileSync(path);
+      totalBytes += statSync(path).size;
+      expect(bytes.subarray(0, 4).toString("ascii"), source).toBe("RIFF");
+      expect(bytes.subarray(8, 12).toString("ascii"), source).toBe("WEBP");
+      expect(bytes.length, source).toBeGreaterThan(20_000);
+    }
+    expect(totalBytes).toBeLessThan(3 * 1024 * 1024);
   });
 });

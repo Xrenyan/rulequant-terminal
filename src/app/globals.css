@@ -6430,6 +6430,12 @@ body::after {
 .rq-analysis-filter-sheet .rq-analysis-toolbar__secondary .rq-button { width: 100%; }
 .rq-analysis-filter-sheet .rq-analysis-toolbar__mobile-trigger { display: none !important; }
 
+@media (min-width: 768px) and (max-width: 1500px) {
+  .rq-analysis-toolbar { grid-template-columns: 1fr; }
+  .rq-analysis-toolbar__primary { border-right: 0; border-bottom: 1px solid var(--rq-border); padding: 0 0 8px; }
+  .rq-analysis-toolbar__secondary { flex-wrap: wrap; }
+}
+
 @media (max-width: 1180px) {
   .rq-analysis-toolbar { grid-template-columns: 1fr; }
   .rq-analysis-toolbar__primary { border-right: 0; border-bottom: 1px solid var(--rq-border); padding: 0 0 8px; }
