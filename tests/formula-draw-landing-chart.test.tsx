@@ -54,6 +54,16 @@ describe("FormulaDrawLandingChart", () => {
     expect(chart.querySelector('svg[role="img"]')).toBeNull();
     expect(svg?.querySelectorAll('[role="button"][tabindex="0"]')).toHaveLength(3);
     expect(svg?.getAttribute("aria-label")).toContain("实际开奖落点组合图");
+
+    const point = svg?.querySelector<SVGGElement>('[data-landing-issue="101"]')!;
+    const hitArea = point.querySelector<SVGRectElement>(".rq-formula-landing-chart__hit-area");
+    const focusHalo = point.querySelector<SVGRectElement>(".rq-formula-landing-chart__focus-halo");
+    expect(Number(hitArea?.getAttribute("width"))).toBeGreaterThanOrEqual(44);
+    expect(Number(hitArea?.getAttribute("height"))).toBeGreaterThanOrEqual(44);
+    expect(focusHalo).not.toBeNull();
+
+    await act(async () => point.focus());
+    expect(point.classList.contains("is-keyboard-focused")).toBe(true);
   });
 
   it("band-centers edge bars and flips the final direct label into the plot", async () => {

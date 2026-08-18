@@ -150,6 +150,10 @@ describe("formula result visualization", () => {
     ];
     expect(interactiveLandingControls.length).toBeGreaterThan(0);
     expect(interactiveLandingControls.every((control) => control instanceof HTMLButtonElement)).toBe(true);
+    const landingHeaders = [...dialog!.querySelectorAll(".rq-formula-viz__landing-records thead th")];
+    expect(landingHeaders.map((header) => header.getAttribute("scope"))).toEqual([
+      "col", "col", "col", "col", "col", "col", "col",
+    ]);
     expect(document.body.style.overflow).toBe("hidden");
 
     await act(async () => {

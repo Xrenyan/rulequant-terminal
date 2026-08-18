@@ -284,7 +284,7 @@ export function FormulaResultVisualizationDialog({
               <header><div><span>逐期核验</span><h4>实际开奖落点记录</h4></div></header>
               <div className="rq-formula-viz__landing-records-scroll">
                 <table>
-                  <thead><tr><th>计算期</th><th>开奖期</th><th>实际特码 / 结果</th><th>次数</th><th>当期位置</th><th>贡献公式</th><th><span className="sr-only">操作</span></th></tr></thead>
+                  <thead><tr><th scope="col">计算期</th><th scope="col">开奖期</th><th scope="col">实际特码 / 结果</th><th scope="col">次数</th><th scope="col">当期位置</th><th scope="col">贡献公式</th><th scope="col"><span className="sr-only">操作</span></th></tr></thead>
                   <tbody>
                     {landing.records.map((record) => (
                       <tr key={record.calculationIssue} data-landing-record={record.calculationIssue}>

@@ -3715,8 +3715,11 @@ option { background: var(--rq-panel-strong); color: var(--rq-text); }
 .rq-formula-landing-chart__axis-title { fill: var(--rq-text-soft); font: 720 10px var(--font-sans); }
 .rq-formula-landing-chart__axis-label { fill: var(--rq-muted); font: 600 9px var(--font-mono); }
 .rq-formula-landing-chart__axis-label.is-rank { fill: var(--rq-accent-strong); }
+.rq-formula-landing-chart__hit-area { fill: transparent; pointer-events: all; }
+.rq-formula-landing-chart__focus-halo { fill: color-mix(in srgb, var(--rq-focus-ring) 12%, transparent); stroke: var(--rq-focus-ring); stroke-width: 3; opacity: 0; pointer-events: none; }
 .rq-formula-landing-chart__bar { fill: color-mix(in srgb, var(--rq-viz-mark) 76%, var(--rq-accent)); }
 .rq-formula-landing-chart__point { cursor: pointer; outline: none; }
+.rq-formula-landing-chart__point.is-keyboard-focused .rq-formula-landing-chart__focus-halo { opacity: 1; }
 .rq-formula-landing-chart__point:hover .rq-formula-landing-chart__bar,
 .rq-formula-landing-chart__point.is-focused .rq-formula-landing-chart__bar { fill: var(--rq-viz-mark); }
 .rq-formula-landing-chart__point.is-focused .rq-formula-landing-chart__bar { filter: drop-shadow(0 3px 4px color-mix(in srgb, var(--rq-viz-mark) 30%, transparent)); }
@@ -3859,7 +3862,7 @@ option { background: var(--rq-panel-strong); color: var(--rq-text); }
   .rq-formula-viz__landing-records > header { min-height: 54px; padding-inline: 12px; }
   .rq-formula-viz__landing-records table,
   .rq-formula-viz__landing-records tbody { display: block; }
-  .rq-formula-viz__landing-records thead { display: none; }
+  .rq-formula-viz__landing-records thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
   .rq-formula-viz__landing-records tr:not(.rq-formula-viz__landing-pending) { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 10px; border-bottom: 1px solid var(--rq-border); padding: 9px 12px; }
   .rq-formula-viz__landing-records td,
   .rq-formula-viz__landing-records td:first-child,

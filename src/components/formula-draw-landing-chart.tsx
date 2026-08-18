@@ -1,6 +1,6 @@
 "use client";
 
-import type { KeyboardEvent } from "react";
+import { useState, type KeyboardEvent } from "react";
 import type { FormulaDrawLandingRecord } from "@/lib/formula-summary/formula-draw-landing";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +35,8 @@ export function FormulaDrawLandingChart({
   unitLabel: string;
   onFocusIssue: (issue: string) => void;
 }) {
+  const [focusedControlIssue, setFocusedControlIssue] = useState<string | null>(null);
+
   if (records.length === 0) {
     return <p className="rq-formula-landing-chart__empty">当前暂无已开奖期可验证实际结果</p>;
   }
@@ -72,6 +74,7 @@ export function FormulaDrawLandingChart({
   const handleKeyDown = (event: KeyboardEvent<SVGGElement>, issue: string) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
+      setFocusedControlIssue(issue);
       onFocusIssue(issue);
     }
   };
@@ -132,8 +135,12 @@ export function FormulaDrawLandingChart({
           const countY = yCount(record.count);
           const rankY = yRank(record.rank);
           const isFocused = record.calculationIssue === focusedIssue;
+          const isKeyboardFocused = record.calculationIssue === focusedControlIssue;
           const isLast = index === records.length - 1;
           const twoDigitNumber = String(record.specialNumber).padStart(2, "0");
+          const hitSize = 44;
+          const hitX = Math.max(left, Math.min(x - hitSize / 2, width - right - hitSize));
+          const hitY = Math.max(top, Math.min(rankY - hitSize / 2, baseline - hitSize));
           return (
             <g
               key={record.calculationIssue}
@@ -142,10 +149,36 @@ export function FormulaDrawLandingChart({
               data-landing-issue={record.calculationIssue}
               aria-pressed={isFocused}
               aria-label={`${record.targetIssue}期，实际${record.actualLabel}，特码${twoDigitNumber}，${unitLabel}${record.count}，${record.rankLabel}`}
-              className={cn("rq-formula-landing-chart__point", isFocused && "is-focused")}
+              className={cn(
+                "rq-formula-landing-chart__point",
+                isFocused && "is-focused",
+                isKeyboardFocused && "is-keyboard-focused",
+              )}
               onClick={() => onFocusIssue(record.calculationIssue)}
               onKeyDown={(event) => handleKeyDown(event, record.calculationIssue)}
+              onFocus={() => setFocusedControlIssue(record.calculationIssue)}
+              onBlur={() => setFocusedControlIssue((current) => (
+                current === record.calculationIssue ? null : current
+              ))}
             >
+              <rect
+                x={hitX}
+                y={hitY}
+                width={hitSize}
+                height={hitSize}
+                rx="10"
+                className="rq-formula-landing-chart__hit-area"
+                aria-hidden="true"
+              />
+              <rect
+                x={hitX}
+                y={hitY}
+                width={hitSize}
+                height={hitSize}
+                rx="10"
+                className="rq-formula-landing-chart__focus-halo"
+                aria-hidden="true"
+              />
               <rect
                 x={x - barWidth / 2}
                 y={countY}
