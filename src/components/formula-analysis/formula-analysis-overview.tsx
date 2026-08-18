@@ -73,7 +73,6 @@ export function FormulaAnalysisOverview({
             <button
               key={record.calculationIssue}
               type="button"
-              role="listitem"
               data-overview-record={record.calculationIssue}
               aria-pressed={selectedIssue === record.calculationIssue}
               className={cn("rq-analysis-overview__record", selectedIssue === record.calculationIssue && "is-selected")}

@@ -65,6 +65,10 @@ function compactFingerprint(value: string): string {
   return `fa-${(hash >>> 0).toString(36)}`;
 }
 
+export function formulaAnalysisInputKey(input: FormulaAnalysisReportInput): string {
+  return compactFingerprint(cacheIdentity(input));
+}
+
 function cacheGet(key: string): FormulaAnalysisReport | undefined {
   const report = reportCache.get(key);
   if (!report) return undefined;
@@ -164,7 +168,7 @@ export function buildFormulaAnalysisReport(
     now: input.now,
   });
   const report: FormulaAnalysisReport = {
-    cacheKey: compactFingerprint(key),
+    cacheKey: formulaAnalysisInputKey(input),
     generatedAt: input.now ?? new Date().toISOString(),
     window: input.window,
     action: input.action,

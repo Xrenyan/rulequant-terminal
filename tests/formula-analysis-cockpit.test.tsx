@@ -87,6 +87,8 @@ describe("formula analysis overview", () => {
     expect(view.textContent).not.toContain("查看此期明细");
 
     const row = view.querySelectorAll("[data-overview-record]")[1];
+    expect(row.getAttribute("role")).toBeNull();
+    expect(row.getAttribute("aria-pressed")).toBe("false");
     await click(row);
     const action = [...view.querySelectorAll("button")].find((button) => button.textContent?.includes("查看此期明细"));
     expect(action).toBeDefined();

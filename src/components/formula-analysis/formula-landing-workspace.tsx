@@ -7,7 +7,6 @@ import type { FormulaDrawLandingRecord } from "@/lib/formula-summary/formula-dra
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
-import { cn } from "@/lib/utils";
 
 type LandingMode = "timeline" | "count-distribution" | "rank-distribution";
 

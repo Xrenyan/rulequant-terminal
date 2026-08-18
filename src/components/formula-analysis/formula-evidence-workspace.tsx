@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { CircleAlert, Eraser, ListChecks, Search, Target } from "lucide-react";
 import type { FormulaAnalysisReport } from "@/lib/formula-analysis/types";
 import { formulaTargetKey, type FormulaDrawLandingRecord } from "@/lib/formula-summary/formula-draw-landing";
@@ -22,12 +22,6 @@ export function FormulaEvidenceWorkspace({ report, initialRecord, initialIssue }
   const [focusedIssue, setFocusedIssue] = useState(initialRecord?.calculationIssue ?? initialIssue ?? "all");
   const [query, setQuery] = useState("");
   const [selectedContributionId, setSelectedContributionId] = useState("");
-
-  useEffect(() => {
-    if (!initialRecord && !initialIssue) return;
-    setSelectedTargetKey(initialRecord?.actualTargetKey ?? defaultTarget);
-    setFocusedIssue(initialRecord?.calculationIssue ?? initialIssue ?? "all");
-  }, [defaultTarget, initialIssue, initialRecord]);
 
   const target = report.landing.domain.find((item) => item.targetKey === selectedTargetKey);
   const allContributions = useMemo(() => report.summary.periods.flatMap((period) => period.contributions).filter((contribution) => (

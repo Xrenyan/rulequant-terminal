@@ -3,6 +3,7 @@
 import {
   Activity,
   BarChart3,
+  BookOpen,
   Braces,
   ChartNoAxesColumnIncreasing,
   CheckCircle2,
@@ -79,6 +80,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/field";
 import { Panel } from "@/components/ui/panel";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ContextHelpLink, PRIMARY_VIEW_GUIDE_TARGETS } from "@/components/system-guide/context-help-link";
 import { cn } from "@/lib/utils";
 import { paginateItems } from "@/lib/pagination";
 import { fetchJsonWithSessionCache } from "@/lib/network/urls";
@@ -91,6 +93,11 @@ const FormulaResultStatisticsView = dynamic(
 const FormulaAnalysisCockpit = dynamic(
   () => import("@/components/formula-analysis/formula-analysis-cockpit").then((module) => module.FormulaAnalysisCockpit),
   { ssr: false, loading: FormulaResultStatisticsLoading },
+);
+
+const SystemGuide = dynamic(
+  () => import("@/components/system-guide/system-guide").then((module) => module.SystemGuide),
+  { ssr: false, loading: SystemGuideLoading },
 );
 
 const SpecialAnalysisView = dynamic(
@@ -282,6 +289,10 @@ export function isNavItemActive(itemKey: ViewKey, activeView: ViewKey): boolean 
   return itemKey === activeView
     || (itemKey === "formula-result-statistics" && activeView === "formula-analysis");
 }
+
+function SystemGuideLoading() {
+  return <div className="rq-guide-loading" role="status" aria-busy="true"><BookOpen className="h-6 w-6" /><strong>正在打开使用说明…</strong><span>说明书按需加载，不影响其他页面速度。</span></div>;
+}
 const REMOTE_DRAW_IMPORT_ENDPOINT = "https://rulequant-terminal.vercel.app/api/import-draws-from-url";
 const AUTO_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 const RESUME_SYNC_INTERVAL_MS = 60 * 1000;
@@ -329,7 +340,7 @@ const viewLabels: Record<ViewKey, string> = {
   "sample-check": "公式校验",
   config: "设置",
   reports: "导出报告",
-  help: "规则理解",
+  help: "使用说明",
 };
 
 const categories: Array<{ value: RuleCategory; label: string }> = [
@@ -1278,6 +1289,12 @@ export function RuleQuantTerminal({ activeView }: { activeView: ViewKey }) {
 
 function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const searchParams = useSearchParams();
+  const activeGuideTarget = activeView === "formula-analysis"
+    ? PRIMARY_VIEW_GUIDE_TARGETS["formula-result-statistics"]
+    : PRIMARY_VIEW_GUIDE_TARGETS[activeView as keyof typeof PRIMARY_VIEW_GUIDE_TARGETS];
+  const activeReturnPath = activeView === "formula-analysis"
+    ? `/formula-result-statistics/analysis${searchParams.size ? `?${searchParams.toString()}` : ""}`
+    : navItems.find((item) => item.key === activeView)?.href;
   const store = useRuleQuantStore();
   const { draws, rules, samples, operationLogs, ruleBackups, referenceHistory, config, selectedRuleId, cloudStateMeta, cloudPublishStatus, cloudPublishMessage, hasHydrated } = store;
   const hydrate = store.hydrate;
@@ -2592,6 +2609,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
               <div className="rq-topbar-actions flex min-w-0 max-w-full flex-wrap items-center gap-2 text-xs text-slate-400">
                 <Badge tone={hasSharedDraws ? "green" : "slate"}>{dataSourceLabel}</Badge>
                 <span className="shrink-0">最新期：{latestRawDraw?.issue ?? "-"}</span>
+                {activeGuideTarget ? <ContextHelpLink {...activeGuideTarget} returnTo={activeReturnPath} /> : null}
                 <ThemeToggle />
                 {showCloudPublishControls && cloudPublishStatus === "failed" && cloudPublishMessage && <Badge tone="rose">{cloudPublishMessage}</Badge>}
               </div>
@@ -3800,7 +3818,14 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
               </div>
             )}
 
-            {activeView === "help" && <RuleUnderstandingPage />}
+            {activeView === "help" && (
+              <SystemGuide
+                mode="help"
+                initialTopicSlug={searchParams.get("topic") ?? undefined}
+                initialSection={searchParams.get("section") ?? undefined}
+                returnTo={searchParams.get("returnTo") ?? undefined}
+              />
+            )}
           </div>
         </main>
       </div>
@@ -5398,11 +5423,12 @@ function ConfigEditor({
   updateConfig: (config: ReturnType<typeof useRuleQuantStore.getState>["config"]) => Promise<void>;
   resetSeed: () => Promise<void>;
 }) {
+  const searchParams = useSearchParams();
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"overview" | "tables" | "advanced" | "maintenance">("overview");
+  const [settingsTab, setSettingsTab] = useState<"overview" | "tables" | "advanced" | "maintenance" | "guide">(() => searchParams.get("tab") === "guide" ? "guide" : "overview");
 
   function toggleAdvancedConfig() {
     if (!advancedOpen && !text) {
@@ -5438,6 +5464,7 @@ function ConfigEditor({
           ["tables", "属性表", "生肖、波色、五行"],
           ["advanced", "高级设置", "规则参数"],
           ["maintenance", "数据维护", "导出与重置"],
+          ["guide", "使用说明", "3分钟学会使用"],
         ].map(([key, label, hint]) => (
           <button key={key} type="button" className={cn(settingsTab === key && "is-active")} onClick={() => setSettingsTab(key as typeof settingsTab)}><strong>{label}</strong><small>{hint}</small></button>
         ))}
@@ -5445,7 +5472,7 @@ function ConfigEditor({
 
       <Panel className="rq-settings-content p-5">
         {settingsTab === "overview" && <>
-          <div className="rq-section-head"><div><p className="rq-eyebrow">基础规则</p><h2>当前计算口径</h2></div><Link href="/help" className="rq-link-button">完整规则说明</Link></div>
+          <div className="rq-section-head"><div><p className="rq-eyebrow">基础规则</p><h2>当前计算口径</h2></div><Link href="/config?tab=guide&topic=rule-understanding" className="rq-link-button">完整规则说明</Link></div>
           <div className="rq-settings-summary-grid">
             <div><span>生肖顺序</span><strong>{config.zodiacOrder.join("、")}</strong></div>
             <div><span>七尾偏移</span><strong>{config.sevenTailOffsets.join(" / ")}</strong></div>
@@ -5482,84 +5509,16 @@ function ConfigEditor({
             <button type="button" className="is-danger" onClick={() => { if (window.confirm("确认恢复示例数据吗？当前本地修改会被替换。")) void resetSeed(); }}><RefreshCw /><span><strong>恢复示例数据</strong><small>此操作需要再次确认</small></span></button>
           </div>
         </>}
+
+        {settingsTab === "guide" && (
+          <SystemGuide
+            initialTopicSlug={searchParams.get("topic") ?? undefined}
+            initialSection={searchParams.get("section") ?? undefined}
+            returnTo={searchParams.get("returnTo") ?? undefined}
+          />
+        )}
       </Panel>
     </div>
   );
 }
 
-function RuleUnderstandingPage() {
-  const items = [
-    ["Formula Engine", "唯一计算入口。公式计算、杀肖、杀合、七尾、八肖、九肖、逐期明细都必须从这里出来，其他模块不能另写一套算法。"],
-    ["Signal System", "只负责把公式输出变成支持或排除信号，例如支持某生肖、排除某尾数、排除某波色。"],
-    ["Scoring Engine", "只负责把支持/排除信号映射到 1-49 号码并打分；没有任何公式证据的号码不能进入 Top 结果。"],
-    ["Aggregation", "只负责把 1-49 号码结果汇总成生肖 Top 7/8/9，不重新计算公式。"],
-    ["UI 展示层", "页面只展示同步、计算结果、证据和逐期明细；除公式编辑器草稿试算外，不在页面里自行推导结果。"],
-    ["参与计算", "公式主状态只有参与计算和不参与计算。来源、推荐、样例核对都是标签，不是参与门槛。"],
-    ["开奖记录结构", "每期必须有平1、平2、平3、平4、平5、平6、特码，共 7 个号码。"],
-    ["L序", "L序是原始落球顺序：平1到平6加特码。公式写 L序时，平1就是原始平1。"],
-    ["D序", "D序只把 6 个平码从小到大排序，特码单独保留为第 7 位。页面表格排序和公式 D序不是一回事。"],
-    ["特码", "特码必须单独保存。无论公式用 L序还是 D序，特码、特尾、特合、特行都取原始第 7 个号码。"],
-    ["号码属性", "头=十位，尾=个位，合=十位+个位，合尾=合数个位，段位按 01-49 分 7 段。"],
-    ["生肖表", "当前默认使用 2026 年生肖表，生肖顺序为马、蛇、龙、兔、虎、牛、鼠、猪、狗、鸡、猴、羊。"],
-    ["波色和五行", "波色值为红=0、蓝=1、绿=2；五行值为金=1、木=2、水=3、火=4、土=5，可在设置里校验和修改。"],
-    ["平码/平位/生肖位", "平三码、平四码、平3、平4 都是开奖号码本身；平3位、平4位是该号码对应生肖在固定十二生肖序里的位置：鼠1、牛2、虎3、兔4、龙5、蛇6、马7、羊8、猴9、鸡10、狗11、猪12。单独写“位/平位/定位”才算未锁定变量。"],
-    ["杀类规则", "杀一肖、杀一尾、杀一合、杀一头、杀一段、杀一行都是排除规则：下期没开到才算正确。"],
-    ["候选类规则", "七尾、八肖、九肖是候选支持规则：下期落在集合里才算正确。七尾不是杀尾。"],
-    ["时间关系", "默认用第 N 期计算，用第 N+1 期的特码验证；八肖管两期验证 N+1 和 N+2；期合按后三位期数计算，例如 174 期合=1+7+4=12。"],
-    ["归一化", "杀肖结果大于 49 减 48；杀合减 13；杀头减 5；杀段减 7；出现 0 等异常要提示。"],
-    ["待人工确认", "遇到单独的“位/平位/定位”、样例对不上、表值不一致、类型不明确时，不要猜，标记待人工确认。"],
-    ["公式校验", "每条公式应校验变量取值、计算过程、原始结果、归一化、映射结果和下一期对错判断。"],
-    ["逐期明细", "每条公式都要展示每期完整计算流水账：当前期、变量、过程、结果处理、下一期开奖和对错。"],
-    ["综合参考", "综合参考合并已启用且可计算的用户提供公式；样例未核对不拦截，计算报错、变量不确定、停用或手动退出的公式不参与。"],
-    ["自动筛选", "系统推荐公式和文档公式分开；推荐公式必须先看训练期、验证期、错期和逐期明细，确认后才能加入。"],
-  ];
-  return (
-    <div className="space-y-4">
-      <Panel className="p-5">
-        <Badge tone="cyan">RuleQuant 规则理解锁定版</Badge>
-        <h2 className="mt-3 text-[22px] font-semibold leading-tight text-white">所有计算、校验、逐期明细和综合参考都按这里执行</h2>
-        <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">如果程序计算结果和 TXT 手算样例不一致，必须标红并允许人工修改公式、顺序、变量或配置后重新校验；遇到文档没有覆盖的规则，不自行猜测，标记待人工确认。</p>
-      </Panel>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {items.map(([title, body]) => (
-          <Panel key={title} className="p-5">
-            <h3 className="font-semibold text-white">{title}</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-400">{body}</p>
-          </Panel>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function HelpContent() {
-  const items = [
-    ["L序是什么", "落球顺序：n1,n2,n3,n4,n5,n6,special，对应 L1-L7。"],
-    ["D序是什么", "只把 6 个平码按大小排序得到 D1-D6，D7/特码仍然是原始特码。"],
-    ["平位和特码", "平1-平7 会按规则的 L/D 模式取值；特码永远等于 special。"],
-    ["平3位和平三码区别", "平三码、平四码、平3、平4 是开奖号码本身；平3位、平4位 是该号码生肖在固定十二生肖序中的位置，鼠1到猪12。"],
-    ["头尾合合尾", "头为十位，尾为个位，合为号码各位相加，合尾为合数个位。"],
-    ["段位", "01-07 为 1段，08-14 为 2段，依此到 43-49 为 7段。"],
-    ["波色值", "红=0，蓝=1，绿=2，配置中心可编辑。"],
-    ["五行值", "金=1，木=2，水=3，火=4，土=5，配置中心可编辑。"],
-    ["杀肖/杀合/杀尾/杀段", "用第 N 期公式输出要排除的属性，再用第 N+1 期特码属性验证是否避开。"],
-    ["七尾", "公式得到 baseTail 后，按 [-3,-2,-1,0,+1,+2,+4] 生成 7 个尾数集合。"],
-    ["八肖/九肖", "八肖是生肖集合命中验证；杀三肖可反向得到九肖候选。"],
-    ["导入数据", "进入数据导入页，粘贴 CSV/TXT 或选择 Excel，先预览再写入本地库。"],
-    ["新增规则", "规则管理页填写类型、序列、公式、归一化、目标后保存。"],
-    ["运行回测", "回测中心会实时基于启用规则运行，并展示每期过程。"],
-    ["样例校验", "录入 TXT 手算样例的 raw、归一、映射和验证结果，不一致会标红。"],
-    ["备份配置", "配置中心或导出报告页可导出规则库、配置和回测结果。"],
-  ];
-  return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      {items.map(([title, body]) => (
-        <Panel key={title} className="p-5">
-          <h3 className="font-semibold text-white">{title}</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-400">{body}</p>
-        </Panel>
-      ))}
-    </div>
-  );
-}

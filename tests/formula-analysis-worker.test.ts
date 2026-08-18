@@ -4,6 +4,7 @@ import { seedDraws, seedRules } from "@/lib/data/seed";
 import {
   buildFormulaAnalysisReport,
   clearFormulaAnalysisReportCache,
+  formulaAnalysisInputKey,
   type FormulaAnalysisReportInput,
 } from "@/lib/formula-analysis/build-analysis-report";
 import {
@@ -69,6 +70,15 @@ describe("formula analysis report", () => {
 
     const changedConfig = { ...input.config, sevenTailOffsets: [...input.config.sevenTailOffsets, 9] };
     expect(buildFormulaAnalysisReport({ ...input, config: changedConfig })).not.toBe(first);
+  });
+
+  it("exposes the same stable input identity used by the completed report", () => {
+    clearFormulaAnalysisReportCache();
+    const input = reportInput();
+    const report = buildFormulaAnalysisReport(input);
+
+    expect(formulaAnalysisInputKey(input)).toBe(report.cacheKey);
+    expect(formulaAnalysisInputKey({ ...input, window: 30 })).not.toBe(report.cacheKey);
   });
 
   it("filters formulas before summary, health, and pair diagnostics", () => {

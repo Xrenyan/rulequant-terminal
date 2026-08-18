@@ -6,6 +6,7 @@ import { Activity, BarChart3, CircleAlert, ListChecks, ShieldCheck, X } from "lu
 import { useRouter, useSearchParams } from "next/navigation";
 import type { DrawRecord, RuleQuantConfig, RuleRecord } from "@/types/domain";
 import type { FormulaAnalysisFilters, FormulaAnalysisReport, FormulaAnalysisTab, SavedFormulaAnalysisView } from "@/lib/formula-analysis/types";
+import { formulaAnalysisInputKey, type FormulaAnalysisReportInput } from "@/lib/formula-analysis/build-analysis-report";
 import { startFormulaAnalysisReportRequest } from "@/lib/formula-analysis/formula-analysis-worker-client";
 import {
   deleteAnalysisView,
@@ -22,6 +23,7 @@ import { Panel } from "@/components/ui/panel";
 import { FormulaAnalysisLoading } from "@/components/formula-analysis/formula-analysis-loading";
 import { FormulaAnalysisToolbar } from "@/components/formula-analysis/formula-analysis-toolbar";
 import { FormulaAnalysisOverview } from "@/components/formula-analysis/formula-analysis-overview";
+import { ContextHelpLink, FORMULA_ANALYSIS_GUIDE_TARGETS } from "@/components/system-guide/context-help-link";
 import type { FormulaDrawLandingRecord } from "@/lib/formula-summary/formula-draw-landing";
 
 const LazyFormulaLandingWorkspace = lazy(() => import("@/components/formula-analysis/formula-landing-workspace").then((module) => ({ default: module.FormulaLandingWorkspace })));
@@ -35,6 +37,8 @@ const TABS: Array<{ key: FormulaAnalysisTab; label: string; description: string;
   { key: "evidence", label: "明细核验", description: "逐期追到原公式", icon: ListChecks },
 ];
 
+const TAB_HELP = FORMULA_ANALYSIS_GUIDE_TARGETS;
+
 export type FormulaAnalysisCockpitProps = {
   draws: DrawRecord[];
   rules: RuleRecord[];
@@ -44,53 +48,43 @@ export type FormulaAnalysisCockpitProps = {
   cloudStateMeta?: { updatedAt?: string; enabled?: boolean; recordCount?: number };
 };
 
-function AnalysisPlaceholder({ tab, report }: { tab: FormulaAnalysisTab; report: FormulaAnalysisReport }) {
-  const copy = {
-    overview: ["分析概览", "把健康度、实际落点和数据状态放在一屏内，先看异常再看证据。"],
-    landing: ["实际落点趋势", report.landing.insight],
-    diagnostics: ["公式健康与冲突", `已检查 ${report.health.rows.length} 条公式，发现 ${report.pairs.duplicates.length} 组高度重复、${report.pairs.conflicts.length} 组方向冲突。`],
-    evidence: ["逐期明细核验", "从期次、开奖结果和贡献公式三层核对，零次也会如实显示。"],
-  }[tab];
-  return <Panel className="rq-analysis-placeholder"><CircleAlert className="h-5 w-5" /><div><h2>{copy[0]}</h2><p>{copy[1]}</p></div></Panel>;
-}
-
 export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, lastSyncAt, cloudStateMeta }: FormulaAnalysisCockpitProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const filters = useMemo(() => parseAnalysisSearchParams(new URLSearchParams(searchParams.toString())), [searchParams]);
-  const [report, setReport] = useState<FormulaAnalysisReport>();
-  const [error, setError] = useState("");
-  const [savedViews, setSavedViews] = useState<SavedFormulaAnalysisView[]>([]);
+  const analysisInput = useMemo<FormulaAnalysisReportInput>(() => ({
+    draws,
+    rules,
+    config,
+    window: filters.window,
+    action: filters.action,
+    targetType: filters.targetType,
+    ruleIds: filters.ruleIds,
+    source: {
+      label: dataSourceLabel,
+      updatedAt: cloudStateMeta?.updatedAt ?? lastSyncAt,
+      offline: false,
+      partial: Boolean(cloudStateMeta?.enabled && !cloudStateMeta.recordCount),
+    },
+  }), [cloudStateMeta, config, dataSourceLabel, draws, filters.action, filters.ruleIds, filters.targetType, filters.window, lastSyncAt, rules]);
+  const analysisRequestKey = useMemo(() => formulaAnalysisInputKey(analysisInput), [analysisInput]);
+  const [analysisState, setAnalysisState] = useState<{ key: string; report?: FormulaAnalysisReport; error?: string }>({ key: "" });
+  const [savedViews, setSavedViews] = useState<SavedFormulaAnalysisView[]>(readSavedViews);
   const [selectedViewId, setSelectedViewId] = useState("");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [focusedRecord, setFocusedRecord] = useState<FormulaDrawLandingRecord>();
   const [focusedEvidenceIssue, setFocusedEvidenceIssue] = useState("");
   const mobileCloseRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => setSavedViews(readSavedViews()), []);
+  const analysisReturnTo = `/formula-result-statistics/analysis?${serializeAnalysisSearchParams(filters)}`;
+  const report = analysisState.key === analysisRequestKey ? analysisState.report : undefined;
+  const error = analysisState.key === analysisRequestKey ? analysisState.error ?? "" : "";
 
   useEffect(() => {
-    setError("");
-    setReport(undefined);
-    return startFormulaAnalysisReportRequest({
-      draws,
-      rules,
-      config,
-      window: filters.window,
-      action: filters.action,
-      targetType: filters.targetType,
-      ruleIds: filters.ruleIds,
-      source: {
-        label: dataSourceLabel,
-        updatedAt: cloudStateMeta?.updatedAt ?? lastSyncAt,
-        offline: false,
-        partial: Boolean(cloudStateMeta?.enabled && !cloudStateMeta.recordCount),
-      },
-    }, {
-      onResult: (nextReport) => startTransition(() => setReport(nextReport)),
-      onError: setError,
+    return startFormulaAnalysisReportRequest(analysisInput, {
+      onResult: (nextReport) => startTransition(() => setAnalysisState({ key: analysisRequestKey, report: nextReport })),
+      onError: (message) => startTransition(() => setAnalysisState({ key: analysisRequestKey, error: message })),
     });
-  }, [cloudStateMeta?.enabled, cloudStateMeta?.recordCount, cloudStateMeta?.updatedAt, config, dataSourceLabel, draws, filters.action, filters.ruleIds, filters.targetType, filters.window, lastSyncAt, rules]);
+  }, [analysisInput, analysisRequestKey]);
 
   useEffect(() => {
     if (!mobileFiltersOpen) return;
@@ -159,14 +153,14 @@ export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, 
         ? <LazyFormulaLandingWorkspace report={report} onSelectRecord={openEvidence} />
         : filters.tab === "diagnostics"
           ? <LazyFormulaHealthWorkspace report={report} onOpenIssue={openIssueEvidence} />
-          : <LazyFormulaEvidenceWorkspace report={report} initialRecord={focusedRecord} initialIssue={focusedEvidenceIssue} />}
+          : <LazyFormulaEvidenceWorkspace key={`${report.cacheKey}:${focusedRecord?.calculationIssue ?? focusedEvidenceIssue}`} report={report} initialRecord={focusedRecord} initialIssue={focusedEvidenceIssue} />}
   </Suspense>;
 
   return (
     <div className={`rq-analysis-cockpit ${filters.action === "exclude" ? "is-exclude" : "is-include"}`}>
       <Panel className="rq-analysis-cockpit__hero">
         <div><Badge tone="cyan">六合彩公式分析</Badge><h2>公式分析驾驶舱</h2><p>先看实际开奖落在“被排除/被支持几次”的位置，再追到具体公式和计算期。这里只描述历史表现，不承诺未来结果。</p></div>
-        <div className="rq-analysis-cockpit__source"><small>当前数据</small><strong>{dataSourceLabel}</strong><span>最近更新：{cloudStateMeta?.updatedAt ?? lastSyncAt ?? "等待首次同步"}</span></div>
+        <div className="rq-analysis-cockpit__source"><small>当前数据</small><strong>{dataSourceLabel}</strong><span>最近更新：{cloudStateMeta?.updatedAt ?? lastSyncAt ?? "等待首次同步"}</span><ContextHelpLink {...TAB_HELP[filters.tab]} returnTo={analysisReturnTo} label="本区说明" /></div>
       </Panel>
 
       <FormulaAnalysisToolbar
