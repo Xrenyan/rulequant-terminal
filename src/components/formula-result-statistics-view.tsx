@@ -1,6 +1,7 @@
 "use client";
 
-import { lazy, startTransition, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   BarChart3,
   CalendarRange,
@@ -8,7 +9,7 @@ import {
   CircleAlert,
   Layers3,
   ListChecks,
-  Eye,
+  ChartSpline,
 } from "lucide-react";
 import {
   buildFormulaSummaryGroups,
@@ -25,19 +26,13 @@ import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
 
-const LazyFormulaResultVisualizationDialog = lazy(() => import("@/components/formula-result-visualization").then((module) => ({
-  default: module.FormulaResultVisualizationDialog,
-})));
-
-function preloadFormulaVisualization() {
-  if (typeof window !== "undefined") void import("@/components/formula-result-visualization");
-}
-
 type FormulaSummaryWorkerResponse = { ok: true; report: FormulaSummaryReport } | { ok: false; error: string };
 type FormulaSummaryCacheEntry = { rules: RuleRecord[]; config: RuleQuantConfig; report: FormulaSummaryReport };
 type FormulaSummaryAsyncState = FormulaSummaryCacheEntry & { draws: DrawRecord[]; error?: string };
 
 const formulaSummaryReportCache = new WeakMap<DrawRecord[], FormulaSummaryCacheEntry>();
+const FORMULA_SUMMARY_PREPARED_PERIODS = 11;
+const FORMULA_SUMMARY_VISIBLE_PERIODS = 10;
 const EMPTY_FORMULA_SUMMARY_REPORT: FormulaSummaryReport = {
   periods: [],
   enabledRuleCount: 0,
@@ -64,7 +59,7 @@ function FormulaSummaryLoading({ error }: { error?: string }) {
         <div>{Array.from({ length: 10 }, (_, index) => <i key={index} />)}</div>
         <div>{Array.from({ length: 7 }, (_, index) => <i key={index} />)}</div>
       </section>
-      <small>{error ? "刷新页面后会自动重新计算。" : "计算在后台线程完成，页面交互不会被阻塞。"}</small>
+      <small>{error ? "刷新页面后会自动重新计算。" : "系统会自动完成计算，页面交互不会被阻塞。"}</small>
     </div>
   );
 }
@@ -130,12 +125,10 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
   const [action, setAction] = useState<FormulaSummaryAction>("exclude");
   const [requestedTargetType, setRequestedTargetType] = useState<FormulaSummaryTargetType | "">("");
   const [requestedTarget, setRequestedTarget] = useState("");
-  const [visualizationOpen, setVisualizationOpen] = useState(false);
-  const visualizationTriggerRef = useRef<HTMLElement | null>(null);
 
   const workerAvailable = typeof Worker !== "undefined";
   const synchronousReport = useMemo(
-    () => workerAvailable ? undefined : buildFormulaSummaryReport({ draws, rules, config, maxPeriods: 10 }),
+    () => workerAvailable ? undefined : buildFormulaSummaryReport({ draws, rules, config, maxPeriods: FORMULA_SUMMARY_PREPARED_PERIODS }),
     [workerAvailable, draws, rules, config],
   );
   const [asyncState, setAsyncState] = useState<FormulaSummaryAsyncState>(() => ({
@@ -154,31 +147,59 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
       return;
     }
 
-    const worker = new Worker(new URL("../workers/formula-summary.worker.ts", import.meta.url));
     let disposed = false;
-    queueMicrotask(() => {
-      if (!disposed) setAsyncState({ draws, rules, config, report: EMPTY_FORMULA_SUMMARY_REPORT });
-    });
-    worker.onmessage = (event: MessageEvent<FormulaSummaryWorkerResponse>) => {
-      if (disposed) return;
-      if (!event.data.ok) {
-        setAsyncState({ draws, rules, config, report: EMPTY_FORMULA_SUMMARY_REPORT, error: event.data.error });
-        worker.terminate();
-        return;
+    let settled = false;
+    let worker: Worker | undefined;
+    const settle = (nextReport: FormulaSummaryReport, error?: string) => {
+      if (disposed || settled) return;
+      settled = true;
+      startTransition(() => setAsyncState({ draws, rules, config, report: nextReport, error }));
+      worker?.terminate();
+    };
+    const recoverFromWorkerFailure = (error: unknown) => {
+      if (disposed || settled) return;
+      try {
+        const fallbackReport = buildFormulaSummaryReport({
+          draws,
+          rules,
+          config,
+          maxPeriods: FORMULA_SUMMARY_PREPARED_PERIODS,
+        });
+        formulaSummaryReportCache.set(draws, { rules, config, report: fallbackReport });
+        settle(fallbackReport);
+      } catch (fallbackError) {
+        const message = fallbackError instanceof Error
+          ? fallbackError.message
+          : error instanceof Error
+            ? error.message
+            : "统计暂时无法完成";
+        settle(EMPTY_FORMULA_SUMMARY_REPORT, message);
       }
-      const nextReport = event.data.report;
-      formulaSummaryReportCache.set(draws, { rules, config, report: nextReport });
-      startTransition(() => setAsyncState({ draws, rules, config, report: nextReport }));
-      worker.terminate();
     };
-    worker.onerror = () => {
-      if (!disposed) setAsyncState({ draws, rules, config, report: EMPTY_FORMULA_SUMMARY_REPORT, error: "统计线程暂时无法启动" });
-      worker.terminate();
-    };
-    worker.postMessage({ draws, rules, config, maxPeriods: 10 });
+    queueMicrotask(() => {
+      if (!disposed && !settled) setAsyncState({ draws, rules, config, report: EMPTY_FORMULA_SUMMARY_REPORT });
+    });
+    try {
+      worker = new Worker(new URL("../workers/formula-summary.worker.ts", import.meta.url));
+      worker.onmessage = (event: MessageEvent<FormulaSummaryWorkerResponse>) => {
+        if (disposed || settled) return;
+        if (!event.data.ok) {
+          recoverFromWorkerFailure(event.data.error);
+          return;
+        }
+        const nextReport = event.data.report;
+        formulaSummaryReportCache.set(draws, { rules, config, report: nextReport });
+        settle(nextReport);
+      };
+      worker.onerror = () => recoverFromWorkerFailure(new Error("统计暂时无法完成"));
+      worker.onmessageerror = () => recoverFromWorkerFailure(new Error("统计结果暂时无法读取"));
+      worker.postMessage({ draws, rules, config, maxPeriods: FORMULA_SUMMARY_PREPARED_PERIODS });
+    } catch (error) {
+      recoverFromWorkerFailure(error);
+    }
     return () => {
       disposed = true;
-      worker.terminate();
+      if (!settled) worker?.terminate();
     };
   }, [workerAvailable, draws, rules, config]);
 
@@ -188,7 +209,9 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
   const report = synchronousReport ?? asyncReport ?? EMPTY_FORMULA_SUMMARY_REPORT;
   const reportError = asyncState.draws === draws && asyncState.rules === rules && asyncState.config === config ? asyncState.error : undefined;
   const visiblePeriods = useMemo(
-    () => rangeMode === "latest" ? report.periods.slice(-1) : report.periods,
+    () => rangeMode === "latest"
+      ? report.periods.slice(-1)
+      : report.periods.slice(-FORMULA_SUMMARY_VISIBLE_PERIODS),
     [rangeMode, report.periods],
   );
   const groups = useMemo(() => buildFormulaSummaryGroups(visiblePeriods), [visiblePeriods]);
@@ -197,13 +220,17 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
     ? requestedTargetType
     : (actionGroups[0]?.targetType ?? "");
   const activeGroup = actionGroups.find((group) => group.targetType === activeTargetType);
-  const activeTarget = activeGroup?.items.some((item) => item.targetKey === requestedTarget)
-    ? requestedTarget
-    : (activeGroup?.items[0]?.targetKey ?? "");
+  const activeTarget = requestedTarget || activeGroup?.items[0]?.targetKey || "";
   const activeItem = activeGroup?.items.find((item) => item.targetKey === activeTarget);
   const maxCount = activeGroup?.items[0]?.count ?? 1;
   const latest = report.latestPeriod;
   const actionCopy = actionOptions.find((option) => option.value === action)!;
+  const analysisHref = `/formula-result-statistics/analysis?${new URLSearchParams({
+    tab: "overview",
+    range: "10",
+    action,
+    type: activeTargetType || "zodiac",
+  })}`;
 
   const changeRange = (nextRange: RangeMode) => {
     startTransition(() => setRangeMode(nextRange));
@@ -217,14 +244,6 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
     });
   };
 
-  const openVisualization = (trigger: HTMLElement, targetKey = activeTarget) => {
-    visualizationTriggerRef.current = trigger;
-    if (targetKey) setRequestedTarget(targetKey);
-    setVisualizationOpen(true);
-  };
-
-  const closeVisualization = useCallback(() => setVisualizationOpen(false), []);
-
   if (!synchronousReport && !asyncReport) return <FormulaSummaryLoading error={reportError} />;
 
   return (
@@ -235,18 +254,9 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
             <h2 id="formula-statistics-title">公式结果统计</h2>
             <p className="mt-1 text-sm text-slate-500">按最新一期或最近十期，统计每条启用公式产生的排除与支持次数。</p>
           </div>
-          <Button
-            type="button"
-            className="w-full sm:w-auto"
-            variant="primary"
-            disabled={!activeItem}
-            onMouseEnter={preloadFormulaVisualization}
-            onFocus={preloadFormulaVisualization}
-            onTouchStart={preloadFormulaVisualization}
-            onClick={(event) => openVisualization(event.currentTarget)}
-          >
-            <Eye className="h-4 w-4" />查看可视化
-          </Button>
+          <Link href={analysisHref} className="rq-button rq-button--primary inline-flex h-10 min-h-10 w-full items-center justify-center gap-2 border px-4 text-sm font-medium sm:w-auto">
+             <ChartSpline className="h-4 w-4" />进入公式结果分析
+          </Link>
         </div>
         <div className="rq-formula-stats__sync-note mt-4">
           <Badge tone="green">实时统计</Badge>
@@ -332,10 +342,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
                   aria-pressed={activeTarget === item.targetKey}
                   aria-label={`查看${item.label}的公式明细`}
                   className={cn("rq-formula-stats__rank-row", activeTarget === item.targetKey && "is-active")}
-                  onMouseEnter={preloadFormulaVisualization}
-                  onFocus={preloadFormulaVisualization}
-                  onTouchStart={preloadFormulaVisualization}
-                  onClick={(event) => openVisualization(event.currentTarget, item.targetKey)}
+                  onClick={() => setRequestedTarget(item.targetKey)}
                 >
                   <span className="rq-formula-stats__rank-label"><small>{String(index + 1).padStart(2, "0")}</small><b>{item.label}</b></span>
                   <span className="rq-formula-stats__bar-track" aria-hidden="true">
@@ -376,20 +383,6 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
           <div className="rq-formula-stats__empty is-compact"><p>选择上方任一结果后，可查看贡献它的全部公式和计算过程。</p></div>
         )}
       </Panel>
-
-      {visualizationOpen && activeTargetType && (
-        <Suspense fallback={<div className="rq-formula-viz-loading" role="status">正在打开完整可视化…</div>}>
-          <LazyFormulaResultVisualizationDialog
-            periods={report.periods}
-            action={action}
-            targetType={activeTargetType}
-            selectedTargetKey={activeTarget}
-            onSelectTarget={setRequestedTarget}
-            onClose={closeVisualization}
-            returnFocusRef={visualizationTriggerRef}
-          />
-        </Suspense>
-      )}
     </div>
   );
 }

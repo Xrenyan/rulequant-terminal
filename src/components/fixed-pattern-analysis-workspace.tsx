@@ -396,7 +396,7 @@ export function FixedPatternAnalysisWorkspace({ draws, config }: Props) {
           <span className="rq-progress-spinner" aria-hidden="true" />
           <div>
             <strong>正在回测固定出波与出尾资料</strong>
-            <p>计算在后台线程完成，页面切换和滚动不会被阻塞。</p>
+            <p>系统正在自动整理资料，页面切换和滚动不会被阻塞。</p>
           </div>
         </div>
       </Panel>

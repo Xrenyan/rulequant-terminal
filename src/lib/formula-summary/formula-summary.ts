@@ -44,12 +44,27 @@ export type FormulaSummarySkippedRule = {
   error: string;
 };
 
+export type FormulaSummaryTargetResult = {
+  issue: string;
+  number: number;
+  zodiac: string;
+  tail: number;
+  head: number;
+  sum: number;
+  segment: number;
+  element: string;
+  color: string;
+  parity: "单" | "双";
+};
+
 export type FormulaSummaryPeriod = {
   calculationIssue: string;
   calculationDate?: string;
   targetIssue?: string;
   targetLabel: string;
   isPending: boolean;
+  targetResult?: FormulaSummaryTargetResult;
+  targetResultWarning?: string;
   contributions: FormulaSummaryContribution[];
   skippedRules: FormulaSummarySkippedRule[];
 };
@@ -317,6 +332,29 @@ export function buildFormulaSummaryReport(input: {
       targetLabel: targetIssue ?? "下期待开奖",
       isPending: targetIssue === undefined,
     };
+    const targetDraw = sortedDraws[index + 1];
+    let targetResult: FormulaSummaryTargetResult | undefined;
+    let targetResultWarning: string | undefined;
+
+    if (targetDraw) {
+      try {
+        const target = normalizeDraw(targetDraw, input.config).specialAttributes;
+        targetResult = {
+          issue: targetDraw.issue,
+          number: target.number,
+          zodiac: target.zodiac,
+          tail: target.tail,
+          head: target.head,
+          sum: target.sum,
+          segment: target.segment,
+          element: target.element,
+          color: target.color,
+          parity: target.parity,
+        };
+      } catch (error) {
+        targetResultWarning = error instanceof Error ? error.message : String(error);
+      }
+    }
     const contributions: FormulaSummaryContribution[] = [];
     const skippedRules: FormulaSummarySkippedRule[] = [];
 
@@ -337,6 +375,8 @@ export function buildFormulaSummaryReport(input: {
       periods.push({
         ...periodIdentity,
         calculationDate: sourceDraw.date,
+        targetResult,
+        targetResultWarning,
         contributions,
         skippedRules,
       });
@@ -364,6 +404,8 @@ export function buildFormulaSummaryReport(input: {
     periods.push({
       ...periodIdentity,
       calculationDate: sourceDraw.date,
+      targetResult,
+      targetResultWarning,
       contributions,
       skippedRules,
     });
