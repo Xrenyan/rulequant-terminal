@@ -6,13 +6,45 @@ import { buildRuleSignature } from "@/lib/rules/rule-library";
 
 describe("cleaned rule library import", () => {
   it("contains every unique exported formula with stable source counts", () => {
-    expect(seedRules).toHaveLength(117);
-    expect(seedRules.filter((rule) => rule.sourceType === "manual")).toHaveLength(57);
+    expect(seedRules).toHaveLength(160);
+    expect(seedRules.filter((rule) => rule.sourceType === "manual")).toHaveLength(99);
     expect(seedRules.filter((rule) => rule.sourceType === "user_provided")).toHaveLength(53);
-    expect(seedRules.filter((rule) => rule.sourceType === "system_recommended")).toHaveLength(6);
+    expect(seedRules.filter((rule) => rule.sourceType === "system_recommended")).toHaveLength(8);
     expect(seedRules.filter((rule) => rule.id.startsWith("rq-docx-20260727-"))).toHaveLength(14);
     expect(seedRules.filter((rule) => rule.id.startsWith("rq-docx-20260729-"))).toHaveLength(25);
+    expect(seedRules.filter((rule) => rule.id.startsWith("rq-docx-20260816-"))).toHaveLength(44);
     expect(new Set(seedRules.map((rule) => rule.id)).size).toBe(seedRules.length);
+  });
+
+  it("bundles the latest formulas exported on 2026-08-16", () => {
+    expect(seedRules.some((rule) => rule.name === "L序杀一行 - 样例核心")).toBe(false);
+    expect(seedRules.find((rule) => rule.name === "D序杀一行 - 样例核心")?.formula).toBe(
+      "行(平1) + 尾(平2) + 特码行 + 期尾",
+    );
+    expect(seedRules.find((rule) => rule.name === "D序杀一肖-2026.08.16新增自创1")).toMatchObject({
+      orderMode: "D",
+      formula: "平2波+平3波+平5波+7",
+      enabled: true,
+      participatesInReference: true,
+    });
+    expect(seedRules.find((rule) => rule.name === "L序杀一肖-2026.08.16新增自创2")?.formula).toBe(
+      "平2波+平3波+平5波+5",
+    );
+    expect(seedRules.find((rule) => rule.name === "L序杀一肖-2026.08.16年规新增")?.formula).toBe(
+      "平1码+平3肖位+平3合+特码+5",
+    );
+    expect(seedRules.find((rule) => rule.name === "自动筛选 30020（已加入）")).toMatchObject({
+      category: "kill_tail",
+      formula: "平4头 + 平5段 + 期尾",
+      normalizer: "mod_10",
+      target: "special_tail",
+    });
+    expect(seedRules.find((rule) => rule.name === "自动筛选 20018（已加入）")).toMatchObject({
+      category: "kill_element",
+      formula: "平4波色值 + 平6尾",
+      normalizer: "subtract_5_to_1_5",
+      target: "special_element",
+    });
   });
 
   it("keeps the latest corrected formulas from the 116-rule archive", () => {
