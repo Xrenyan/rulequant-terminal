@@ -121,6 +121,7 @@ function mergeDrawLibraries(...libraries: DrawRecord[][]) {
 }
 
 const userCreatedRuleSources = new Set<RuleSourceType>(["manual", "txt_import", "system_recommended", "copied"]);
+const retiredSeedRuleIds = new Set(["rq-kill-element-l-core"]);
 const SELECTED_RULE_STORAGE_KEY = "rulequant:selectedRuleId";
 
 function readSelectedRuleId() {
@@ -148,6 +149,7 @@ function timestampValue(value?: string) {
 }
 
 function isUserCreatedRule(rule: Pick<RuleRecord, "id" | "sourceType">) {
+  if (retiredSeedRuleIds.has(rule.id)) return false;
   if (userCreatedRuleSources.has(rule.sourceType ?? "user_provided")) return true;
   return !seedRules.some((seedRule) => seedRule.id === rule.id);
 }
@@ -248,16 +250,19 @@ function normalizeConfigForCurrentRules(config?: RuleQuantConfig): RuleQuantConf
 
 function mergeRulesWithSeedRules(rules: RuleRecord[]) {
   const seedById = new Map(seedRules.map((rule) => [rule.id, rule]));
-  const normalizedRules = rules.map((rule) => normalizeRuleForLibrary(rule, seedById.get(rule.id))).reduce<RuleRecord[]>((deduplicated, rule) => {
-    const signature = buildRuleSignature(rule);
-    const duplicateIndex = deduplicated.findIndex((item) => buildRuleSignature(item) === signature);
-    if (duplicateIndex < 0) {
-      deduplicated.push(rule);
-    } else if (ruleSourcePriority(rule) > ruleSourcePriority(deduplicated[duplicateIndex])) {
-      deduplicated[duplicateIndex] = rule;
-    }
-    return deduplicated;
-  }, []);
+  const normalizedRules = rules
+    .filter((rule) => !retiredSeedRuleIds.has(rule.id))
+    .map((rule) => normalizeRuleForLibrary(rule, seedById.get(rule.id)))
+    .reduce<RuleRecord[]>((deduplicated, rule) => {
+      const signature = buildRuleSignature(rule);
+      const duplicateIndex = deduplicated.findIndex((item) => buildRuleSignature(item) === signature);
+      if (duplicateIndex < 0) {
+        deduplicated.push(rule);
+      } else if (ruleSourcePriority(rule) > ruleSourcePriority(deduplicated[duplicateIndex])) {
+        deduplicated[duplicateIndex] = rule;
+      }
+      return deduplicated;
+    }, []);
   const existingIds = new Set(normalizedRules.map((rule) => rule.id));
   const existingSignatures = new Set(normalizedRules.map(buildRuleSignature));
   const missingSeedRules = seedRules.filter((rule) => {

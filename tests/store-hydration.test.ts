@@ -19,6 +19,38 @@ function draw(issue: string, special: number): DrawRecord {
 }
 
 describe("store hydration draw freshness", () => {
+  it("retires a bundled formula removed by the latest full-library snapshot", () => {
+    const retiredRule = {
+      ...seedRules[0],
+      id: "rq-kill-element-l-core",
+      name: "L序杀一行 - 样例核心",
+      category: "kill_element" as const,
+      orderMode: "L" as const,
+      formula: "行(平1) + 行(平2) + 特码行 + 期尾",
+      normalizer: "subtract_5_to_1_5",
+      target: "special_element",
+      sourceType: "user_provided" as const,
+      updatedAt: "2026-06-24T00:00:00.000Z",
+    };
+    const persisted = {
+      draws: seedDraws,
+      rules: [...seedRules, retiredRule],
+      samples: seedSampleCases,
+      config: seedConfig,
+      logs: [],
+      backups: [],
+      referenceHistory: [],
+    };
+
+    const hydrated = buildHydratedState({
+      persisted,
+      current: { draws: seedDraws, rules: seedRules, selectedRuleId: retiredRule.id },
+    });
+
+    expect(hydrated.rules.some((rule) => rule.id === retiredRule.id)).toBe(false);
+    expect(hydrated.rules).toHaveLength(seedRules.length);
+  });
+
   it("adds newly shipped seed rules without removing a locally created rule", () => {
     const localRule = {
       ...seedRules[0],

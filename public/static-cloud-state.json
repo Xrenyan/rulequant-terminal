@@ -12745,13 +12745,15 @@
         "115 - 48 - 48 = 19 = 鼠"
       ],
       "createdAt": "2026-06-24T00:00:00.000Z",
-      "updatedAt": "2026-06-24T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_zodiac|special_zodiac|L|59+平1+平2+特码尾+总数尾|subtract_48_to_1_49|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-kill-sum-l-core",
@@ -12773,13 +12775,15 @@
       "sourceFile": "一条L序杀合数规.txt",
       "examples": [],
       "createdAt": "2026-06-24T00:00:00.000Z",
-      "updatedAt": "2026-06-24T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_sum|special_sum|L|平1+平3+期尾+特码合|subtract_13_to_1_13|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-kill-tail-d-core",
@@ -12801,14 +12805,15 @@
       "sourceFile": "D序杀规1（176错3）都是截止156期的数据。红=00蓝=01绿=0(1).txt",
       "examples": [],
       "createdAt": "2026-06-24T00:00:00.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "verifyOffset": 1,
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_tail|special_tail|D|6+平1五行值+平4+特码尾+总数尾|mod_10|||0|1|1"
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-kill-head-l-core",
@@ -12830,42 +12835,22 @@
       "sourceFile": "L序杀一头规.txt",
       "examples": [],
       "createdAt": "2026-06-24T00:00:00.000Z",
-      "updatedAt": "2026-06-24T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_head|special_head|L|平1头+平2头+期尾+特码头|subtract_5_to_0_4|||0|1|1"
-    },
-    {
-      "id": "rq-kill-element-l-core",
-      "name": "L序杀一行 - 样例核心",
-      "category": "kill_element",
-      "orderMode": "L",
-      "formula": "行(平1) + 行(平2) + 特码行 + 期尾",
-      "normalizer": "subtract_5_to_1_5",
-      "target": "special_element",
-      "verifyMode": "next_special",
-      "positionPattern": [],
-      "periodSpan": 1,
-      "enabled": true,
-      "tags": [
-        "L序",
-        "五行"
-      ],
-      "description": "用于验证五行值同义词：行 = 五行值。",
-      "sourceFile": "L序杀一行规公式.txt",
-      "examples": [],
-      "createdAt": "2026-06-24T00:00:00.000Z",
-      "updatedAt": "2026-06-24T00:00:00.000Z"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-kill-segment-macau",
       "name": "澳门杀一段 - 样例核心",
       "category": "kill_segment",
       "orderMode": "L",
-      "formula": "段(平1) + 段(平2) + 特码段 + 期尾",
+      "formula": "平1肖位 +平2五行+特码段 + 期尾",
       "normalizer": "subtract_7_to_1_7",
       "target": "special_segment",
       "verifyMode": "next_special",
@@ -12880,13 +12865,15 @@
       "sourceFile": "澳门杀一段规，要的拿走。.txt",
       "examples": [],
       "createdAt": "2026-06-24T00:00:00.000Z",
-      "updatedAt": "2026-06-24T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_segment|special_segment|L|平1段+平2段+期尾+特码段|subtract_7_to_1_7|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-seven-tail-core",
@@ -12910,13 +12897,15 @@
         "baseTail=9 -> 6,7,8,9,0,1,3"
       ],
       "createdAt": "2026-06-24T00:00:00.000Z",
-      "updatedAt": "2026-06-24T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "seven_tail|special_tail|L|特码尾|tail_offsets|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-odd-even-4455-core",
@@ -12953,11 +12942,13 @@
         "173期 平4兔40 + 1 = 41 单，174期虎41为单，正确"
       ],
       "createdAt": "2026-06-26T00:00:00.000Z",
-      "updatedAt": "2026-06-26T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
-      "librarySignature": "include_parity|special_parity|L|平4|parity_4455_plus_1_or_2|4,4,5,5|2026172|0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-eight-zodiac-core",
@@ -12995,13 +12986,15 @@
         "13马 +1 = 14蛇 -> 蛇、龙、兔、鸡、虎、牛、羊、鼠"
       ],
       "createdAt": "2026-06-24T00:00:00.000Z",
-      "updatedAt": "2026-06-24T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "eight_zodiac|special_zodiac|L|平1|eight_zodiac|1,2,3,4,5,6,5,4,3,2|2026169|0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-eight-zodiac-two-period",
@@ -13025,13 +13018,15 @@
         "狗 -> 牛、鼠、猪、狗、鸡、猴、羊、龙"
       ],
       "createdAt": "2026-06-24T00:00:00.000Z",
-      "updatedAt": "2026-06-24T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "eight_zodiac_two_period|special_zodiac|L|平6|eight_zodiac_two_period|||0|2|2"
+      "verifyOffset": 2,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-kill-three-as-nine",
@@ -13069,13 +13064,15 @@
       "sourceFile": "杀三肖可以当做九肖用、、20260606、、(取值平7654321.23456.7654321.23456.).txt",
       "examples": [],
       "createdAt": "2026-06-24T00:00:00.000Z",
-      "updatedAt": "2026-06-24T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_three_as_nine|special_zodiac|L|特码|kill_three_as_nine|7,6,5,4,3,2,1,2,3,4,5,6|2026167|0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-raw-d-kill-zodiac-327",
@@ -13100,13 +13097,15 @@
         "平5合尾+平4头+平6合+平4+平6+9"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_zodiac|special_zodiac|D|9+平4+平4头+平5合尾+平6+平6合|subtract_48_to_1_49|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-raw-d-kill-zodiac-rule1",
@@ -13131,13 +13130,15 @@
         "平2头+平3波+平4波+特行值"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_zodiac|special_zodiac|D|平2头+平3波色值+平4波色值+特码五行值值|subtract_48_to_1_49|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-raw-l-kill-zodiac-rule1",
@@ -13162,13 +13163,15 @@
         "平2头+平3波+平4波+特行值"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_zodiac|special_zodiac|L|平2头+平3波色值+平4波色值+特码五行值值|subtract_48_to_1_49|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-raw-l-kill-zodiac-rule5",
@@ -13193,13 +13196,15 @@
         "6+平1合+平2段+平4合+平6波"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_zodiac|special_zodiac|L|6+平1合+平2段+平4合+平6波色值|subtract_48_to_1_49|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-raw-l-kill-zodiac-rule10",
@@ -13224,13 +13229,15 @@
         "4+平1段+平3波+平3行+平6合+平6波+特码波+总数尾"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_zodiac|special_zodiac|L|4+平1段+平3波色值+平3五行值+平6波色值+平6合+特码波色值+总数尾|subtract_48_to_1_49|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-raw-l-kill-zodiac-rule4",
@@ -13255,13 +13262,15 @@
         "9+平1合+平3头+平5头"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_zodiac|special_zodiac|L|9+平1合+平3头+平5头|subtract_48_to_1_49|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-raw-l-kill-zodiac-7",
@@ -13286,13 +13295,15 @@
         "5+平2合+平3行+平5头+特合"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_zodiac|special_zodiac|L|5+平2合+平3五行值+平5头+特码合|subtract_48_to_1_49|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-raw-l-kill-zodiac-8",
@@ -13317,13 +13328,15 @@
         "7+平2合+平3行+平5头+特合"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_zodiac|special_zodiac|L|7+平2合+平3五行值+平5头+特码合|subtract_48_to_1_49|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-raw-l-kill-head",
@@ -13348,20 +13361,22 @@
         "平3波+平4行+平5波+平5合+特码行+特码+总数合"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_head|special_head|L|平3波色值+平4五行值+平5波色值+平5合+特码+特码五行值+总数合|subtract_5_to_0_4|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-raw-l-kill-element",
       "name": "L序杀一行 - 原始公式",
       "category": "kill_element",
       "orderMode": "L",
-      "formula": "平1尾 + 平1段 + 平4尾 + 平5合 + 平5五行值 + 总数合",
+      "formula": "平1尾 + 平1段 + 平4尾+ 平5合 + 平5五行值 + 总数合",
       "normalizer": "subtract_5_to_1_5",
       "target": "special_element",
       "verifyMode": "next_special",
@@ -13379,13 +13394,15 @@
         "平1尾+平1段+平4尾+平5合+平5五行值+总数合"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_element|special_element|L|平1段+平1尾+平4尾+平5合+平5五行值+总数合|subtract_5_to_1_5|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-raw-l-kill-sum",
@@ -13410,13 +13427,15 @@
         "8+平1合+平4码"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_sum|special_sum|L|8+平1合+平4码|subtract_13_to_1_13|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-macau-kill-sum-1",
@@ -13441,13 +13460,15 @@
         "7+平1段+平2段+平6头"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_sum|special_sum|D|7+平1段+平2段+平6头|subtract_13_to_1_13|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-macau-kill-sum-2",
@@ -13472,13 +13493,15 @@
         "8+平2五行值+平4头+平4五行值+平6合"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_sum|special_sum|D|8+平2五行值+平4头+平4五行值+平6合|subtract_13_to_1_13|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-macau-kill-sum-3",
@@ -13503,13 +13526,15 @@
         "12+平2头+平2波色值"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_sum|special_sum|D|12+平2波色值+平2头|subtract_13_to_1_13|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-macau-kill-tail-1",
@@ -13534,13 +13559,15 @@
         "6+平3头+平3波色值+平4五行值+平6尾+期数尾"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_tail|special_tail|D|6+平3波色值+平3头+平4五行值+平6尾+期尾|mod_10|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-macau-kill-tail-2",
@@ -13565,13 +13592,15 @@
         "4+平3五行值+平4头+特码段+总数尾+期数尾"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_tail|special_tail|D|4+平3五行值+平4头+期尾+特码段+总数尾|mod_10|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-macau-kill-zodiac-1",
@@ -13596,13 +13625,15 @@
         "4+平3尾+平5五行值+平6头+平6段+特码+特码波色值"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_zodiac|special_zodiac|L|4+平3尾+平5五行值+平6段+平6头+特码+特码波色值|subtract_48_to_1_49|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-macau-kill-zodiac-2-l",
@@ -13627,13 +13658,15 @@
         "5+平4五行值+平6尾+平6波色值"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_zodiac|special_zodiac|L|5+平4五行值+平6波色值+平6尾|subtract_48_to_1_49|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-macau-kill-zodiac-2-d",
@@ -13658,13 +13691,15 @@
         "5+平4五行值+平6尾+平6波色值"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_zodiac|special_zodiac|D|5+平4五行值+平6波色值+平6尾|subtract_48_to_1_49|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-macau-kill-zodiac-image-line",
@@ -13690,13 +13725,15 @@
         "2+平2五行值+平3+平4合+平5段+平6波色值"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_zodiac|special_zodiac|L|2+平2五行值+平3+平4合+平5段+平6波色值|subtract_48_to_1_49|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-raw-seven-tail-macau-2",
@@ -13723,11 +13760,13 @@
         "172期8+5+1+9=23，0123457尾，173开蛇26错"
       ],
       "createdAt": "2026-06-27T00:00:00.000Z",
-      "updatedAt": "2026-06-27T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
-      "librarySignature": "seven_tail|special_tail|L|平1尾+平2段+平2五行值+平5合|tail_offsets|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-raw-macau-kill-zodiac-6",
@@ -13753,13 +13792,15 @@
         "平1尾+平4合+期合+平1合尾+平3合尾+8"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_zodiac|special_zodiac|D|8+平1合尾+平1尾+平3合尾+平4合+期合|subtract_48_to_1_49|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-raw-macau-kill-zodiac-7",
@@ -13785,13 +13826,15 @@
         "落6行+落2波+特尾+特号+特合尾+1"
       ],
       "createdAt": "2026-06-25T00:00:00.000Z",
-      "updatedAt": "2026-06-25T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "sourceType": "user_provided",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
       "participatesInReference": true,
-      "librarySignature": "kill_zodiac|special_zodiac|L|1+平2波色值+平6五行值+特码+特码合尾+特码尾|subtract_48_to_1_49|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-nine-zodiac-three-clash",
@@ -13842,11 +13885,13 @@
         "175平5兔28+1=29虎(猴)牛鼠(马)猪狗(龙)鸡"
       ],
       "createdAt": "2026-06-27T00:00:00.000Z",
-      "updatedAt": "2026-06-27T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
-      "librarySignature": "nine_zodiac|special_zodiac|L|平1|nine_zodiac_plus_1_three_clash|1,2,3,4,5,6,5,4,3,2,1,2,3,4,5,6,5,4,3,2|2026139|0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-seven-tail-d-161",
@@ -13873,11 +13918,13 @@
         "161期定位尾数8 -> 4、5、7、9、1、2、3"
       ],
       "createdAt": "2026-07-10T00:00:00.000Z",
-      "updatedAt": "2026-07-10T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
-      "librarySignature": "seven_tail|special_tail|D|平1尾+平5段+特码尾|tail_offsets:-4,-3,-1,1,3,4,5|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-kill-element-d-user",
@@ -13902,11 +13949,13 @@
       "sourceFile": "用户补充D序杀一行",
       "examples": [],
       "createdAt": "2026-07-10T00:00:00.000Z",
-      "updatedAt": "2026-07-10T00:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "canCompute": true,
       "parseStatus": "parsed",
       "verifyStatus": "unchecked",
-      "librarySignature": "kill_element|special_element|D|平2尾+平3尾+特码合+特码五行值|subtract_5_to_1_5|||0|1|1"
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-half-head-l-user",
@@ -13934,8 +13983,10 @@
       "sourceFile": "用户补充杀半头L序",
       "examples": [],
       "createdAt": "2026-07-12T00:00:00.000Z",
-      "updatedAt": "2026-07-12T00:00:00.000Z",
-      "librarySignature": "kill_half_head|special_number|L|平2尾+平3尾+平6头+特码合|half_head_digit|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z",
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-half-head-d-user",
@@ -13963,8 +14014,10 @@
       "sourceFile": "用户补充杀半头D序",
       "examples": [],
       "createdAt": "2026-07-12T00:00:00.000Z",
-      "updatedAt": "2026-07-12T00:00:00.000Z",
-      "librarySignature": "kill_half_head|special_number|D|平1头+平2头|half_head_digit|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z",
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-kill-color-l-user",
@@ -13992,8 +14045,10 @@
       "sourceFile": "用户补充杀一波",
       "examples": [],
       "createdAt": "2026-07-12T00:00:00.000Z",
-      "updatedAt": "2026-07-12T00:00:00.000Z",
-      "librarySignature": "kill_color|special_color|L|平1+平2五行值+平4波色值+平4头+平5段+特码尾|mod_3|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z",
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-kill-door-l-user",
@@ -14021,8 +14076,10 @@
       "sourceFile": "用户补充杀一门",
       "examples": [],
       "createdAt": "2026-07-12T00:00:00.000Z",
-      "updatedAt": "2026-07-12T00:00:00.000Z",
-      "librarySignature": "kill_door|special_number|L|平2尾+平3尾+期尾+特码合+特码五行值|subtract_5_to_1_5|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z",
+      "verifyOffset": 1,
+      "manuallyConfirmed": false,
+      "origin": "RuleQuant-全部公式-160条-20260816.docx"
     },
     {
       "id": "rq-manual-html-20260716-043",
@@ -14049,12 +14106,11 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "kill_zodiac|special|L|3+平2合+平3五行值+平5头+平6波色值+特码合|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-manual-html-20260716-044",
@@ -14081,12 +14137,11 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "nine_zodiac|special|L|1+平4位+平2尾+平3头+平5波色值+平6五行值-特码合|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-manual-html-20260716-045",
@@ -14113,12 +14168,11 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "kill_sum|special|D|8+平2五行值+平4头+平4五行值+平6合|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-manual-html-20260716-046",
@@ -14145,16 +14199,15 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_tail|special|D|4+平3五行值+平4头+平6波色值+期尾+特码段+总数尾|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-manual-html-20260716-047",
-      "name": "杀一尾公式1：",
+      "name": "L序杀一尾公式1：",
       "category": "kill_tail",
       "orderMode": "L",
       "formula": "7+平2尾",
@@ -14177,12 +14230,11 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "kill_tail|special|L|7+平2尾|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-manual-html-20260716-048",
@@ -14209,12 +14261,11 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "kill_zodiac|special|L|5+平1+平2+平3五行值+特码尾+总数尾|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-manual-html-20260716-049",
@@ -14270,9 +14321,8 @@
       "sourceFile": "常用模板添加",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "anchorIssue": "2026163",
-      "librarySignature": "nine_zodiac|special_zodiac|L|平5|zodiac_offsets:1,2,3,5,6,7,8,11,12|1,2,3,4,5,6,7,6,5,4,3,2,1,2,3,4,5,6,7,6,5,4,3,2|2026163|0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z",
+      "anchorIssue": "2026163"
     },
     {
       "id": "rq-manual-html-20260716-050",
@@ -14299,12 +14349,11 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "kill_zodiac|special|L|9+平1+平2+特码尾+总数尾|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-manual-html-20260716-051",
@@ -14335,9 +14384,8 @@
       "sourceFile": "粘贴原文识别",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "anchorIssue": "2026164",
-      "librarySignature": "nine_zodiac|special_zodiac|L|平6|zodiac_offsets:+1234567911||2026164|0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z",
+      "anchorIssue": "2026164"
     },
     {
       "id": "rq-manual-html-20260716-052",
@@ -14375,8 +14423,7 @@
       "sourceFile": "常用模板添加",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "six_zodiac|special_zodiac|L|平3|zodiac_set_offsets:-7,-1,0,1,2,3,4,8|3,2,1,3,2,1||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-manual-html-20260716-053",
@@ -14407,9 +14454,8 @@
       "sourceFile": "常用模板添加",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "anchorIssue": "2026185",
-      "librarySignature": "seven_tail|special_tail|L|特码尾|tail_window:left=3,right=3||2026185|0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z",
+      "anchorIssue": "2026185"
     },
     {
       "id": "rq-manual-html-20260716-054",
@@ -14436,12 +14482,11 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "kill_sum|special|L|平1合+平2尾+特码合|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-manual-html-20260716-055",
@@ -14468,12 +14513,11 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_element|special|L|平2尾+平3合尾+特码合+特码五行值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-manual-html-20260716-056",
@@ -14500,12 +14544,11 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "kill_element|special|D|平2+平3尾+特码合+特码五行值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-manual-html-20260716-057",
@@ -14532,19 +14575,18 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "kill_segment|special|D|3+平5合+平6+特码波色值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-manual-html-20260716-058",
-      "name": "D杀一段规1：2026.0709起",
+      "name": "D杀一段规1：2026.0709起自己用2",
       "category": "kill_segment",
       "orderMode": "D",
-      "formula": "2+平1五行值+平2尾+平4头+平5段+平6波色值",
+      "formula": "3+平1五行值+平2头+平4头+平5段+平6波色值",
       "normalizer": "auto",
       "target": "special",
       "verifyMode": "next_special",
@@ -14564,16 +14606,15 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "kill_segment|special|D|2+平1五行值+平2尾+平4头+平5段+平6波色值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-manual-html-20260716-059",
-      "name": "L序杀一段规2026.07.09新增",
+      "name": "L序杀一段规2026.07.09新增自己用3",
       "category": "kill_segment",
       "orderMode": "L",
       "formula": "5+平1+平2+平3头+平4段+平5",
@@ -14596,12 +14637,11 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "kill_segment|special|L|5+平1+平2+平3头+平4段+平5|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-manual-html-20260716-060",
@@ -14628,19 +14668,18 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "kill_segment|special|L|6+平2头+平4段+平5段+平5尾+特码|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-manual-html-20260716-061",
       "name": "L序杀一头规2026.07.14新增",
       "category": "kill_head",
       "orderMode": "L",
-      "formula": "平3波 + 平4行 + 平5波 + 平5合 + 特码行 + 特码 + 总数尾",
+      "formula": "平3波 + 平4位+ 平5波 + 平5合 + 特码行+特码 + 总数尾",
       "normalizer": "auto",
       "target": "special",
       "verifyMode": "next_special",
@@ -14660,12 +14699,11 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "kill_head|special|L|平3波色值+平4五行值+平5波色值+平5合+特码+特码五行值+总数尾|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-manual-html-20260716-062",
@@ -14692,19 +14730,18 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "kill_color|special|L|平1合+平3合尾+平4合+特码合尾|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-manual-html-20260716-063",
       "name": "D序杀一波色- 新增2026.07.15",
       "category": "kill_color",
       "orderMode": "D",
-      "formula": "平3头+平4五行值+平5波色+平6合+特码波",
+      "formula": "平3波+平4五行值+平5波色+平6合+特码波",
       "normalizer": "auto",
       "target": "special",
       "verifyMode": "next_special",
@@ -14724,12 +14761,11 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_color|special|D|平3头+平4五行值+平5波色值+平6合+特码波色值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-system-html-20260716-064",
@@ -14760,8 +14796,7 @@
       "sourceFile": "系统自动筛选",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "kill_sum|special_sum|L|期尾+特码合|subtract_13_to_1_13|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-system-html-20260716-065",
@@ -14792,8 +14827,7 @@
       "sourceFile": "系统自动筛选",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "kill_zodiac|special_zodiac|L|平2尾+平4段|subtract_48_to_1_49|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-system-html-20260716-066",
@@ -14824,8 +14858,7 @@
       "sourceFile": "系统自动筛选",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "kill_zodiac|special_zodiac|L|平1尾+平2尾|subtract_48_to_1_49|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-system-html-20260716-067",
@@ -14856,8 +14889,7 @@
       "sourceFile": "系统自动筛选",
       "examples": [],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_tail|special_tail|L|4+平1段+平3头+期尾+总数尾|mod_10|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-system-html-20260716-068",
@@ -14890,8 +14922,7 @@
         "RuleQuant 公式库导出 · 文档中的状态以导出时设备保存内容为准。"
       ],
       "createdAt": "2026-07-16T16:38:37.000Z",
-      "updatedAt": "2026-07-16T16:38:37.000Z",
-      "librarySignature": "kill_sum|special_sum|L|平1尾+期尾|subtract_13_to_1_13|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260727-001",
@@ -14922,8 +14953,7 @@
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-27T18:01:26.000Z",
-      "updatedAt": "2026-07-27T18:01:26.000Z",
-      "librarySignature": "kill_element|special|D|1+平3合+平3五行值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260727-069",
@@ -14956,8 +14986,7 @@
         "平1尾+平2段+平2五行值+平5合"
       ],
       "createdAt": "2026-07-27T18:01:26.000Z",
-      "updatedAt": "2026-07-27T18:01:26.000Z",
-      "librarySignature": "seven_tail|special_tail|L|平1尾+平2段+平2五行值+平5合+平6波色值|tail_offsets|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260727-070",
@@ -14988,8 +15017,7 @@
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-27T18:01:26.000Z",
-      "updatedAt": "2026-07-27T18:01:26.000Z",
-      "librarySignature": "kill_head|special|D|平3尾+平4头+特码合+特码五行值-总数尾|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260727-071",
@@ -15020,8 +15048,7 @@
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-27T18:01:26.000Z",
-      "updatedAt": "2026-07-27T18:01:26.000Z",
-      "librarySignature": "kill_half_head|special|L|平1尾+平3合+平4五行值+平6五行值+特码头|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260727-072",
@@ -15052,15 +15079,14 @@
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-27T18:01:26.000Z",
-      "updatedAt": "2026-07-27T18:01:26.000Z",
-      "librarySignature": "kill_half_head|special|D|平1尾+平3尾+平4五行值+平6五行值+特码头|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260727-073",
       "name": "D序杀一门 -2026.07.25新增",
       "category": "kill_door",
       "orderMode": "D",
-      "formula": "平2 + 平3头 + 平4尾 + 平5段 + 平6头",
+      "formula": "平2 + 平3头 + 平4头 + 平5段 + 平6头",
       "normalizer": "auto",
       "target": "special",
       "verifyMode": "next_special",
@@ -15084,8 +15110,7 @@
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-27T18:01:26.000Z",
-      "updatedAt": "2026-07-27T18:01:26.000Z",
-      "librarySignature": "kill_door|special|D|平2+平3头+平4尾+平5段+平6头|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260727-074",
@@ -15116,8 +15141,7 @@
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-27T18:01:26.000Z",
-      "updatedAt": "2026-07-27T18:01:26.000Z",
-      "librarySignature": "kill_door|special|D|2+平1+平6五行值+特码|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260727-075",
@@ -15148,8 +15172,7 @@
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-27T18:01:26.000Z",
-      "updatedAt": "2026-07-27T18:01:26.000Z",
-      "librarySignature": "kill_color|special|L|平4合尾+特码波色值+特码五行值值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260727-076",
@@ -15180,15 +15203,14 @@
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-27T18:01:26.000Z",
-      "updatedAt": "2026-07-27T18:01:26.000Z",
-      "librarySignature": "kill_color|special|L|2+平3波色值+平4段+平5合+特码波色值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260727-077",
       "name": "L序杀一段 -2026.07.28新增",
       "category": "kill_segment",
       "orderMode": "L",
-      "formula": "5 + 平1 + 平2 + 平3头 + 平4段 + 平5波色值",
+      "formula": "5+ 平1波色 + 平2合+ 平3头+ 平5波色值+特码尾",
       "normalizer": "auto",
       "target": "special",
       "verifyMode": "next_special",
@@ -15212,15 +15234,14 @@
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-27T18:01:26.000Z",
-      "updatedAt": "2026-07-27T18:01:26.000Z",
-      "librarySignature": "kill_segment|special|L|5+平1+平2+平3头+平4段+平5波色值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260727-078",
       "name": "L序杀一头-2026.07.28新增",
       "category": "kill_head",
       "orderMode": "L",
-      "formula": "4 + 特码头",
+      "formula": "4 + 特码头+平3位",
       "normalizer": "auto",
       "target": "special",
       "verifyMode": "next_special",
@@ -15244,8 +15265,7 @@
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-27T18:01:26.000Z",
-      "updatedAt": "2026-07-27T18:01:26.000Z",
-      "librarySignature": "kill_head|special|L|4+特码头|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260727-079",
@@ -15276,15 +15296,14 @@
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-27T18:01:26.000Z",
-      "updatedAt": "2026-07-27T18:01:26.000Z",
-      "librarySignature": "kill_segment|special|L|3+平1尾+平5波色值+平5段+平5五行值+特码头|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260727-080",
       "name": "L序杀一段 -2026.07.28新增2",
       "category": "kill_segment",
       "orderMode": "L",
-      "formula": "5 + 平1头 + 平2五行值 + 平5段 + 平2尾 + 特码头",
+      "formula": "6+ 平1头 + 平2五行值 + 平3波+平5合 + 特码尾",
       "normalizer": "auto",
       "target": "special",
       "verifyMode": "next_special",
@@ -15308,8 +15327,7 @@
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-27T18:01:26.000Z",
-      "updatedAt": "2026-07-27T18:01:26.000Z",
-      "librarySignature": "kill_segment|special|L|5+平1头+平2尾+平2五行值+平5段+特码头|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260727-081",
@@ -15340,8 +15358,7 @@
       "sourceFile": "系统自动筛选",
       "examples": [],
       "createdAt": "2026-07-27T18:01:26.000Z",
-      "updatedAt": "2026-07-27T18:01:26.000Z",
-      "librarySignature": "kill_zodiac|special_zodiac|L|平4头+期尾+特码五行值|subtract_48_to_1_49|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "verifyMode": "next_special",
@@ -15358,7 +15375,7 @@
       "verifyStatus": "unchecked",
       "sourceFile": "用户补充规则",
       "createdAt": "2026-07-29T10:00:00.000Z",
-      "updatedAt": "2026-07-29T10:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "id": "rq-user-20260729-kill-sum-01",
       "name": "D序杀一合 - 多属性组合",
       "category": "kill_sum",
@@ -15374,8 +15391,7 @@
       "description": "多个号码属性相加，结果循环减13至1-13，得到要排除的合数。",
       "examples": [
         "用206期数据计算207期：总和47，47-13-13-13=8，207期杀8合。"
-      ],
-      "librarySignature": "kill_sum|special_sum|D|9+平1头+平1位+平3合+平3合尾+平4段+平5波色值+平5头+平6段|subtract_13_to_1_13|||0|1|1"
+      ]
     },
     {
       "verifyMode": "next_special",
@@ -15392,7 +15408,7 @@
       "verifyStatus": "unchecked",
       "sourceFile": "用户补充规则",
       "createdAt": "2026-07-29T10:00:00.000Z",
-      "updatedAt": "2026-07-29T10:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "id": "rq-user-20260729-kill-sum-02",
       "name": "D序杀一合 - 特合平3位",
       "category": "kill_sum",
@@ -15408,8 +15424,7 @@
       "description": "特码合、平3生肖位置和平3合尾相加，结果循环减13。",
       "examples": [
         "用206期数据计算207期：总和31，31-13-13=5，207期杀5合。"
-      ],
-      "librarySignature": "kill_sum|special_sum|D|3+平3合尾+平3位+特码合|subtract_13_to_1_13|||0|1|1"
+      ]
     },
     {
       "verifyMode": "next_special",
@@ -15426,7 +15441,7 @@
       "verifyStatus": "unchecked",
       "sourceFile": "用户补充规则",
       "createdAt": "2026-07-29T10:00:00.000Z",
-      "updatedAt": "2026-07-29T10:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "id": "rq-user-20260729-kill-sum-03",
       "name": "D序杀一合 - 波段总分尾",
       "category": "kill_sum",
@@ -15442,8 +15457,7 @@
       "description": "头、波色值、段位和总数尾相加，结果循环减13。总分尾等同总数尾。",
       "examples": [
         "用206期数据计算207期：总数220、总数尾0，总和17，17-13=4，207期杀4合。"
-      ],
-      "librarySignature": "kill_sum|special_sum|D|6+平3波色值+平5波色值+平5段+平6头+特码波色值+总数尾|subtract_13_to_1_13|||0|1|1"
+      ]
     },
     {
       "verifyMode": "next_special",
@@ -15460,7 +15474,7 @@
       "verifyStatus": "unchecked",
       "sourceFile": "用户补充规则",
       "createdAt": "2026-07-29T10:00:00.000Z",
-      "updatedAt": "2026-07-29T10:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "id": "rq-user-20260729-kill-sum-04",
       "name": "L序杀一合 - 行波尾码",
       "category": "kill_sum",
@@ -15476,8 +15490,7 @@
       "description": "按落球顺序取五行、波色、尾数和第5位号码，结果循环减13。",
       "examples": [
         "用206期数据计算207期：总和70，循环减13后为5，207期杀5合。"
-      ],
-      "librarySignature": "kill_sum|special_sum|L|11+平1波色值+平2尾+平2五行值+平5码+平6波色值+平6尾|subtract_13_to_1_13|||0|1|1"
+      ]
     },
     {
       "verifyMode": "next_special",
@@ -15494,7 +15507,7 @@
       "verifyStatus": "unchecked",
       "sourceFile": "用户补充规则",
       "createdAt": "2026-07-29T10:00:00.000Z",
-      "updatedAt": "2026-07-29T10:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "id": "rq-user-20260729-kill-sum-05",
       "name": "L序杀一合 - 肖位合尾",
       "category": "kill_sum",
@@ -15510,8 +15523,7 @@
       "description": "号码属性与固定生肖位置相加。肖位按鼠1、牛2至猪12。",
       "examples": [
         "用206期数据计算207期：总和49，循环减13后为10，207期杀10合。"
-      ],
-      "librarySignature": "kill_sum|special_sum|L|4+平2合+平2头+平5合尾+平5位+特码合+特码位|subtract_13_to_1_13|||0|1|1"
+      ]
     },
     {
       "verifyMode": "next_special",
@@ -15528,7 +15540,7 @@
       "verifyStatus": "unchecked",
       "sourceFile": "用户补充规则",
       "createdAt": "2026-07-29T10:00:00.000Z",
-      "updatedAt": "2026-07-29T10:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "id": "rq-user-20260729-kill-half-color-01",
       "name": "D序杀半波 - 五行波段组合",
       "category": "kill_half_color",
@@ -15545,8 +15557,7 @@
       "examples": [
         "用206期数据计算207期：2+2+4+1+10+2+47+5=73，循环减6得1，杀红单。",
         "用207期数据计算208期：3+1+4+0+8+2+31+5=54，循环减6得0，杀红双。"
-      ],
-      "librarySignature": "kill_half_color|special_number|D|5+平2波色值+平2段+平2五行值+平4合+平6头+特码+特码五行值|subtract_6_to_0_5|||0|1|1"
+      ]
     },
     {
       "verifyMode": "next_special",
@@ -15563,7 +15574,7 @@
       "verifyStatus": "unchecked",
       "sourceFile": "用户补充规则",
       "createdAt": "2026-07-29T10:00:00.000Z",
-      "updatedAt": "2026-07-29T10:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "id": "rq-user-20260729-seven-tail-01",
       "name": "D序七尾 - 多属性连续尾",
       "category": "seven_tail",
@@ -15579,8 +15590,7 @@
       "description": "公式总和取个位作为定位尾，连续取定位尾及后6个尾数。",
       "examples": [
         "用206期数据计算：总和47，定位尾7，207期主7、8、9、0、1、2、3尾。"
-      ],
-      "librarySignature": "seven_tail|special_tail|D|7+平1头+平3位+平4尾+平5段+平6波色值+平6合尾+特码头+特码位|tail_offsets:0,1,2,3,4,5,6|||0|1|1"
+      ]
     },
     {
       "verifyMode": "next_special",
@@ -15597,7 +15607,7 @@
       "verifyStatus": "unchecked",
       "sourceFile": "用户补充规则",
       "createdAt": "2026-07-29T10:00:00.000Z",
-      "updatedAt": "2026-07-29T10:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "id": "rq-user-20260729-seven-tail-02",
       "name": "L序七尾 - 期号总数综合",
       "category": "seven_tail",
@@ -15613,8 +15623,7 @@
       "description": "号码属性、完整三位期号、期合和总数相加，取个位后连续取7尾。",
       "examples": [
         "用206期数据计算：总和508，定位尾8，207期主8、9、0、1、2、3、4尾。"
-      ],
-      "librarySignature": "seven_tail|special_tail|L|6+平3头+平4波色值+平5五行值+平6尾+期号+期合+期合尾+特码+总数|tail_offsets:0,1,2,3,4,5,6|||0|1|1"
+      ]
     },
     {
       "verifyMode": "next_special",
@@ -15631,7 +15640,7 @@
       "verifyStatus": "unchecked",
       "sourceFile": "用户补充规则",
       "createdAt": "2026-07-29T10:00:00.000Z",
-      "updatedAt": "2026-07-29T10:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "id": "rq-user-20260729-seven-tail-03",
       "name": "L序七尾 - 落5属性组合",
       "category": "seven_tail",
@@ -15647,8 +15656,7 @@
       "description": "落5多种属性与期号、特合尾等相加，取个位后连续取7尾。",
       "examples": [
         "用206期数据计算：总和248，定位尾8，207期主8、9、0、1、2、3、4尾。"
-      ],
-      "librarySignature": "seven_tail|special_tail|L|7+平1合尾+平4波色值+平5波色值+平5合尾+平5头+平5位+平5五行值+平6合+期号+特码合尾|tail_offsets:0,1,2,3,4,5,6|||0|1|1"
+      ]
     },
     {
       "verifyMode": "next_special",
@@ -15665,7 +15673,7 @@
       "verifyStatus": "unchecked",
       "sourceFile": "用户补充规则",
       "createdAt": "2026-07-29T10:00:00.000Z",
-      "updatedAt": "2026-07-29T10:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "id": "rq-user-20260729-seven-tail-04",
       "name": "L序七尾 - 落4头特波落3段",
       "category": "seven_tail",
@@ -15681,8 +15689,7 @@
       "description": "公式总和取个位作为定位尾，连续取定位尾及后6个尾数。",
       "examples": [
         "用206期数据计算：总和13，定位尾3，207期主3、4、5、6、7、8、9尾。"
-      ],
-      "librarySignature": "seven_tail|special_tail|L|6+平3段+平4头+特码波色值|tail_offsets:0,1,2,3,4,5,6|||0|1|1"
+      ]
     },
     {
       "verifyMode": "next_special",
@@ -15699,9 +15706,9 @@
       "verifyStatus": "unchecked",
       "sourceFile": "用户补充规则",
       "createdAt": "2026-07-29T10:00:00.000Z",
-      "updatedAt": "2026-07-29T10:00:00.000Z",
+      "updatedAt": "2026-08-16T12:16:24Z",
       "id": "rq-user-20260729-kill-head-01",
-      "name": "D序杀一头 - 平1平3波加平6",
+      "name": "D序杀一头 - 平1平3波加平6自用头1",
       "category": "kill_head",
       "orderMode": "D",
       "formula": "平1波色值 + 平3波色值 + 平6 + 4",
@@ -15715,8 +15722,7 @@
       "description": "公式结果循环减5直到小于5，得到要排除的头数。",
       "examples": [
         "预测210期手算：2+2+44+4=52，52-50=2，杀2头。"
-      ],
-      "librarySignature": "kill_head|special_head|D|4+平1波色值+平3波色值+平6|subtract_5_to_0_4|||0|1|1"
+      ]
     },
     {
       "id": "rq-docx-20260729-005",
@@ -15747,8 +15753,7 @@
       "sourceFile": "L序杀一行规公式.txt",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_element|special_element|D|平1五行值+平2尾+期尾+特码五行值|subtract_5_to_1_5|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-093",
@@ -15775,12 +15780,11 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_zodiac|special|D|2+平2头+平3波色值+平4段+特码五行值值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-094",
@@ -15807,12 +15811,11 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_zodiac|special|L|1+平2头+平3波色值+平4段+平6头+特码五行值值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-095",
@@ -15839,12 +15842,11 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_zodiac|special|D|平2头+平3波色值+平4段+平6合尾+特码五行值值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-096",
@@ -15871,12 +15873,11 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_zodiac|special|D|2+平2头+平3波色值+平4段+平6合尾+特码五行值值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-097",
@@ -15903,12 +15904,11 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_zodiac|special|D|2+平2头+平3波色值+平4段+平6合+特码五行值值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-098",
@@ -15935,12 +15935,11 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_zodiac|special|L|平2头+平3波色值+平4段+平6合+特码五行值值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-099",
@@ -15967,12 +15966,11 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_zodiac|special|D|平2头+平3波色值+平4段+平6合+特码五行值值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-100",
@@ -15999,12 +15997,11 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_element|special|D|3+平2段+平4合+平5段+平6头|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-101",
@@ -16031,12 +16028,11 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "seven_tail|special|L|平2波色值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-102",
@@ -16063,12 +16059,11 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_zodiac|special|L|11+期尾|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-103",
@@ -16095,12 +16090,11 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_zodiac|special|L|平3+平3段|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-104",
@@ -16127,16 +16121,15 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_head|special|L|平1+平2五行值+平4波色值+平4头+平4五行值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-105",
-      "name": "D序杀一肖-2026.07.29新增杀肖类 [D序]",
+      "name": "D序杀一肖-2026.07.29新增杀肖类 [D序]自用杀肖4",
       "category": "kill_zodiac",
       "orderMode": "D",
       "formula": "平5位+平2码+平5码+11",
@@ -16159,16 +16152,15 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_zodiac|special|D|11+平2码+平5码+平5位|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-106",
-      "name": "L序杀一肖 - 2026.07.29新增杀肖类 [L序]",
+      "name": "L序杀一肖 - 2026.07.29新增杀肖类 [L序]自用6",
       "category": "kill_zodiac",
       "orderMode": "L",
       "formula": "落1行+落2行+落6行+落1头+特段+落3段+落5位+落3码+总数尾+5",
@@ -16191,12 +16183,11 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_zodiac|special|L|5+平1头+平1五行值+平2五行值+平3段+平3码+平5位+平6五行值+特码段+总数尾|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-107",
@@ -16223,16 +16214,15 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_zodiac|special|L|8+平3码+总数合|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-108",
-      "name": "D序杀一肖-2026.07.29新增1杀肖类 [D序]",
+      "name": "D序杀一肖-2026.07.29新增1杀肖类 [D序]自用5",
       "category": "kill_zodiac",
       "orderMode": "D",
       "formula": "1+平6波+平2合+平3合+平5合+平4位+期尾",
@@ -16255,16 +16245,15 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_zodiac|special|D|1+平2合+平3合+平4位+平5合+平6波色值+期尾|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-109",
-      "name": "D序杀一段 -2026.07.29新增杀段类 [D序]",
+      "name": "D序杀一段 -2026.07.29新增杀段类 [D序]自己用",
       "category": "kill_segment",
       "orderMode": "D",
       "formula": "平2尾+平5合+平6段+平3码+3",
@@ -16287,12 +16276,11 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_segment|special|D|3+平2尾+平3码+平5合+平6段|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-110",
@@ -16319,12 +16307,11 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_segment|special|D|1+平2段+平3波色值+平3位+平5码+平6码+平6头+平6尾+特码头|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-111",
@@ -16351,12 +16338,11 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_tail|special|L|6+平2波色值+平3码+特码波色值|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-112",
@@ -16383,12 +16369,11 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_tail|special|D|5+平2段+平2头+平4五行值+平5段+平5码+平6段+期数+特码段+总数合|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-113",
@@ -16415,12 +16400,11 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_segment|special|L|3+平2尾+平3码+平5合+平6段|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-114",
@@ -16447,12 +16431,11 @@
         "D序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_zodiac|special|D|8+平3码+总数合|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-115",
@@ -16479,12 +16462,11 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_zodiac|special|L|1+特码位|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
     },
     {
       "id": "rq-docx-20260729-116",
@@ -16511,12 +16493,1375 @@
         "L序",
         "人工新增公式"
       ],
-      "description": "暂无说明",
+      "description": "",
       "sourceFile": "手动录入",
       "examples": [],
       "createdAt": "2026-07-29T10:13:34.000Z",
-      "updatedAt": "2026-07-29T10:13:34.000Z",
-      "librarySignature": "kill_sum|special|L|11+平1波色值+平2尾+平2五行值+平5码+平6波色值+平6尾|auto|||0|1|1"
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-001",
+      "name": "D序杀一肖-2026.08.16新增自创1",
+      "category": "kill_zodiac",
+      "orderMode": "D",
+      "formula": "平2波+平3波+平5波+7",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "D序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-002",
+      "name": "L序杀一肖-2026.08.16新增自创2",
+      "category": "kill_zodiac",
+      "orderMode": "L",
+      "formula": "平2波+平3波+平5波+5",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-003",
+      "name": "L序杀一肖-2026.08.16新增自创1",
+      "category": "kill_zodiac",
+      "orderMode": "L",
+      "formula": "00+平2波+平3头+平3波+平3肖位+平4肖位+平6波+2",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-004",
+      "name": "D序杀一肖-2026.08.16年规新增",
+      "category": "kill_zodiac",
+      "orderMode": "D",
+      "formula": "平1波+平2波+平3头+平3波+平3肖位+平4肖位+平6波",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "D序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-005",
+      "name": "L序杀一肖-2026.08.16年规新增1",
+      "category": "kill_zodiac",
+      "orderMode": "L",
+      "formula": "平2波+平3头+平3波+平3肖位+平4肖位+平6波+6",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-006",
+      "name": "L序杀一肖-2026.08.16年规新增",
+      "category": "kill_zodiac",
+      "orderMode": "L",
+      "formula": "平1码+平3肖位+平3合+特码+5",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-123",
+      "name": "L序杀一头-2026.07.29新增",
+      "category": "kill_head",
+      "orderMode": "D",
+      "formula": "2+期数尾+平1波色+平3波色",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一头",
+        "D序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-124",
+      "name": "D序杀一头 -2026.07.30新增",
+      "category": "kill_head",
+      "orderMode": "D",
+      "formula": "平1波色值+平3合尾+平6+4",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一头",
+        "D序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-125",
+      "name": "L序杀一肖 - 2026.07.30新增1自用7",
+      "category": "kill_zodiac",
+      "orderMode": "L",
+      "formula": "10+平5波色值",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-126",
+      "name": "L序杀一肖 - 2026.07.30新增",
+      "category": "kill_zodiac",
+      "orderMode": "L",
+      "formula": "7+平6",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-127",
+      "name": "L序杀一肖 - 2026.07.30新增2",
+      "category": "kill_zodiac",
+      "orderMode": "L",
+      "formula": "7+平3",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-128",
+      "name": "L序杀一段-2026.07.31新增杀段类 [L序]",
+      "category": "kill_segment",
+      "orderMode": "L",
+      "formula": "3+平3波色+平4波色+平5合+特码波色",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一段",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-129",
+      "name": "D序杀一门 -2026.07.31新增",
+      "category": "kill_door",
+      "orderMode": "D",
+      "formula": "平3波+平4波+平5波+总分合+特码",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一门",
+        "D序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-130",
+      "name": "L序杀一肖 - 2027.07.31新增",
+      "category": "kill_zodiac",
+      "orderMode": "L",
+      "formula": "5+落1行+落5合尾+特尾+落3尾+特肖位+落4码+期尾+特合尾+落1合尾+落4合尾",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-131",
+      "name": "L序杀一肖 - 2027.08.03新增自用杀肖4",
+      "category": "kill_zodiac",
+      "orderMode": "L",
+      "formula": "平二波+平一波+平六尾+平五合尾+02",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-132",
+      "name": "D序杀一肖-2026.08.03.新增1",
+      "category": "kill_zodiac",
+      "orderMode": "D",
+      "formula": "平五波+平二波+平二头+特合尾",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "D序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-133",
+      "name": "L序杀一肖-2026.08.04新增杀肖类 [L序]自用杀肖2",
+      "category": "kill_zodiac",
+      "orderMode": "L",
+      "formula": "平四波+平六波+平六头+期数尾+落四合尾+平码一+12",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-134",
+      "name": "D序杀一头 -2026.08.03新增1",
+      "category": "kill_head",
+      "orderMode": "D",
+      "formula": "平3五行+平4头+平1+总数合-期尾",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一头",
+        "D序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-135",
+      "name": "D序杀一头 -2026.08.04新增",
+      "category": "kill_head",
+      "orderMode": "D",
+      "formula": "平1 + 特码尾+平3尾+2",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一头",
+        "D序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-136",
+      "name": "L序杀一肖-2026.08.03新增杀肖类 [L序]",
+      "category": "kill_zodiac",
+      "orderMode": "L",
+      "formula": "平六波+平六头+期数尾+落四合尾+平码一+00",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-137",
+      "name": "L序 杀一肖 -2026.08.04新增2",
+      "category": "kill_zodiac",
+      "orderMode": "L",
+      "formula": "期合+期合尾+8",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-138",
+      "name": "L序杀一合-2026.08.04新增杀合 [L序]",
+      "category": "kill_sum",
+      "orderMode": "L",
+      "formula": "平4头+平6头+平5波+7",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一合",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-139",
+      "name": "D序杀一头 -2026.08.04新增杀头类 [D序]",
+      "category": "kill_head",
+      "orderMode": "D",
+      "formula": "平1波+平3波+平6尾+4",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一头",
+        "D序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-140",
+      "name": "L序杀一行2026.08.04新增杀行类 [L序]",
+      "category": "kill_element",
+      "orderMode": "L",
+      "formula": "落3波+落1尾+落2尾+落4尾+落1段+落2位+落4码+落6合尾+期尾+4",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一行",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-141",
+      "name": "L序杀一段 -2026.08.04新增",
+      "category": "kill_segment",
+      "orderMode": "L",
+      "formula": "5+ 平1波色 + 平2合+ 平3头+ 平5波色值+特码尾+总数合+平6位",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一段",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-142",
+      "name": "D序杀一段 -2026.08.04新增1",
+      "category": "kill_segment",
+      "orderMode": "D",
+      "formula": "3+平5合+平6+特码波色值+平1",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一段",
+        "D序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-143",
+      "name": "L序杀半波-2026.08.05新增半波类 [L序]",
+      "category": "kill_half_color",
+      "orderMode": "L",
+      "formula": "落1波+落5尾+落6码+总分合+特合尾+落2合尾+3",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀半波",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-144",
+      "name": "D序杀一头-2026.08.11新增杀头类[D序]",
+      "category": "kill_head",
+      "orderMode": "D",
+      "formula": "平3行+平4行+平6行+平2尾+平2位+平3合尾+1",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一头",
+        "D序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-145",
+      "name": "未命名规则",
+      "category": "kill_half_color",
+      "orderMode": "L",
+      "formula": "落2行+落4行+落5行+平6位+落3头+特合+00",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀半波",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-146",
+      "name": "L序杀一头-2026.08.11新增",
+      "category": "kill_head",
+      "orderMode": "L",
+      "formula": "特波+平3行+平4行+平6行+平3位+平2尾+平2位+平3合尾+1",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一头",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-147",
+      "name": "L序杀一头-2026.08.11新增1",
+      "category": "kill_head",
+      "orderMode": "L",
+      "formula": "特波+平3行+平4行+平6行+平4位+平2尾+平2位+平3合尾+1",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一头",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-148",
+      "name": "L序杀一肖-2026.08.11新增杀肖类 [L序]",
+      "category": "kill_zodiac",
+      "orderMode": "L",
+      "formula": "平4头 + 特码五行值 + 期尾+3",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-149",
+      "name": "D序杀一肖 -2026.08.14新增",
+      "category": "kill_zodiac",
+      "orderMode": "D",
+      "formula": "10+平5波色值",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "D序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-150",
+      "name": "D杀一段规1：2026.08.14新增",
+      "category": "kill_segment",
+      "orderMode": "D",
+      "formula": "特行+平2行+平1波+平6波+平1合+期号+2",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一段",
+        "D序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-151",
+      "name": "D序杀一段 -2026.08.14新增1",
+      "category": "kill_segment",
+      "orderMode": "D",
+      "formula": "平4行+平4头+平2波+平6合+平5段+总分合+5",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一段",
+        "D序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-152",
+      "name": "L序杀一波 -2026.08.14新增",
+      "category": "kill_color",
+      "orderMode": "L",
+      "formula": "平六行+平四波+特码行+平二行+平四合+平一合+平一头+特码段",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一波",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-153",
+      "name": "D序杀半头-2026.08.14新增",
+      "category": "kill_half_head",
+      "orderMode": "D",
+      "formula": "平五波+平二波+平六合+平一+平四行+特码段+平五行+平四尾",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀半头",
+        "D序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-154",
+      "name": "L序杀半头 -2026.08.14新增1",
+      "category": "kill_half_head",
+      "orderMode": "L",
+      "formula": "平五波+平二波+平六合+平一+平四行+特码段+平五行+平四尾",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀半头",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-155",
+      "name": "L序杀一尾2026.08.14新增",
+      "category": "kill_tail",
+      "orderMode": "L",
+      "formula": "平二段+平六行+平三头+平一段+平四尾+平三+平四段+平一头",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一尾",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-156",
+      "name": "D序杀一肖 -2026.08.14新增",
+      "category": "kill_zodiac",
+      "orderMode": "D",
+      "formula": "平二段+平六行+平三头+平一段+平四尾+平三+平四段+平一头",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "D序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-157",
+      "name": "L序杀一肖-2026.08.14新增",
+      "category": "kill_zodiac",
+      "orderMode": "L",
+      "formula": "平二段+平六行+平三头+平一段+平四尾+平三+平四段+平一头+期数-特码",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-158",
+      "name": "L序杀一肖 - 2026.0814新增1",
+      "category": "kill_zodiac",
+      "orderMode": "L",
+      "formula": "平五波+平六头+平三头+特码+平码一+00",
+      "normalizer": "auto",
+      "target": "special",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "manual",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一肖",
+        "L序",
+        "人工新增公式"
+      ],
+      "description": "",
+      "sourceFile": "手动录入",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-159",
+      "name": "自动筛选 30020（已加入）",
+      "category": "kill_tail",
+      "orderMode": "L",
+      "formula": "平4头 + 平5段 + 期尾",
+      "normalizer": "mod_10",
+      "target": "special_tail",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "system_recommended",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一尾",
+        "L序",
+        "系统推荐公式"
+      ],
+      "description": "由本地确定性算法按训练期、验证期和独立留出期筛选生成，加入公式库后才参与综合参考结果。",
+      "sourceFile": "系统自动筛选",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
+    },
+    {
+      "id": "rq-docx-20260816-160",
+      "name": "自动筛选 20018（已加入）",
+      "category": "kill_element",
+      "orderMode": "L",
+      "formula": "平4波色值 + 平6尾",
+      "normalizer": "subtract_5_to_1_5",
+      "target": "special_element",
+      "verifyMode": "next_special",
+      "positionPattern": [],
+      "periodSpan": 1,
+      "verifyOffset": 1,
+      "enabled": true,
+      "manuallyConfirmed": false,
+      "participatesInReference": true,
+      "sourceType": "system_recommended",
+      "origin": "RuleQuant-全部公式-160条-20260816.docx",
+      "canCompute": true,
+      "parseStatus": "parsed",
+      "verifyStatus": "unchecked",
+      "tags": [
+        "杀一行",
+        "L序",
+        "系统推荐公式"
+      ],
+      "description": "由本地确定性算法按训练期、验证期和独立留出期筛选生成，加入公式库后才参与综合参考结果。",
+      "sourceFile": "系统自动筛选",
+      "examples": [],
+      "createdAt": "2026-08-16T12:16:24Z",
+      "updatedAt": "2026-08-16T12:16:24Z"
     }
   ],
   "samples": [

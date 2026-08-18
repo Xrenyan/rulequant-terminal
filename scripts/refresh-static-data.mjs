@@ -125,10 +125,12 @@ function ruleSourcePriority(rule) {
   }[rule.sourceType ?? ""] ?? 0;
 }
 
+const retiredRuleIds = new Set(["rq-kill-element-l-core"]);
+
 function mergeRuleLibraries(libraries, preferredRuleIds = new Set()) {
   const byId = new Map();
   libraries.forEach((rules) => (Array.isArray(rules) ? rules : []).forEach((rule) => {
-    if (rule?.id) byId.set(String(rule.id), rule);
+    if (rule?.id && !retiredRuleIds.has(String(rule.id))) byId.set(String(rule.id), rule);
   }));
 
   const unique = [];
