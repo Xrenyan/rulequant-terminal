@@ -142,6 +142,29 @@ describe("formula result statistics view", () => {
     expect(host?.textContent).toContain("3 个计算期");
   });
 
+  it("falls back to the synchronous report when the summary worker fails", async () => {
+    class FailingWorkerStub {
+      static instance: FailingWorkerStub | undefined;
+      onmessage: ((event: MessageEvent<{ ok: boolean; report?: ReturnType<typeof buildFormulaSummaryReport> }>) => void) | null = null;
+      onerror: ((event: ErrorEvent) => void) | null = null;
+      postMessage = vi.fn();
+      terminate = vi.fn();
+
+      constructor() {
+        FailingWorkerStub.instance = this;
+      }
+    }
+
+    workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Worker");
+    Object.defineProperty(globalThis, "Worker", { configurable: true, writable: true, value: FailingWorkerStub });
+    await renderView({ draws: [...draws] });
+
+    await act(async () => FailingWorkerStub.instance?.onerror?.(new ErrorEvent("error")));
+
+    expect(host?.textContent).toContain("最新输出");
+    expect(host?.textContent).not.toContain("正在整理完整统计");
+  });
+
   it("keeps the page recent range at ten calculation periods", async () => {
     const longDraws = Array.from({ length: 12 }, (_, index) => ({
       issue: String(101 + index),

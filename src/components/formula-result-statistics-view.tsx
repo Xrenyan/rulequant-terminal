@@ -158,14 +158,34 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
 
     const worker = new Worker(new URL("../workers/formula-summary.worker.ts", import.meta.url));
     let disposed = false;
+    const recoverFromWorkerFailure = (error: unknown) => {
+      if (disposed) return;
+      try {
+        const fallbackReport = buildFormulaSummaryReport({
+          draws,
+          rules,
+          config,
+          maxPeriods: FORMULA_SUMMARY_PREPARED_PERIODS,
+        });
+        formulaSummaryReportCache.set(draws, { rules, config, report: fallbackReport });
+        setAsyncState({ draws, rules, config, report: fallbackReport });
+      } catch (fallbackError) {
+        const message = fallbackError instanceof Error
+          ? fallbackError.message
+          : error instanceof Error
+            ? error.message
+            : "统计线程暂时无法启动";
+        setAsyncState({ draws, rules, config, report: EMPTY_FORMULA_SUMMARY_REPORT, error: message });
+      }
+      worker.terminate();
+    };
     queueMicrotask(() => {
       if (!disposed) setAsyncState({ draws, rules, config, report: EMPTY_FORMULA_SUMMARY_REPORT });
     });
     worker.onmessage = (event: MessageEvent<FormulaSummaryWorkerResponse>) => {
       if (disposed) return;
       if (!event.data.ok) {
-        setAsyncState({ draws, rules, config, report: EMPTY_FORMULA_SUMMARY_REPORT, error: event.data.error });
-        worker.terminate();
+        recoverFromWorkerFailure(event.data.error);
         return;
       }
       const nextReport = event.data.report;
@@ -174,8 +194,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
       worker.terminate();
     };
     worker.onerror = () => {
-      if (!disposed) setAsyncState({ draws, rules, config, report: EMPTY_FORMULA_SUMMARY_REPORT, error: "统计线程暂时无法启动" });
-      worker.terminate();
+      recoverFromWorkerFailure(new Error("统计线程暂时无法启动"));
     };
     worker.postMessage({ draws, rules, config, maxPeriods: FORMULA_SUMMARY_PREPARED_PERIODS });
     return () => {
