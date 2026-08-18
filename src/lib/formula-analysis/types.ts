@@ -61,3 +61,34 @@ export type FormulaPairDiagnosticsReport = {
   duplicateThreshold: number;
   conflictThreshold: number;
 };
+
+export type DataHealthStatus = "healthy" | "attention" | "partial" | "offline";
+export type DataFreshness = "fresh" | "stale" | "unknown";
+
+export type DataHealthFormulaError = {
+  ruleId: string;
+  ruleName: string;
+  message: string;
+};
+
+export type DataHealthInvalidDraw = {
+  issue: string;
+  errors: string[];
+};
+
+export type DataHealthReport = {
+  status: DataHealthStatus;
+  freshness: DataFreshness;
+  sourceLabel: string;
+  updatedAt?: string;
+  latestIssue?: string;
+  recordCount: number;
+  enabledRuleCount: number;
+  identicalDuplicateCount: number;
+  conflictingIssues: string[];
+  invalidDraws: DataHealthInvalidDraw[];
+  configErrors: string[];
+  formulaErrors: DataHealthFormulaError[];
+  missingIssueStatus: "known" | "unknown";
+  missingIssues: string[];
+};

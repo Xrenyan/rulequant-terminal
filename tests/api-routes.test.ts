@@ -4,6 +4,7 @@ const fetchDrawsFromUrl = vi.fn();
 const syncDrawsToCloud = vi.fn();
 const hasDrawWriteAuthorization = vi.fn();
 const isConfiguredDrawSourceUrl = vi.fn();
+const loadSharedCloudState = vi.fn();
 
 vi.mock("@/lib/server/draw-sync", () => ({
   fetchDrawsFromUrl,
@@ -14,6 +15,10 @@ vi.mock("@/lib/server/sync-draws-to-cloud", () => ({
   hasDrawWriteAuthorization,
   isConfiguredDrawSourceUrl,
   syncDrawsToCloud,
+}));
+
+vi.mock("@/lib/cloud/server-state", () => ({
+  loadSharedCloudState,
 }));
 
 const sampleFetchResult = {
@@ -43,6 +48,15 @@ describe("draw sync API write guards", () => {
     syncDrawsToCloud.mockResolvedValue({ ...sampleFetchResult, ok: true, latestIssue: "2026179", recordCount: 1, state: { latestIssue: "2026179", recordCount: 1 } });
     hasDrawWriteAuthorization.mockReturnValue(false);
     isConfiguredDrawSourceUrl.mockReturnValue(true);
+    loadSharedCloudState.mockResolvedValue({
+      draws: sampleFetchResult.records,
+      rules: [],
+      samples: [],
+      logs: [],
+      backups: [],
+      referenceHistory: [],
+      meta: { enabled: true, source: "github", updatedAt: "2026-08-18T02:00:00.000Z", latestIssue: "2026179", recordCount: 1 },
+    });
   });
 
   it("does not persist imported draw data without authorization", async () => {
@@ -133,5 +147,49 @@ describe("draw sync API write guards", () => {
 
     expect(response.status).toBe(401);
     expect(syncDrawsToCloud).not.toHaveBeenCalled();
+  });
+});
+
+describe("read-only health API", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    loadSharedCloudState.mockResolvedValue({
+      draws: sampleFetchResult.records,
+      rules: [{ id: "private-rule" }, { id: "private-rule-2" }],
+      samples: [],
+      logs: [{ message: "private log" }],
+      backups: [],
+      referenceHistory: [],
+      meta: { enabled: true, source: "github", updatedAt: "2026-08-18T02:00:00.000Z", latestIssue: "2026179", recordCount: 1 },
+    });
+  });
+
+  it("returns only non-sensitive service metadata", async () => {
+    const { GET } = await import("@/app/api/health/route");
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(body).toEqual({
+      ok: true,
+      mode: "github",
+      updatedAt: "2026-08-18T02:00:00.000Z",
+      latestIssue: "2026179",
+      recordCount: 1,
+      ruleCount: 2,
+    });
+    expect(JSON.stringify(body)).not.toContain("private-rule");
+    expect(JSON.stringify(body)).not.toContain("private log");
+  });
+
+  it("sanitizes backend failures", async () => {
+    loadSharedCloudState.mockRejectedValue(new Error("secret database connection string"));
+    const { GET } = await import("@/app/api/health/route");
+    const response = await GET();
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ ok: false, mode: "unavailable", error: "健康状态暂时不可用" });
   });
 });
