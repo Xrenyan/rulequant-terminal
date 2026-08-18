@@ -1,7 +1,37 @@
 import type { RuleRecord } from "@/types/domain";
-import type { FormulaSummaryTargetType } from "@/lib/formula-summary/formula-summary";
+import type {
+  FormulaSummaryAction,
+  FormulaSummaryTargetType,
+} from "@/lib/formula-summary/formula-summary";
 
 export type FormulaAnalysisWindow = 10 | 30 | 50;
+
+export type FormulaAnalysisTab = "overview" | "landing" | "diagnostics" | "evidence";
+
+export type FormulaAnalysisCompare =
+  | { kind: "none" }
+  | { kind: "window"; value: FormulaAnalysisWindow }
+  | { kind: "group"; ruleIds: string[] }
+  | { kind: "target-type"; value: FormulaSummaryTargetType };
+
+export type FormulaAnalysisFilters = {
+  tab: FormulaAnalysisTab;
+  window: FormulaAnalysisWindow;
+  action: FormulaSummaryAction;
+  targetType: FormulaSummaryTargetType;
+  ruleIds: string[];
+  compare: FormulaAnalysisCompare;
+};
+
+export type SavedFormulaAnalysisView = {
+  schemaVersion: 1;
+  id: string;
+  name: string;
+  filters: FormulaAnalysisFilters;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type FormulaHealthStatus =
   | "normal"
