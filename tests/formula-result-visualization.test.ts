@@ -88,11 +88,19 @@ describe("formula result visualization", () => {
     expect(dialog?.textContent).toContain("相对趋势");
     expect(dialog?.textContent).toContain("十期排名轨迹");
     expect(dialog?.textContent).toContain("公式贡献帕累托");
+    expect(dialog?.textContent).toContain("近十期开奖落点趋势");
+    expect(dialog?.textContent).toContain("实际结果平均次数");
+    expect(dialog?.textContent).toContain("落在前三期数");
+    expect(dialog?.textContent).toContain("实际结果平均位置");
+    expect(dialog?.textContent).toContain("单期最高次数");
+    expect(dialog?.textContent).toContain("实际开奖落点记录");
+    expect(dialog?.textContent).toContain("期次 × 全部结果");
     expect(dialog?.textContent).toContain("统一色阶");
     expect(dialog?.textContent).toContain("贡献公式明细");
     expect(dialog?.textContent).not.toContain("结果构成");
     expect(dialog?.querySelector('svg[aria-label*="中位数"]')).not.toBeNull();
     expect(dialog?.querySelector('svg[aria-label*="排名从"]')).not.toBeNull();
+    expect(dialog?.querySelector('svg[aria-label*="第1位在上"]')).not.toBeNull();
     expect(dialog?.querySelector(".rq-formula-viz__heat-legend")).not.toBeNull();
     expect(dialog?.querySelector(".rq-formula-viz__target-chips")).not.toBeNull();
     const evidence = dialog?.querySelector(".rq-formula-viz__evidence-row") as HTMLDetailsElement | null;
@@ -107,6 +115,7 @@ describe("formula result visualization", () => {
       ".rq-formula-viz__rank-panel",
       ".rq-formula-viz__trajectory-panel",
       ".rq-formula-viz__pareto-panel",
+      ".rq-formula-viz__landing-panel",
       ".rq-formula-viz__matrix-panel",
       ".rq-formula-viz__evidence-panel",
     ].map((selector) => dialog?.querySelector(selector));
@@ -148,6 +157,48 @@ describe("formula result visualization", () => {
 
     await act(async () => buttonByText(dialog, "清除期次筛选").click());
     expect(dialog.textContent).not.toContain("已聚焦计算期");
+  });
+
+  it("shares actual landing focus across the chart, records, matrix, and evidence", async () => {
+    await renderView();
+    await act(async () => {
+      buttonByText(host!, "最近十期").click();
+      buttonByText(host!, "查看可视化").click();
+      await import("@/components/formula-result-visualization");
+    });
+
+    const dialog = document.body.querySelector('[role="dialog"]')!;
+    const record = [...dialog.querySelectorAll<HTMLTableRowElement>("[data-landing-record]")]
+      .find((row) => !row.textContent?.includes("0条"));
+    expect(record).toBeDefined();
+    if (!record) throw new Error("fixture requires an actual landing with contributions");
+
+    const issue = record.dataset.landingRecord!;
+    const actualLabel = record.querySelector('td[data-label="实际特码 / 结果"] span')?.textContent;
+    expect(actualLabel).toBeTruthy();
+    const viewButton = buttonByText(record, "查看");
+
+    const expectFocusedActualEvidence = () => {
+      expect(dialog.querySelector(".rq-formula-viz__active-filter")?.textContent).toContain(issue);
+      const evidenceRows = [...dialog.querySelectorAll(".rq-formula-viz__evidence-row")];
+      expect(evidenceRows.length).toBeGreaterThan(0);
+      expect(evidenceRows.every((row) => row.textContent?.includes(`${issue} 计算`))).toBe(true);
+      expect(evidenceRows.every((row) => row.querySelector(".rq-formula-viz__target-chips")?.textContent?.includes(actualLabel!))).toBe(true);
+    };
+
+    await act(async () => viewButton.click());
+    expectFocusedActualEvidence();
+
+    const chartPoint = dialog.querySelector<SVGGElement>(`[data-landing-issue="${issue}"]`);
+    expect(chartPoint).not.toBeNull();
+    await act(async () => chartPoint?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expectFocusedActualEvidence();
+
+    const actualCell = [...dialog.querySelectorAll<HTMLButtonElement>('[data-actual-landing="true"]')]
+      .find((cell) => cell.getAttribute("aria-label")?.includes(`${issue}计算期`));
+    expect(actualCell).not.toBeNull();
+    await act(async () => actualCell?.click());
+    expectFocusedActualEvidence();
   });
 
   it("closes through the accessible backdrop control and restores focus again", async () => {
