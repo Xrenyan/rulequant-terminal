@@ -73,6 +73,10 @@ async function renderView({ draws: viewDraws = draws }: { draws?: DrawRecord[] }
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
+  await rerenderView({ draws: viewDraws });
+}
+
+async function rerenderView({ draws: viewDraws = draws }: { draws?: DrawRecord[] } = {}) {
   await act(async () => {
     root?.render(React.createElement(FormulaResultStatisticsView, {
       draws: viewDraws,
@@ -286,6 +290,46 @@ describe("formula result statistics view", () => {
     root = undefined;
     await act(async () => instance?.onerror?.(new ErrorEvent("error")));
     expect(instance?.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a pending Worker response from stale draw props after a rerender", async () => {
+    class PropSwapWorkerStub {
+      static instances: PropSwapWorkerStub[] = [];
+      onmessage: ((event: MessageEvent<{ ok: boolean; report?: ReturnType<typeof buildFormulaSummaryReport> }>) => void) | null = null;
+      onerror: ((event: ErrorEvent) => void) | null = null;
+      onmessageerror: ((event: MessageEvent) => void) | null = null;
+      postMessage = vi.fn();
+      terminate = vi.fn();
+
+      constructor() {
+        PropSwapWorkerStub.instances.push(this);
+      }
+    }
+
+    const oldDraws = [...draws];
+    const nextDraws: DrawRecord[] = [
+      { issue: "201", n1: 1, n2: 2, n3: 3, n4: 4, n5: 5, n6: 6, special: 7 },
+      { issue: "202", n1: 8, n2: 9, n3: 10, n4: 11, n5: 12, n6: 13, special: 14 },
+      { issue: "203", n1: 15, n2: 16, n3: 17, n4: 18, n5: 19, n6: 20, special: 21 },
+    ];
+    workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Worker");
+    Object.defineProperty(globalThis, "Worker", { configurable: true, writable: true, value: PropSwapWorkerStub });
+    await renderView({ draws: oldDraws });
+    const oldWorker = PropSwapWorkerStub.instances[0];
+
+    await rerenderView({ draws: nextDraws });
+    const currentWorker = PropSwapWorkerStub.instances[1];
+    const staleReport = { ...buildFormulaSummaryReport({ draws: oldDraws, rules, config: defaultConfig, maxPeriods: 11 }), formulaCount: 999 };
+    await act(async () => oldWorker.onmessage?.({ data: { ok: true, report: staleReport } } as MessageEvent));
+
+    expect(oldWorker.terminate).toHaveBeenCalledTimes(1);
+    expect(host?.textContent).not.toContain("999 条");
+
+    const nextReport = buildFormulaSummaryReport({ draws: nextDraws, rules, config: defaultConfig, maxPeriods: 11 });
+    await act(async () => currentWorker.onmessage?.({ data: { ok: true, report: nextReport } } as MessageEvent));
+
+    expect(host?.textContent).toContain("203");
+    expect(host?.textContent).not.toContain("999 条");
   });
 
   it("keeps the page recent range at ten calculation periods", async () => {
