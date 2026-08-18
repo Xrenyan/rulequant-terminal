@@ -134,20 +134,22 @@ describe("formula result visualization", () => {
     expect(evidence?.textContent).toContain("计算过程");
     expect(evidence?.querySelector(".rq-formula-viz__process")).not.toBeNull();
 
-    const panelOrder = [
-      ".rq-formula-viz__overview",
-      ".rq-formula-viz__trend-panel",
-      ".rq-formula-viz__rank-panel",
-      ".rq-formula-viz__trajectory-panel",
-      ".rq-formula-viz__pareto-panel",
-      ".rq-formula-viz__landing-panel",
-      ".rq-formula-viz__matrix-panel",
-      ".rq-formula-viz__evidence-panel",
-    ].map((selector) => dialog?.querySelector(selector));
-    expect(panelOrder.every(Boolean)).toBe(true);
-    expect(panelOrder.every((panel, index) => (
-      index === 0 || panelOrder[index - 1]?.compareDocumentPosition(panel!) === Node.DOCUMENT_POSITION_FOLLOWING
-    ))).toBe(true);
+    const sections = [...dialog!.querySelectorAll<HTMLElement>(".rq-formula-viz__body > section")];
+    expect(sections.map((section) => section.getAttribute("aria-labelledby"))).toEqual([
+      "formula-overview-title",
+      "formula-trend-title",
+      "formula-rank-title",
+      "formula-trajectory-title",
+      "formula-pareto-title",
+      "formula-landing-title",
+      "formula-matrix-title",
+      "formula-evidence-title",
+    ]);
+    const interactiveLandingControls = [
+      ...dialog!.querySelectorAll("[data-landing-record] button, [data-actual-landing='true']"),
+    ];
+    expect(interactiveLandingControls.length).toBeGreaterThan(0);
+    expect(interactiveLandingControls.every((control) => control instanceof HTMLButtonElement)).toBe(true);
     expect(document.body.style.overflow).toBe("hidden");
 
     await act(async () => {

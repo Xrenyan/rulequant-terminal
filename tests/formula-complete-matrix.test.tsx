@@ -165,6 +165,7 @@ describe("FormulaCompleteMatrix", () => {
     const zeroCell = matrix.querySelector<HTMLButtonElement>('[data-matrix-cell="string:马"]')!;
     expect(zeroCell.textContent).toBe("0");
     expect(zeroCell.style.getPropertyValue("--rq-cell-strength")).toBe("0%");
+    expect(zeroCell.getAttribute("aria-label")).toContain("结果马，0次");
     await act(async () => zeroCell.click());
     expect(onSelectTarget).toHaveBeenLastCalledWith("string:马");
     expect(onFocusIssue).toHaveBeenLastCalledWith("101");
@@ -204,6 +205,7 @@ describe("FormulaCompleteMatrix", () => {
     });
 
     expect(matrix.querySelector(".rq-formula-complete-matrix.is-number")).not.toBeNull();
+    expect(matrix.querySelector('[role="region"][aria-label="完整号码结果矩阵"]')).not.toBeNull();
     expect(matrix.querySelectorAll(".rq-formula-complete-matrix__number-grid")).toHaveLength(1);
     expect(matrix.querySelectorAll("[data-number-cell]")).toHaveLength(49);
     expect(matrix.querySelector("[data-number-cell='01']")).not.toBeNull();
@@ -220,8 +222,20 @@ describe("FormulaCompleteMatrix", () => {
     expect(ordinary.textContent).toContain("02");
     expect(ordinary.textContent).toContain("0");
     expect(ordinary.style.getPropertyValue("--rq-cell-strength")).toBe("0%");
+    expect(ordinary.getAttribute("aria-label")).toContain("号码02，0次");
     await act(async () => ordinary.click());
     expect(onSelectTarget).toHaveBeenCalledWith("number:2");
     expect(onFocusIssue).toHaveBeenCalledWith("201");
+  });
+
+  it("keeps multiple number periods as separate seven-column, keyboard-operable blocks", async () => {
+    const first = completedPeriod("301", 1, "鼠", [contribution("301", "r1", [1], "number")]);
+    const second = completedPeriod("302", 49, "羊", [contribution("302", "r2", [49], "number")]);
+    const matrix = await renderMatrix({ periods: [first, second], targetType: "number" });
+
+    expect(matrix.querySelectorAll("[data-matrix-period]")).toHaveLength(2);
+    expect(matrix.querySelectorAll(".rq-formula-complete-matrix__number-grid")).toHaveLength(2);
+    expect(matrix.querySelectorAll("[data-number-cell]")).toHaveLength(98);
+    expect([...matrix.querySelectorAll("[data-number-cell]")].every((cell) => cell instanceof HTMLButtonElement)).toBe(true);
   });
 });

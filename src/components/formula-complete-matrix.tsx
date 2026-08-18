@@ -49,6 +49,15 @@ function periodResultLabel(period: FormulaSummaryPeriod): string {
   return period.isPending ? "待开奖" : period.targetLabel;
 }
 
+function matrixCellAriaLabel(
+  item: FormulaLandingDomainItem,
+  period: FormulaSummaryPeriod,
+  count: number,
+  numberCell: boolean,
+): string {
+  return `${period.calculationIssue}计算期，${periodResultLabel(period)}，${numberCell ? "号码" : "结果"}${item.label}，${count}次`;
+}
+
 function MatrixCell({
   item,
   period,
@@ -68,7 +77,7 @@ function MatrixCell({
   const specialNumber = actual ? String(actual.specialNumber).padStart(2, "0") : "";
   const ariaLabel = isActual && actual
     ? actualAriaLabel(actual)
-    : `${period.calculationIssue}计算期，${periodResultLabel(period)}，${item.label}${count}次`;
+    : matrixCellAriaLabel(item, period, count, numberCell);
 
   return (
     <button
@@ -140,7 +149,7 @@ function NumberMatrix({
   const seriesByKey = new Map(analysis.series.map((series) => [series.targetKey, series]));
 
   return (
-    <div className="rq-formula-complete-matrix is-number" aria-label="完整号码结果矩阵">
+    <div className="rq-formula-complete-matrix is-number" role="region" aria-label="完整号码结果矩阵">
       {analysis.matrixPeriods.map((period, periodIndex) => {
         const isFocused = focusedIssue === period.calculationIssue;
         return (
@@ -208,7 +217,7 @@ export function FormulaCompleteMatrix({
   const seriesByKey = new Map(analysis.series.map((series) => [series.targetKey, series]));
 
   return (
-    <div className={cn("rq-formula-complete-matrix", `is-${targetType}`)} aria-label="完整结果矩阵">
+    <div className={cn("rq-formula-complete-matrix", `is-${targetType}`)} role="region" aria-label="完整结果矩阵">
       <div className="rq-formula-complete-matrix__scroll">
         <div
           className="rq-formula-complete-matrix__grid"
