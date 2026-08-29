@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import unicodedata
 from copy import deepcopy
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -58,16 +60,23 @@ RENAMED_RULES = {
     "D序杀一段 -2026.07.29新增杀段类 [D序]自己用": "D序杀一段 -2026.07.29新增杀段类 [D序]",
 }
 
-REMOVED_RULES = {"L序杀一行 - 样例核心"}
-
-SYNCED_AT = "2026-08-16T12:16:24Z"
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Sync RuleQuant seed rules from an exported Word library.")
     parser.add_argument("document", type=Path)
     parser.add_argument("rules", type=Path)
     return parser.parse_args()
+
+
+def parse_snapshot_metadata(document_path: Path) -> tuple[int, str, str]:
+    match = re.search(r"全部公式-(\d+)条-(\d{8})", document_path.name)
+    if not match:
+        raise ValueError(f"无法从文件名识别公式总数和快照日期：{document_path.name}")
+    expected_total = int(match.group(1))
+    snapshot_date = match.group(2)
+    parsed_date = date.fromisoformat(
+        f"{snapshot_date[:4]}-{snapshot_date[4:6]}-{snapshot_date[6:]}"
+    )
+    return expected_total, snapshot_date, f"{parsed_date.isoformat()}T00:00:00Z"
 
 
 def parse_bool_status(value: str) -> tuple[bool, bool, bool]:
@@ -184,8 +193,9 @@ def find_existing_rule(
     entry: dict[str, Any],
     existing_rules: list[dict[str, Any]],
     used_ids: set[str],
+    snapshot_date: str,
 ) -> dict[str, Any] | None:
-    imported_id = f"rq-docx-20260816-{entry['index']:03d}"
+    imported_id = f"rq-docx-{snapshot_date}-{entry['index']:03d}"
     imported_matches = [
         rule for rule in existing_rules if rule["id"] not in used_ids and rule["id"] == imported_id
     ]
@@ -201,6 +211,13 @@ def find_existing_rule(
         and rule["category"] == category
         and rule["orderMode"] == entry["orderMode"]
     ]
+    formula_matches = [
+        rule
+        for rule in exact_matches
+        if normalized_formula(rule.get("formula", "")) == normalized_formula(entry["formula"])
+    ]
+    if len(formula_matches) == 1:
+        return formula_matches[0]
     if len(exact_matches) == 1:
         return exact_matches[0]
 
@@ -214,10 +231,34 @@ def find_existing_rule(
     return None
 
 
+def normalized_formula(value: str) -> str:
+    return re.sub(r"\s+", "", unicodedata.normalize("NFKC", value.strip()))
+
+
+def matches_same_position(entry: dict[str, Any], existing: dict[str, Any]) -> bool:
+    category = CATEGORY_BY_LABEL.get(entry["categoryLabel"])
+    normalizer, target = parse_output_config(entry["config"]["输出配置"])
+    anchor = parse_anchor_config(entry["config"]["锚点与管期"])
+    return (
+        existing.get("category") == category
+        and existing.get("orderMode") == entry["orderMode"]
+        and normalized_formula(existing.get("formula", "")) == normalized_formula(entry["formula"])
+        and existing.get("normalizer") == normalizer
+        and existing.get("target") == target
+        and existing.get("positionPattern", []) == parse_pattern(entry["config"]["取位循环"])
+        and existing.get("anchorIssue") == anchor["anchorIssue"]
+        and existing.get("anchorPatternIndex") == anchor["anchorPatternIndex"]
+        and existing.get("periodSpan", 1) == anchor["periodSpan"]
+        and existing.get("verifyOffset", 1) == anchor["verifyOffset"]
+    )
+
+
 def build_rule(
     entry: dict[str, Any],
     existing: dict[str, Any] | None,
     document_name: str,
+    snapshot_date: str,
+    synced_at: str,
 ) -> dict[str, Any]:
     category = CATEGORY_BY_LABEL.get(entry["categoryLabel"])
     source_type = SOURCE_BY_LABEL.get(entry["sourceLabel"])
@@ -235,7 +276,7 @@ def build_rule(
     rule = deepcopy(existing) if existing is not None else {}
     rule.update(
         {
-            "id": existing["id"] if existing is not None else f"rq-docx-20260816-{entry['index']:03d}",
+            "id": existing["id"] if existing is not None else f"rq-docx-{snapshot_date}-{entry['index']:03d}",
             "name": entry["name"],
             "category": category,
             "orderMode": entry["orderMode"],
@@ -258,8 +299,8 @@ def build_rule(
             "description": entry.get("description", ""),
             "sourceFile": source_file,
             "examples": entry.get("examples", []),
-            "createdAt": existing.get("createdAt", SYNCED_AT) if existing else SYNCED_AT,
-            "updatedAt": SYNCED_AT,
+            "createdAt": existing.get("createdAt", synced_at) if existing else synced_at,
+            "updatedAt": synced_at,
         }
     )
     for key in ("anchorIssue", "anchorPatternIndex"):
@@ -268,42 +309,63 @@ def build_rule(
         else:
             rule[key] = anchor[key]
     rule.pop("librarySignature", None)
+    if existing is not None:
+        comparable_existing = {
+            key: value for key, value in existing.items() if key not in {"librarySignature", "updatedAt"}
+        }
+        comparable_rule = {
+            key: value for key, value in rule.items() if key not in {"librarySignature", "updatedAt"}
+        }
+        if comparable_existing == comparable_rule:
+            rule["updatedAt"] = existing.get("updatedAt", synced_at)
     return rule
 
 
 def main() -> None:
     args = parse_args()
+    expected_total, snapshot_date, synced_at = parse_snapshot_metadata(args.document)
     with args.rules.open(encoding="utf-8") as handle:
         existing_rules = json.load(handle)
 
     entries = extract_entries(args.document)
+    if len(entries) != expected_total:
+        raise ValueError(f"文档公式数量异常：文件名标注 {expected_total}，实际提取 {len(entries)}")
     used_ids: set[str] = set()
     synchronized_by_id: dict[str, dict[str, Any]] = {}
     added_rules: list[dict[str, Any]] = []
     added_ids: list[str] = []
+    changed_ids: list[str] = []
 
     for entry in entries:
-        existing = find_existing_rule(entry, existing_rules, used_ids)
-        rule = build_rule(entry, existing, args.document.name)
+        existing = find_existing_rule(entry, existing_rules, used_ids, snapshot_date)
+        if existing is None and entry["index"] <= len(existing_rules):
+            positional = existing_rules[entry["index"] - 1]
+            if positional["id"] not in used_ids and matches_same_position(entry, positional):
+                existing = positional
+        rule = build_rule(
+            entry,
+            existing,
+            args.document.name,
+            snapshot_date,
+            synced_at,
+        )
         used_ids.add(rule["id"])
         if existing is None:
             added_rules.append(rule)
             added_ids.append(rule["id"])
         else:
             synchronized_by_id[rule["id"]] = rule
+            if rule != existing:
+                changed_ids.append(rule["id"])
 
     synchronized = [
-        synchronized_by_id[rule["id"]]
+        synchronized_by_id.get(rule["id"], rule)
         for rule in existing_rules
-        if rule["id"] in synchronized_by_id
     ] + added_rules
 
     unused_existing = [rule["name"] for rule in existing_rules if rule["id"] not in used_ids]
-    expected_removed = REMOVED_RULES.intersection(rule["name"] for rule in existing_rules)
-    if set(unused_existing) != expected_removed:
-        raise ValueError(f"最新文档未能对账这些已有公式：{unused_existing}")
-    if len(synchronized) != 160:
-        raise ValueError(f"同步数量异常：总计 {len(synchronized)}，新增 {len(added_ids)}")
+    if len(synchronized) < expected_total:
+        raise ValueError(f"同步数量异常：文档 {expected_total}，同步后 {len(synchronized)}")
     if len({rule["id"] for rule in synchronized}) != len(synchronized):
         raise ValueError("同步后出现重复公式 ID")
 
@@ -311,7 +373,19 @@ def main() -> None:
         json.dump(synchronized, handle, ensure_ascii=False, indent=2)
         handle.write("\n")
 
-    print(json.dumps({"total": len(synchronized), "added": len(added_ids), "updated": len(used_ids) - len(added_ids)}, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "sourceTotal": expected_total,
+                "total": len(synchronized),
+                "added": len(added_ids),
+                "updated": len(changed_ids),
+                "unchanged": len(used_ids) - len(added_ids) - len(changed_ids),
+                "retained": len(unused_existing),
+            },
+            ensure_ascii=False,
+        )
+    )
 
 
 if __name__ == "__main__":
