@@ -26,6 +26,7 @@ export type FormulaDiscoveryInput = {
   minTrainingRate?: number;
   minValidationRate?: number;
   minHoldoutRate?: number;
+  minOverallRate?: number;
   minRecentRate?: number;
   maxTrainValidationGap?: number;
   combinationLimitPerTerm?: number;
@@ -39,6 +40,7 @@ const discoveryCache = new Map<string, FormulaDiscoveryCandidate[]>();
 
 function discoveryCacheKey(input: FormulaDiscoveryInput): string {
   return JSON.stringify({
+    discoveryVersion: 2,
     draws: input.draws.map((draw) => [draw.issue, draw.n1, draw.n2, draw.n3, draw.n4, draw.n5, draw.n6, draw.special]),
     categories: input.categories ?? DEFAULT_CATEGORIES,
     variablePool: input.variablePool ?? DEFAULT_VARIABLES,
@@ -49,11 +51,11 @@ function discoveryCacheKey(input: FormulaDiscoveryInput): string {
     minTrainingRate: input.minTrainingRate ?? 50,
     minValidationRate: input.minValidationRate ?? 50,
     minHoldoutRate: input.minHoldoutRate ?? 50,
+    minOverallRate: input.minOverallRate ?? null,
     minRecentRate: input.minRecentRate ?? 50,
     maxTrainValidationGap: input.maxTrainValidationGap ?? 20,
     combinationLimitPerTerm: input.combinationLimitPerTerm ?? 80,
     orderModes: input.orderModes ?? ["L"],
-    formulaStyles: input.formulaStyles ?? ["sum"],
     config: input.config,
   });
 }
@@ -184,21 +186,6 @@ function spreadSample<T>(items: T[], limit: number): T[] {
   return Array.from({ length: limit }, (_, index) => items[Math.floor((index * items.length) / limit)]);
 }
 
-function formulaFor(items: string[], style: NonNullable<FormulaDiscoveryInput["formulaStyles"]>[number], index: number): string {
-  if (style === "alternating") {
-    return items.map((item, itemIndex) => `${itemIndex === 0 ? "" : itemIndex % 2 ? " - " : " + "}${item}`).join("");
-  }
-  if (style === "subtract_last" && items.length > 1) {
-    return `${items.slice(0, -1).join(" + ")} - ${items.at(-1)}`;
-  }
-  if (style === "constant_adjusted") {
-    const constants = [1, -1, 2, -2, 3, -3];
-    const adjustment = constants[index % constants.length];
-    return `${items.join(" + ")} ${adjustment > 0 ? "+" : "-"} ${Math.abs(adjustment)}`;
-  }
-  return items.join(" + ");
-}
-
 function formulaComplexity(formula: string): number {
   return formula.split(/[+\-]/).map((item) => item.trim()).filter(Boolean).length;
 }
@@ -220,7 +207,7 @@ function makeRule(category: RuleCategory, formula: string, index: number, orderM
     sourceType: "system_recommended",
     participatesInReference: false,
     tags: ["自动筛选", `${orderMode}序`],
-    description: "由本地确定性算法按训练期、验证期和独立留出期筛选生成，加入公式库后才参与综合参考结果。",
+    description: "由本地确定性算法使用全部历史数据筛选，并自动检查前后表现是否稳定；加入公式库后才参与综合参考结果。",
     sourceFile: "系统自动筛选",
     examples: [],
     createdAt: now,
@@ -315,21 +302,17 @@ function candidateScore(
   const baseline = categoryBaseline(overall.rule.category);
   const recent = recentRate(overall);
   const complexity = formulaComplexity(overall.rule.formula);
-  const stableRate = training.successRate * 0.15 + validation.successRate * 0.4 + holdout.successRate * 0.45;
   const stabilityGap = Math.max(
     Math.abs(training.successRate - validation.successRate),
     Math.abs(validation.successRate - holdout.successRate),
     Math.abs(training.successRate - holdout.successRate),
   );
-  const confidenceFloor = Math.min(
-    wilsonLowerBound(validation.success, validation.total),
-    wilsonLowerBound(holdout.success, holdout.total),
-  );
+  const confidenceFloor = wilsonLowerBound(overall.success, overall.total);
   const score = 55
-    + (stableRate - baseline) * 2.2
-    + (recent - baseline) * 0.35
-    + (confidenceFloor - (baseline - 15)) * 0.25
-    - stabilityGap * 0.7
+    + (overall.successRate - baseline) * 2.15
+    + (recent - baseline) * 0.4
+    + (confidenceFloor - (baseline - 15)) * 0.3
+    - stabilityGap * 0.45
     + Math.min(overall.currentStreak, 4) * 0.5
     + Math.max(0, 5 - complexity) * 0.8;
   return Number(Math.max(0, Math.min(100, score)).toFixed(3));
@@ -343,13 +326,14 @@ export function discoverFormulaCandidates(input: FormulaDiscoveryInput): Formula
   const categories = input.categories ?? DEFAULT_CATEGORIES;
   const variablePool = input.variablePool ?? DEFAULT_VARIABLES;
   const maxTerms = Math.max(2, Math.min(input.maxTerms ?? 3, 5));
-  const minTrainingRate = input.minTrainingRate ?? 50;
-  const minValidationRate = input.minValidationRate ?? 50;
-  const minHoldoutRate = input.minHoldoutRate ?? 50;
+  const minOverallRate = input.minOverallRate ?? Math.min(
+    input.minTrainingRate ?? 50,
+    input.minValidationRate ?? 50,
+    input.minHoldoutRate ?? 50,
+  );
   const minRecentRate = input.minRecentRate ?? 50;
   const maxTrainValidationGap = input.maxTrainValidationGap ?? 20;
   const orderModes = input.orderModes?.length ? input.orderModes : ["L" as const];
-  const formulaStyles = input.formulaStyles?.length ? input.formulaStyles : ["sum" as const];
   const { sortedDraws, trainCut, validationCut } = splitDraws(input.draws, input.trainRatio ?? 0.6, input.validationRatio ?? 0.2);
   const issueIndex = new Map(sortedDraws.map((draw, index) => [draw.issue, index]));
   const candidates: FormulaDiscoveryCandidate[] = [];
@@ -359,7 +343,7 @@ export function discoverFormulaCandidates(input: FormulaDiscoveryInput): Formula
 
   for (let termCount = 2; termCount <= maxTerms; termCount += 1) {
     const itemGroups = spreadSample(combinations(variablePool, termCount, termCount), combinationLimit);
-    const formulas = itemGroups.flatMap((items, index) => formulaStyles.map((style) => formulaFor(items, style, index)));
+    const formulas = itemGroups.map((items) => items.join(" + "));
     const rules = categories.flatMap((category) => orderModes.flatMap((orderMode) => formulas.map((formula, index) => ({
       ...makeRule(category, formula, index + termCount * 10000, orderMode),
       enabled: true,
@@ -377,9 +361,7 @@ export function discoverFormulaCandidates(input: FormulaDiscoveryInput): Formula
         }));
         const holdoutResult = summarizeResult(result, result.details.filter((detail) => (issueIndex.get(detail.currentIssue) ?? -1) >= validationCut - span));
         if (!result || result.total === 0 || trainingResult.total === 0 || validationResult.total === 0 || holdoutResult.total === 0) return;
-        if (trainingResult.successRate < minTrainingRate) return;
-        if (validationResult.successRate < minValidationRate) return;
-        if (holdoutResult.successRate < minHoldoutRate) return;
+        if (result.successRate < minOverallRate) return;
         const recent = recentRate(result);
         if (recent < minRecentRate) return;
         const stabilityGap = Math.max(
@@ -407,12 +389,12 @@ export function discoverFormulaCandidates(input: FormulaDiscoveryInput): Formula
       }
     });
     depthCandidates
-      .sort((a, b) => b.score - a.score || b.holdoutRate - a.holdoutRate || b.validationRate - a.validationRate || a.stabilityGap - b.stabilityGap)
+      .sort((a, b) => b.score - a.score || b.successRate - a.successRate || b.recentRate - a.recentRate || a.stabilityGap - b.stabilityGap)
       .slice(0, perDepthLimit)
       .forEach((candidate) => candidates.push(candidate));
   }
 
-  const sortedCandidates = candidates.sort((a, b) => b.score - a.score || b.holdoutRate - a.holdoutRate || b.validationRate - a.validationRate || b.successRate - a.successRate || a.stabilityGap - b.stabilityGap || a.failed - b.failed);
+  const sortedCandidates = candidates.sort((a, b) => b.score - a.score || b.successRate - a.successRate || b.recentRate - a.recentRate || a.stabilityGap - b.stabilityGap || a.failed - b.failed);
   const selected = new Map<string, FormulaDiscoveryCandidate>();
   for (let termCount = 2; termCount <= maxTerms; termCount += 1) {
     const candidate = sortedCandidates.find((item) => item.complexity === termCount);
@@ -423,7 +405,7 @@ export function discoverFormulaCandidates(input: FormulaDiscoveryInput): Formula
     selected.set(candidate.rule.id, candidate);
   }
   const result = [...selected.values()]
-    .sort((a, b) => b.score - a.score || b.holdoutRate - a.holdoutRate || a.stabilityGap - b.stabilityGap)
+    .sort((a, b) => b.score - a.score || b.successRate - a.successRate || b.recentRate - a.recentRate || a.stabilityGap - b.stabilityGap)
     .slice(0, input.limit ?? 20);
   discoveryCache.set(key, result.map(cloneCandidate));
   return result.map(cloneCandidate);

@@ -3,6 +3,8 @@ import { calculateRule } from "@/lib/formula-engine/formula-engine";
 import { canRuleParticipateInReference, type RuleValidationSummary } from "@/lib/rules/rule-validation";
 import type {
   BacktestResult,
+  BacktestDetail,
+  NormalizedDraw,
   DrawRecord,
   RuleBacktestResult,
   RuleQuantConfig,
@@ -18,6 +20,15 @@ export type BuildRuleSignalsInput = {
   config: RuleQuantConfig;
   backtest?: BacktestResult;
   validationSummaries?: RuleValidationSummary[];
+};
+
+type BuildRuleSignalsFromBacktestInput = Omit<BuildRuleSignalsInput, "draws" | "config"> & {
+  calculationBacktest: BacktestResult;
+  currentIssue: string;
+  fallbackCurrent?: NormalizedDraw;
+  fallbackConfig?: RuleQuantConfig;
+  fallbackPeriodIndex?: number;
+  calculationDetailIndex?: ReadonlyMap<string, ReadonlyMap<string, BacktestDetail>>;
 };
 
 function sortDraws(draws: DrawRecord[]): DrawRecord[] {
@@ -148,6 +159,44 @@ export function buildRuleSignals(input: BuildRuleSignalsInput): RuleSignal[] {
             calculation.secondaryMappedResult?.length
               ? calculation.secondaryMappedResult
               : input.config.zodiacOrder.filter((zodiac) => !includeTargets.includes(zodiac));
+          return [
+            makeSignal(rule, result, "include", "zodiac", includeTargets, calculation.process),
+            makeSignal(rule, result, "exclude", "zodiac", excludeTargets, calculation.process),
+          ];
+        }
+
+        const target = targetForCategory(rule.category);
+        return [makeSignal(rule, result, target.action, target.targetType, calculation.mappedResult, calculation.process)];
+      } catch {
+        return [];
+      }
+    });
+}
+
+export function buildRuleSignalsFromBacktest(input: BuildRuleSignalsFromBacktestInput): RuleSignal[] {
+  const validationMap = new Map(input.validationSummaries?.map((summary) => [summary.ruleId, summary]));
+  const historicalResultMap = new Map(input.backtest?.ruleResults.map((result) => [result.rule.id, result]));
+  const calculationResultMap = new Map(input.calculationBacktest.ruleResults.map((result) => [result.rule.id, result]));
+
+  return input.rules
+    .filter((rule) => canRuleParticipateInReference(rule, validationMap.get(rule.id)))
+    .flatMap((rule) => {
+      try {
+        const result = historicalResultMap.get(rule.id);
+        const detail = input.calculationDetailIndex?.get(rule.id)?.get(input.currentIssue)
+          ?? calculationResultMap.get(rule.id)?.details.find((item) => item.currentIssue === input.currentIssue);
+        const calculation = detail
+          ? { mappedResult: detail.mappedResult, secondaryMappedResult: detail.secondaryMappedResult, process: detail.process }
+          : input.fallbackCurrent && input.fallbackConfig
+            ? calculateRule(rule, input.fallbackCurrent, input.fallbackConfig, { periodIndex: input.fallbackPeriodIndex ?? 0 })
+            : undefined;
+        if (!calculation) return [];
+
+        if (rule.category === "kill_three_as_nine") {
+          const includeTargets = calculation.mappedResult;
+          const excludeTargets = calculation.secondaryMappedResult?.length
+            ? calculation.secondaryMappedResult
+            : (input.fallbackConfig?.zodiacOrder ?? []).filter((zodiac) => !includeTargets.includes(zodiac));
           return [
             makeSignal(rule, result, "include", "zodiac", includeTargets, calculation.process),
             makeSignal(rule, result, "exclude", "zodiac", excludeTargets, calculation.process),

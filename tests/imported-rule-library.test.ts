@@ -6,17 +6,18 @@ import { buildRuleSignature } from "@/lib/rules/rule-library";
 
 describe("cleaned rule library import", () => {
   it("contains every unique exported formula with stable source counts", () => {
-    expect(seedRules).toHaveLength(160);
-    expect(seedRules.filter((rule) => rule.sourceType === "manual")).toHaveLength(99);
+    expect(seedRules).toHaveLength(246);
+    expect(seedRules.filter((rule) => rule.sourceType === "manual")).toHaveLength(183);
     expect(seedRules.filter((rule) => rule.sourceType === "user_provided")).toHaveLength(53);
-    expect(seedRules.filter((rule) => rule.sourceType === "system_recommended")).toHaveLength(8);
+    expect(seedRules.filter((rule) => rule.sourceType === "system_recommended")).toHaveLength(10);
     expect(seedRules.filter((rule) => rule.id.startsWith("rq-docx-20260727-"))).toHaveLength(14);
     expect(seedRules.filter((rule) => rule.id.startsWith("rq-docx-20260729-"))).toHaveLength(25);
     expect(seedRules.filter((rule) => rule.id.startsWith("rq-docx-20260816-"))).toHaveLength(44);
+    expect(seedRules.filter((rule) => rule.id.startsWith("rq-docx-20260828-"))).toHaveLength(86);
     expect(new Set(seedRules.map((rule) => rule.id)).size).toBe(seedRules.length);
   });
 
-  it("bundles the latest formulas exported on 2026-08-16", () => {
+  it("bundles the latest formulas exported on 2026-08-28", () => {
     expect(seedRules.some((rule) => rule.name === "L序杀一行 - 样例核心")).toBe(false);
     expect(seedRules.find((rule) => rule.name === "D序杀一行 - 样例核心")?.formula).toBe(
       "行(平1) + 尾(平2) + 特码行 + 期尾",
@@ -44,6 +45,25 @@ describe("cleaned rule library import", () => {
       formula: "平4波色值 + 平6尾",
       normalizer: "subtract_5_to_1_5",
       target: "special_element",
+    });
+    expect(seedRules.find((rule) => rule.id === "rq-docx-20260816-145")?.name).toBe(
+      "L序杀半波-2026.08.15新增半波类 [L序]",
+    );
+    expect(seedRules.find((rule) => rule.id === "rq-docx-20260828-244")).toMatchObject({
+      name: "D序杀一肖-2026.08.29新增2",
+      category: "kill_zodiac",
+      orderMode: "D",
+      formula: "平2波+平3头+平3波+平3肖位+平4肖位+平6波+2",
+    });
+    expect(seedRules.find((rule) => rule.id === "rq-docx-20260828-245")).toMatchObject({
+      name: "自动筛选 30009（已加入）",
+      category: "kill_element",
+      formula: "平2尾 + 平4头 + 平5段",
+    });
+    expect(seedRules.find((rule) => rule.id === "rq-docx-20260828-246")).toMatchObject({
+      name: "自动筛选 30070（已加入）",
+      category: "kill_tail",
+      formula: "平4波色值-平5段 + 特码五行值",
     });
   });
 
