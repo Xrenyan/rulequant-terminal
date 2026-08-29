@@ -37,7 +37,7 @@ import { createPortal } from "react-dom";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent, type KeyboardEvent } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { runRuleCalculation, type RuleCalculation } from "@/lib/rule-engine/rule-engine";
-import { buildReferenceObservation, clearCandidatePoolCache, generateCandidatePool } from "@/lib/candidate-pool/candidate-pool";
+import { REFERENCE_OBSERVATION_WINDOWS, clearCandidatePoolCache, compactReferenceObservationBacktest, generateCandidatePool } from "@/lib/candidate-pool/candidate-pool";
 import type { FormulaDiscoveryCandidate } from "@/lib/formula-discovery/formula-discovery";
 import { buildFormulaLedger, buildOneClickFormulaResults, type FormulaLedgerEntry, type OneClickFormulaResult } from "@/lib/formula-ledger/formula-ledger";
 import { parseDrawFile, parseDrawText } from "@/lib/parsers/draw-parser";
@@ -150,6 +150,8 @@ const backgroundBacktestCache = new Map<string, BacktestResult>();
 const BACKGROUND_BACKTEST_CACHE_LIMIT = 3;
 const candidatePoolReportCache = new Map<string, CandidatePoolReport>();
 const CANDIDATE_POOL_REPORT_CACHE_LIMIT = 3;
+const referenceObservationCache = new Map<string, ReferenceObservationReport>();
+const REFERENCE_OBSERVATION_CACHE_LIMIT = 24;
 
 function compactCandidateBacktest(backtest: BacktestResult): BacktestResult {
   return {
@@ -1036,7 +1038,7 @@ function FormulaDiscoveryPendingPanel({
   elapsedSeconds: number;
   preparing: boolean;
 }) {
-  const stages = ["生成候选组合", "训练期筛选", "验证期复核", "留出期检查", "稳定性排序"];
+  const stages = ["生成加法组合", "计算全部历史", "检查近期表现", "排除波动过大", "综合排序"];
   const activeStage = preparing ? 0 : Math.min(4, Math.max(1, Math.floor(elapsedSeconds / 2) + 1));
   const depthLabel = depth === "balanced" ? "稳健组合" : depth === "deep" ? "深度组合" : "高级组合";
 
@@ -1071,6 +1073,12 @@ function FormulaDiscoveryPendingPanel({
       </div>
     </Panel>
   );
+}
+
+function formulaStabilityLabel(gap: number): "稳定" | "较稳定" | "波动较大" {
+  if (gap <= 8) return "稳定";
+  if (gap <= 15) return "较稳定";
+  return "波动较大";
 }
 
 function NumberTile({ number, special = false, config }: { number: number; special?: boolean; config: RuleQuantConfig }) {
@@ -1371,6 +1379,16 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     loading: boolean;
     error: string;
   }>({ key: "", loading: false, error: "" });
+  const [referenceObservationWindow, setReferenceObservationWindow] = useState(10);
+  const [referenceObservationState, setReferenceObservationState] = useState<{
+    key: string;
+    report?: ReferenceObservationReport;
+    loading: boolean;
+    error: string;
+  }>({ key: "", loading: false, error: "" });
+  const referenceObservationWorkerRef = useRef<Worker | null>(null);
+  const referenceObservationDatasetKeyRef = useRef("");
+  const referenceObservationActiveKeyRef = useRef("");
   const [discoveryFocusId, setDiscoveryFocusId] = useState("");
   const [discoveryPage, setDiscoveryPage] = useState(0);
   const [discoveryStatus, setDiscoveryStatus] = useState("");
@@ -1784,11 +1802,87 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     }, 500);
     return () => window.clearTimeout(saveTimer);
   }, [activeDraws.length, activeView, candidateReport, dataSourceLabel, referenceHistory, store]);
-  const referenceObservation = useMemo(() => {
-    if (activeView !== "candidate-pool" || candidateWorkspaceTab !== "history" || !isCandidatePoolReady || !isCandidateHistoryReady) return EMPTY_REFERENCE_OBSERVATION;
-    void referenceRunId;
-    return buildReferenceObservation({ draws: researchDraws, rules, config, validationSummaries: ruleValidationSummaries, window: 10 });
-  }, [activeView, candidateWorkspaceTab, isCandidateHistoryReady, isCandidatePoolReady, researchDraws, rules, config, ruleValidationSummaries, referenceRunId]);
+  const shouldBuildReferenceObservation = activeView === "candidate-pool"
+    && candidateWorkspaceTab === "history"
+    && isCandidatePoolReady
+    && isCandidateHistoryReady
+    && Boolean(backgroundBacktest);
+  const referenceObservationBacktest = useMemo(
+    () => shouldBuildReferenceObservation ? compactReferenceObservationBacktest(candidateBacktest) : EMPTY_BACKTEST,
+    [shouldBuildReferenceObservation, candidateBacktest],
+  );
+  const referenceObservationKey = shouldBuildReferenceObservation
+    ? `${backgroundBacktestKey}:${referenceRunId}:${referenceObservationWindow}`
+    : "";
+  const referenceObservationDatasetKey = shouldBuildReferenceObservation
+    ? `${backgroundBacktestKey}:${referenceRunId}`
+    : "";
+  const cachedReferenceObservation = referenceObservationKey ? referenceObservationCache.get(referenceObservationKey) : undefined;
+  useEffect(() => {
+    referenceObservationActiveKeyRef.current = referenceObservationKey;
+    if (!shouldBuildReferenceObservation || !referenceObservationKey || !referenceObservationDatasetKey) {
+      referenceObservationWorkerRef.current?.terminate();
+      referenceObservationWorkerRef.current = null;
+      referenceObservationDatasetKeyRef.current = "";
+      return;
+    }
+    const cached = referenceObservationCache.get(referenceObservationKey);
+    if (cached) return;
+
+    let worker = referenceObservationWorkerRef.current;
+    const initializeDataset = !worker || referenceObservationDatasetKeyRef.current !== referenceObservationDatasetKey;
+    if (initializeDataset) {
+      worker?.terminate();
+      worker = new Worker(new URL("../workers/reference-observation.worker.ts", import.meta.url));
+      referenceObservationWorkerRef.current = worker;
+      referenceObservationDatasetKeyRef.current = referenceObservationDatasetKey;
+      worker.onmessage = (event: MessageEvent<{ ok: boolean; requestKey: string; report?: ReferenceObservationReport; error?: string }>) => {
+        if (!event.data.ok || !event.data.report) {
+          if (event.data.requestKey === referenceObservationActiveKeyRef.current) {
+            setReferenceObservationState({ key: event.data.requestKey, loading: false, error: event.data.error ?? "历史观察暂时无法生成" });
+          }
+          return;
+        }
+        referenceObservationCache.set(event.data.requestKey, event.data.report);
+        while (referenceObservationCache.size > REFERENCE_OBSERVATION_CACHE_LIMIT) {
+          const oldestKey = referenceObservationCache.keys().next().value;
+          if (typeof oldestKey !== "string") break;
+          referenceObservationCache.delete(oldestKey);
+        }
+        if (event.data.requestKey === referenceObservationActiveKeyRef.current) {
+          const report = event.data.report;
+          startTransition(() => setReferenceObservationState({ key: event.data.requestKey, report, loading: false, error: "" }));
+        }
+      };
+      worker.onerror = (event) => {
+        const activeKey = referenceObservationActiveKeyRef.current;
+        setReferenceObservationState({ key: activeKey, loading: false, error: event.message || "历史观察暂时无法启动" });
+      };
+    }
+    if (!worker) return;
+    queueMicrotask(() => {
+      setReferenceObservationState({ key: referenceObservationKey, loading: true, error: "" });
+    });
+    worker.postMessage({
+      requestKey: referenceObservationKey,
+      window: referenceObservationWindow,
+      dataset: initializeDataset ? {
+        draws: researchDraws,
+        rules,
+        config,
+        backtest: referenceObservationBacktest,
+        validationSummaries: ruleValidationSummaries,
+      } : undefined,
+    });
+  }, [shouldBuildReferenceObservation, referenceObservationKey, referenceObservationDatasetKey, researchDraws, rules, config, referenceObservationBacktest, ruleValidationSummaries, referenceObservationWindow]);
+  useEffect(() => () => referenceObservationWorkerRef.current?.terminate(), []);
+  const referenceObservation = cachedReferenceObservation
+    ?? (referenceObservationState.key === referenceObservationKey ? referenceObservationState.report : undefined)
+    ?? { ...EMPTY_REFERENCE_OBSERVATION, window: referenceObservationWindow };
+  const isReferenceObservationCalculating = shouldBuildReferenceObservation
+    && !cachedReferenceObservation
+    && (referenceObservationState.key !== referenceObservationKey || referenceObservationState.loading);
+  const referenceObservationError = referenceObservationState.key === referenceObservationKey ? referenceObservationState.error : "";
   const resolvedReferenceHistory = useMemo<ResolvedReferenceHistoryItem[]>(() => {
     if (activeView !== "reports" && !(activeView === "candidate-pool" && candidateWorkspaceTab === "history")) return [];
     return resolveReferenceHistoryOutcomes(referenceHistory, activeDraws, config);
@@ -2361,6 +2455,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     try {
       clearCandidatePoolCache();
       candidatePoolReportCache.clear();
+      referenceObservationCache.clear();
       const nextRunId = referenceRunId + 1;
       const nextReportKey = `${backgroundBacktestKey}:${nextRunId}`;
       const freshReport = await runCandidateReportWorker({
@@ -3016,7 +3111,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   <div className="rq-discovery-head">
                     <div>
                       <h2 className="font-semibold text-white">公式筛选</h2>
-                      <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-500">本地算法按 60% 训练期、20% 验证期、20% 独立留出期筛选，并比较最近表现与稳定差。推荐结果只代表历史筛选，不接入大模型，也不代表未来一定有效；确认加入公式库后才参与综合参考。</p>
+                      <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-500">本地算法使用全部开奖记录筛选加法公式，并自动检查近期表现和前后稳定程度。结果只代表历史表现，不接入大模型，也不代表未来一定有效；确认加入公式库后才参与综合参考。</p>
                     </div>
                     <div className="rq-discovery-actions">
                       <Button size="sm" variant={discoveryDepth === "balanced" ? "primary" : "secondary"} onClick={() => { setDiscoveryElapsedSeconds(0); setDiscoveryPage(0); setDiscoveryDepth("balanced"); }}>稳健 · 2-3项</Button>
@@ -3058,15 +3153,15 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                               <h3 className="font-medium text-white">{candidate.rule.formula}</h3>
                               <p className="mt-1 text-xs text-slate-500">{categoryLabel(candidate.rule.category)} · {candidate.rule.orderMode}序 · {candidate.complexity} 项</p>
                             </div>
-                            <Badge tone={candidate.validationRate >= candidate.trainingRate - 10 ? "green" : "yellow"}>{candidate.validationRate}%</Badge>
+                            <Badge tone={candidate.stabilityGap <= 15 ? "green" : "yellow"}>历史 {candidate.successRate}%</Badge>
                           </div>
                           <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-slate-400 sm:grid-cols-3 xl:grid-cols-6">
-                            <span>训练 {candidate.trainingRate}%</span>
-                            <span>验证 {candidate.validationRate}%</span>
-                            <span>留出 {candidate.holdoutRate}%</span>
-                            <span>近10 {candidate.recentRate}%</span>
-                            <span>稳定差 {candidate.stabilityGap}</span>
-                            <span>错 {candidate.failed}</span>
+                            <span>全部历史 {candidate.successRate}%</span>
+                            <span>最近10期 {candidate.recentRate}%</span>
+                            <span>稳定程度 {formulaStabilityLabel(candidate.stabilityGap)}</span>
+                            <span>样本 {candidate.total}期</span>
+                            <span>当前连对 {candidate.currentStreak}期</span>
+                            <span>历史错期 {candidate.failed}</span>
                           </div>
                           <p className="mt-3 text-xs text-rose-200">错期：{candidate.failedIssues.slice(0, 6).join("、") || "暂无"}</p>
                         </button>
@@ -3612,7 +3707,15 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     <span className="rq-progress-spinner" aria-hidden="true" />
                     <div><strong>正在准备历史复盘</strong><p>页面保持可用，系统正在按过去开奖逐期重建当时的综合排序。</p></div>
                   </div>
-                ) : <ReferenceObservationPanel report={referenceObservation} />}
+                ) : (
+                  <ReferenceObservationPanel
+                    report={referenceObservation}
+                    selectedWindow={referenceObservationWindow}
+                    loading={isReferenceObservationCalculating}
+                    error={referenceObservationError}
+                    onWindowChange={setReferenceObservationWindow}
+                  />
+                )}
                 <ReferenceHistoryPanel
                   records={resolvedReferenceHistory}
                   config={config}
@@ -3937,30 +4040,30 @@ function DiscoveryDetailPanel({
       <p className="mt-4 font-mono text-sm text-cyan-100">{candidate.rule.formula}</p>
       <div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
         <div className="rounded-md border border-white/[0.08] bg-white/[0.03] p-3">
-          <p className="text-slate-500">训练期表现</p>
-          <p className="mt-1 font-mono text-[20px] text-white">{candidate.trainingRate}%</p>
-          <p className="mt-1 text-xs text-slate-500">{candidate.trainingResult.total} 期</p>
+          <p className="text-slate-500">全部历史表现</p>
+          <p className="mt-1 font-mono text-[20px] text-white">{candidate.successRate}%</p>
+          <p className="mt-1 text-xs text-slate-500">共计算 {candidate.total} 期</p>
         </div>
         <div className="rounded-md border border-white/[0.08] bg-white/[0.03] p-3">
-          <p className="text-slate-500">验证期表现</p>
-          <p className="mt-1 font-mono text-[20px] text-white">{candidate.validationRate}%</p>
-          <p className="mt-1 text-xs text-slate-500">{candidate.validationResult.total} 期</p>
+          <p className="text-slate-500">最近10期表现</p>
+          <p className="mt-1 font-mono text-[20px] text-white">{candidate.recentRate}%</p>
+          <p className="mt-1 text-xs text-slate-500">近期变化单独列出</p>
         </div>
         <div className="rounded-md border border-white/[0.08] bg-white/[0.03] p-3">
-          <p className="text-slate-500">独立留出期</p>
-          <p className="mt-1 font-mono text-[20px] text-white">{candidate.holdoutRate}%</p>
-          <p className="mt-1 text-xs text-slate-500">{candidate.holdoutResult.total} 期</p>
+          <p className="text-slate-500">稳定程度</p>
+          <p className="mt-1 text-[20px] font-semibold text-white">{formulaStabilityLabel(candidate.stabilityGap)}</p>
+          <p className="mt-1 text-xs text-slate-500">系统已检查前后表现</p>
         </div>
       </div>
       <div className="mt-4 grid grid-cols-1 gap-2 text-xs text-slate-400 sm:grid-cols-4">
-        <span>总验证 {candidate.total}</span>
-        <span>近10期 {candidate.recentRate}%</span>
+        <span>样本期数 {candidate.total}</span>
+        <span>历史通过 {candidate.success}</span>
         <span>当前连对 {candidate.currentStreak}</span>
-        <span>稳定差 {candidate.stabilityGap}</span>
+        <span>历史得分 {candidate.score}</span>
       </div>
       <p className="mt-3 text-xs text-rose-200">明确错期：{candidate.failedIssues.slice(0, 12).join("、") || "暂无"}</p>
       <p className="mt-3 rounded-md border border-cyan-300/20 bg-cyan-300/[0.06] px-3 py-2 text-xs leading-5 text-slate-400">
-        加减公式出现负的原始值时，规则引擎会按目标范围闭环归一化；综合计算只使用归一化后的有效结果。
+        系统已使用全部开奖记录筛选加法公式，并自动排除前后波动过大的候选。这里只显示历史表现，加入前请人工确认公式含义和错期明细。
       </p>
       {existingRule ? (
         <div className="mt-4 grid gap-2">
@@ -5100,23 +5203,61 @@ function ObservationMetric({ label, hits, total, rate, tone }: { label: string; 
   );
 }
 
-function ReferenceObservationPanel({ report }: { report: ReferenceObservationReport }) {
+function ReferenceObservationPanel({
+  report,
+  selectedWindow,
+  loading,
+  error,
+  onWindowChange,
+}: {
+  report: ReferenceObservationReport;
+  selectedWindow: number;
+  loading: boolean;
+  error: string;
+  onWindowChange: (window: number) => void;
+}) {
   const rows = [...report.items].reverse();
+  const [visibleObservationState, setVisibleObservationState] = useState({ window: selectedWindow, count: 30 });
+  const visibleObservationCount = visibleObservationState.window === selectedWindow ? visibleObservationState.count : 30;
+  const visibleRows = rows.slice(0, visibleObservationCount);
   return (
     <Panel className="rq-observation-panel p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h3 className="font-semibold text-white">综合推荐近10期观察</h3>
+          <h3 className="font-semibold text-white">综合推荐近{selectedWindow}期观察</h3>
           <p className="mt-1 text-sm leading-6 text-slate-500">
             每一期都只用上一期以前的数据生成综合推荐，再拿本期开奖特码核对。这个是观察概率，不代表后面一定会中。
           </p>
         </div>
-        <Badge tone="cyan">观察 {report.total}/{report.window} 期</Badge>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="min-w-[156px]">
+            <Label htmlFor="reference-observation-window">观察范围</Label>
+            <Select
+              id="reference-observation-window"
+              aria-label="选择综合推荐观察期数"
+              value={selectedWindow}
+              onChange={(event) => onWindowChange(Number(event.target.value))}
+            >
+              {REFERENCE_OBSERVATION_WINDOWS.map((window) => <option key={window} value={window}>最近 {window} 期</option>)}
+            </Select>
+          </div>
+          <Badge tone="cyan">实际观察 {report.total}/{selectedWindow} 期</Badge>
+        </div>
       </div>
-      {report.total === 0 ? (
-        <p className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.03] p-4 text-sm text-slate-500">数据还不够，暂时不能观察最近10期综合推荐表现。</p>
+      {loading ? (
+        <div className="rq-inline-progress mt-4" aria-live="polite" aria-busy="true">
+          <span className="rq-progress-spinner" aria-hidden="true" />
+          <div><strong>正在整理最近 {selectedWindow} 期</strong><p>计算已放到后台，页面可以继续操作；完成后会自动更新全部指标和逐期记录。</p></div>
+        </div>
+      ) : error ? (
+        <p className="mt-4 rounded-lg border border-rose-300/25 bg-rose-300/10 p-4 text-sm text-rose-100">{error}</p>
+      ) : report.total === 0 ? (
+        <p className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.03] p-4 text-sm text-slate-500">数据还不够，暂时不能观察最近 {selectedWindow} 期综合推荐表现。</p>
       ) : (
         <>
+          {report.total < selectedWindow && (
+            <p className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/[0.07] px-4 py-3 text-sm text-amber-100">当前共有 {report.total} 个可核对期，以下指标按实际数据计算，没有用空白期凑数。</p>
+          )}
           <div className="rq-observation-metrics">
             <ObservationMetric label="重点号码 Top8" hits={report.top8Hits} total={report.total} rate={report.top8Rate} tone="green" />
             <ObservationMetric label="次选号码 Top12" hits={report.top12Hits} total={report.total} rate={report.top12Rate} tone="cyan" />
@@ -5125,7 +5266,7 @@ function ReferenceObservationPanel({ report }: { report: ReferenceObservationRep
             <ObservationMetric label="生肖 Top9" hits={report.zodiac9Hits} total={report.total} rate={report.zodiac9Rate} tone="yellow" />
           </div>
           <div className="rq-observation-list">
-            {rows.map((item) => (
+            {visibleRows.map((item) => (
               <article key={item.issue} className="rq-observation-entry">
                 <div className="rq-observation-entry__head">
                   <div className="rq-observation-entry__identity">
@@ -5150,6 +5291,11 @@ function ReferenceObservationPanel({ report }: { report: ReferenceObservationRep
                 </div>
               </article>
             ))}
+            {visibleRows.length < rows.length && (
+              <Button className="w-full" variant="secondary" onClick={() => setVisibleObservationState({ window: selectedWindow, count: visibleObservationCount + 30 })}>
+                再显示 30 期（还有 {rows.length - visibleRows.length} 期）
+              </Button>
+            )}
           </div>
         </>
       )}
@@ -5247,7 +5393,7 @@ function ReferenceHistoryPanel({
         <div>
           <h3 className="font-semibold text-white">综合推荐档案</h3>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
-            这里保存每次生成推荐时的完整快照：Top8、Top12、Top16、Top18 号码、全量49号码、生肖Top7/Top8/Top9、全量12生肖、公式数量、证据数量和后续开奖命中情况。它和上面的近10期观察不同，这里是实际保存下来的复盘记录。
+            这里保存每次生成推荐时的完整快照：Top8、Top12、Top16、Top18 号码、全量49号码、生肖Top7/Top8/Top9、全量12生肖、公式数量、证据数量和后续开奖命中情况。它和上面的可选期数观察不同，这里是实际保存下来的复盘记录。
           </p>
         </div>
         <div className="rq-reference-history__actions">

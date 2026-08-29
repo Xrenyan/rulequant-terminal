@@ -21,7 +21,7 @@ describe("formula discovery", () => {
     expect(getFormulaDiscoveryCacheSize()).toBe(1);
   });
 
-  it("generates addable formulas from historical data and ranks them by performance", () => {
+  it("ranks addable formulas by their full historical performance", () => {
     const candidates = discoverFormulaCandidates({
       draws: seedDraws,
       config: seedConfig,
@@ -53,6 +53,7 @@ describe("formula discovery", () => {
       failedIssues: expect.any(Array),
     });
     expect(candidates[0].rule.formula.split("+").length).toBeLessThanOrEqual(3);
+    expect(candidates[0].rule.description).toContain("全部历史");
     expect(candidates[0].validationResult.total).toBeGreaterThan(0);
     expect(candidates[0].holdoutResult.total).toBeGreaterThan(0);
     expect(candidates[0].validationRate + 25).toBeGreaterThanOrEqual(candidates[0].trainingRate);
@@ -82,7 +83,7 @@ describe("formula discovery", () => {
     expect(candidates.every((candidate) => candidate.holdoutResult.total > 0)).toBe(true);
   });
 
-  it("normalizes negative results from advanced subtraction formulas before they become usable outputs", () => {
+  it("only returns addition formulas with non-negative raw results even when advanced styles are requested", () => {
     const candidates = discoverFormulaCandidates({
       draws: seedDraws,
       config: seedConfig,
@@ -101,10 +102,11 @@ describe("formula discovery", () => {
     });
 
     expect(candidates.length).toBeGreaterThan(0);
-    expect(candidates.some((candidate) => candidate.details.some((detail) => detail.rawResult < 0))).toBe(true);
+    expect(candidates.every((candidate) => !candidate.rule.formula.includes("-"))).toBe(true);
 
     for (const candidate of candidates) {
       for (const detail of candidate.details) {
+        expect(detail.rawResult).toBeGreaterThanOrEqual(0);
         if (typeof detail.finalResult !== "number") continue;
         expect(detail.finalResult).toBeGreaterThanOrEqual(0);
         if (["kill_zodiac", "kill_sum", "kill_segment", "kill_element"].includes(candidate.rule.category)) {

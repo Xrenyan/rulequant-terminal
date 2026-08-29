@@ -20,15 +20,9 @@ self.onmessage = (event: MessageEvent<Request>) => {
       trainRatio: 0.6,
       validationRatio: 0.2,
       orderModes: depth === "balanced" ? ["L"] : ["L", "D"],
-      formulaStyles: depth === "advanced"
-        ? ["sum", "alternating", "subtract_last", "constant_adjusted"]
-        : depth === "deep"
-          ? ["sum", "alternating"]
-          : ["sum"],
+      formulaStyles: ["sum"],
       combinationLimitPerTerm: depth === "advanced" ? 18 : depth === "deep" ? 26 : 24,
-      minTrainingRate: depth === "advanced" ? 68 : 62,
-      minValidationRate: depth === "advanced" ? 68 : 62,
-      minHoldoutRate: depth === "advanced" ? 68 : 62,
+      minOverallRate: depth === "advanced" ? 68 : 62,
       minRecentRate: depth === "advanced" ? 70 : 60,
       maxTrainValidationGap: depth === "advanced" ? 16 : depth === "deep" ? 20 : 24,
     });

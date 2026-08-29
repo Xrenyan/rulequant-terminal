@@ -1,8 +1,8 @@
 import { aggregateZodiacCandidates, buildNumberCandidates } from "@/lib/scoring/scoring-engine";
-import { buildRuleSignals } from "@/lib/signal-system/signal-system";
-import { getNumberAttributes } from "@/lib/engine/attributes";
+import { buildRuleSignals, buildRuleSignalsFromBacktest } from "@/lib/signal-system/signal-system";
+import { getNumberAttributes, normalizeDraw } from "@/lib/engine/attributes";
 import { runBacktest } from "@/lib/backtest/run-backtest";
-import type { BacktestDetail, BacktestResult, CandidateNumber, CandidatePoolReport, DrawRecord, ReferenceObservationReport, RuleBacktestResult, RuleQuantConfig, RuleRecord } from "@/types/domain";
+import type { BacktestDetail, BacktestResult, CandidateNumber, CandidatePoolReport, DrawRecord, ReferenceObservationReport, RuleQuantConfig, RuleRecord, RuleSignal } from "@/types/domain";
 import type { RuleValidationSummary } from "@/lib/rules/rule-validation";
 
 type GenerateCandidatePoolInput = {
@@ -11,21 +11,26 @@ type GenerateCandidatePoolInput = {
   config: RuleQuantConfig;
   backtest?: BacktestResult;
   validationSummaries?: RuleValidationSummary[];
+  signals?: RuleSignal[];
+  cache?: boolean;
 };
 
 const RISK_NOTICE = "综合参考结果仅用于历史数据研究、规则公式计算和参考排序，不代表一定正确。";
+export const REFERENCE_OBSERVATION_WINDOWS = Array.from({ length: 20 }, (_, index) => (index + 1) * 10);
 const candidatePoolCache = new Map<string, CandidatePoolReport>();
 const CANDIDATE_POOL_CACHE_LIMIT = 32;
 
+function compareIssues(a: string, b: string): number {
+  const aNumber = /^\d+$/.test(a) ? Number(a) : undefined;
+  const bNumber = /^\d+$/.test(b) ? Number(b) : undefined;
+  if (aNumber !== undefined && bNumber !== undefined) return aNumber - bNumber;
+  if (aNumber !== undefined) return 1;
+  if (bNumber !== undefined) return -1;
+  return a.localeCompare(b, "zh-CN", { numeric: true });
+}
+
 function sortDraws(draws: DrawRecord[]): DrawRecord[] {
-  return [...draws].sort((a, b) => {
-    const aNumber = /^\d+$/.test(a.issue) ? Number(a.issue) : undefined;
-    const bNumber = /^\d+$/.test(b.issue) ? Number(b.issue) : undefined;
-    if (aNumber !== undefined && bNumber !== undefined) return aNumber - bNumber;
-    if (aNumber !== undefined) return 1;
-    if (bNumber !== undefined) return -1;
-    return a.issue.localeCompare(b.issue, "zh-CN", { numeric: true });
-  });
+  return [...draws].sort((a, b) => compareIssues(a.issue, b.issue));
 }
 
 function candidateCacheKey(input: GenerateCandidatePoolInput): string {
@@ -50,6 +55,7 @@ function candidateCacheKey(input: GenerateCandidatePoolInput): string {
     ]),
     validation: input.validationSummaries?.map((summary) => [summary.ruleId, summary.canJoinReference, summary.status]) ?? [],
     backtest: input.backtest?.ruleResults.map((result) => [result.rule.id, result.successRate, result.currentStreak, result.last10]) ?? [],
+    signals: input.signals?.map((signal) => [signal.ruleId, signal.action, signal.targetType, signal.targets, signal.weight]) ?? [],
     config: input.config,
   });
 }
@@ -60,6 +66,37 @@ export function clearCandidatePoolCache(): void {
 
 export function getCandidatePoolCacheSize(): number {
   return candidatePoolCache.size;
+}
+
+export function compactReferenceObservationBacktest(backtest: BacktestResult): BacktestResult {
+  return {
+    generatedAt: backtest.generatedAt,
+    ruleResults: backtest.ruleResults.map((result) => ({
+      ...result,
+      failedIssues: [],
+      details: result.details.map((detail) => ({
+        ruleId: detail.ruleId,
+        ruleName: detail.ruleName,
+        currentIssue: detail.currentIssue,
+        currentNumbers: [],
+        lOrder: [],
+        dOrder: [],
+        formula: "",
+        variables: {},
+        expression: "",
+        process: [],
+        rawResult: 0,
+        normalizerSteps: [],
+        finalResult: 0,
+        mappedResult: [...detail.mappedResult],
+        secondaryMappedResult: detail.secondaryMappedResult ? [...detail.secondaryMappedResult] : undefined,
+        targetLabel: "",
+        nextIssue: detail.futureChecks.at(-1)?.issue ?? detail.nextIssue,
+        futureChecks: [],
+        success: detail.success,
+      })),
+    })),
+  };
 }
 
 function focusedNumberScore(candidate: CandidateNumber): number {
@@ -97,8 +134,8 @@ function focusedNumbers(candidates: CandidateNumber[], count: number): Candidate
 }
 
 export function generateCandidatePool(input: GenerateCandidatePoolInput): CandidatePoolReport {
-  const key = candidateCacheKey(input);
-  const cached = candidatePoolCache.get(key);
+  const key = input.cache === false ? "" : candidateCacheKey(input);
+  const cached = key ? candidatePoolCache.get(key) : undefined;
   if (cached) {
     candidatePoolCache.delete(key);
     candidatePoolCache.set(key, cached);
@@ -107,7 +144,7 @@ export function generateCandidatePool(input: GenerateCandidatePoolInput): Candid
 
   const sortedDraws = sortDraws(input.draws);
   const latestDraw = sortedDraws.at(-1);
-  const signals = buildRuleSignals(input);
+  const signals = input.signals ?? buildRuleSignals(input);
   const allNumbers = buildNumberCandidates(input.config, signals);
   const allZodiacs = aggregateZodiacCandidates(input.config, allNumbers);
   const participatingRuleIds = new Set(signals.map((signal) => signal.ruleId));
@@ -134,11 +171,13 @@ export function generateCandidatePool(input: GenerateCandidatePoolInput): Candid
     riskNotice: RISK_NOTICE,
   };
 
-  candidatePoolCache.set(key, report);
-  while (candidatePoolCache.size > CANDIDATE_POOL_CACHE_LIMIT) {
-    const oldestKey = candidatePoolCache.keys().next().value;
-    if (!oldestKey) break;
-    candidatePoolCache.delete(oldestKey);
+  if (key) {
+    candidatePoolCache.set(key, report);
+    while (candidatePoolCache.size > CANDIDATE_POOL_CACHE_LIMIT) {
+      const oldestKey = candidatePoolCache.keys().next().value;
+      if (!oldestKey) break;
+      candidatePoolCache.delete(oldestKey);
+    }
   }
   return report;
 }
@@ -149,77 +188,90 @@ function rate(hits: number, total: number): number {
 
 function detailKnownByIssue(detail: BacktestDetail, knownIssue: string): boolean {
   if (detail.futureChecks.length) {
-    return detail.futureChecks.every((check) => check.issue.localeCompare(knownIssue, "zh-CN", { numeric: true }) <= 0);
+    return detail.futureChecks.every((check) => compareIssues(check.issue, knownIssue) <= 0);
   }
-  if (detail.nextIssue) return detail.nextIssue.localeCompare(knownIssue, "zh-CN", { numeric: true }) <= 0;
-  return detail.currentIssue.localeCompare(knownIssue, "zh-CN", { numeric: true }) < 0;
+  if (detail.nextIssue) return compareIssues(detail.nextIssue, knownIssue) <= 0;
+  return compareIssues(detail.currentIssue, knownIssue) < 0;
 }
 
-function streak(values: boolean[]): { current: number; max: number } {
-  let max = 0;
-  let running = 0;
-  for (const value of values) {
-    if (value) {
-      running += 1;
-      max = Math.max(max, running);
-    } else {
-      running = 0;
-    }
-  }
+function createHistoricalBacktestSnapshotter(backtest: BacktestResult): (knownIssue: string) => BacktestResult {
+  const states = backtest.ruleResults.map((result) => ({
+    result,
+    cursor: 0,
+    success: 0,
+    currentStreak: 0,
+    maxStreak: 0,
+    recentValues: [] as boolean[],
+  }));
 
-  let current = 0;
-  for (let index = values.length - 1; index >= 0; index -= 1) {
-    if (!values[index]) break;
-    current += 1;
-  }
-
-  return { current, max };
-}
-
-function summarizeRuleBacktest(ruleResult: RuleBacktestResult, knownIssue: string): RuleBacktestResult {
-  const details = ruleResult.details.filter((detail) => detailKnownByIssue(detail, knownIssue));
-  const values = details.map((detail) => detail.success);
-  const success = values.filter(Boolean).length;
-  const streaks = streak(values);
-
-  return {
-    ...ruleResult,
-    total: details.length,
-    success,
-    failed: details.length - success,
-    successRate: details.length ? Number(((success / details.length) * 100).toFixed(2)) : 0,
-    currentStreak: streaks.current,
-    maxStreak: streaks.max,
-    last10: values.slice(-10),
-    failedIssues: details.filter((detail) => !detail.success).map((detail) => detail.currentIssue),
-    details,
-  };
-}
-
-function backtestKnownByIssue(backtest: BacktestResult, knownIssue: string): BacktestResult {
-  return {
+  return (knownIssue: string) => ({
     generatedAt: backtest.generatedAt,
-    ruleResults: backtest.ruleResults.map((ruleResult) => summarizeRuleBacktest(ruleResult, knownIssue)),
-  };
+    ruleResults: states.map((state) => {
+      while (state.cursor < state.result.details.length && detailKnownByIssue(state.result.details[state.cursor], knownIssue)) {
+        const value = state.result.details[state.cursor].success;
+        state.cursor += 1;
+        if (value) {
+          state.success += 1;
+          state.currentStreak += 1;
+          state.maxStreak = Math.max(state.maxStreak, state.currentStreak);
+        } else {
+          state.currentStreak = 0;
+        }
+        state.recentValues.push(value);
+        if (state.recentValues.length > 10) state.recentValues.shift();
+      }
+
+      return {
+        ...state.result,
+        total: state.cursor,
+        success: state.success,
+        failed: state.cursor - state.success,
+        successRate: state.cursor ? Number(((state.success / state.cursor) * 100).toFixed(2)) : 0,
+        currentStreak: state.currentStreak,
+        maxStreak: state.maxStreak,
+        last10: [...state.recentValues],
+        failedIssues: [],
+        details: [],
+      };
+    }),
+  });
 }
 
 export function buildReferenceObservation(input: GenerateCandidatePoolInput & { window?: number }): ReferenceObservationReport {
   const sortedDraws = sortDraws(input.draws);
-  const windowSize = input.window ?? 10;
+  const windowSize = Math.min(200, Math.max(10, Math.floor(input.window ?? 10)));
   const startIndex = Math.max(1, sortedDraws.length - windowSize);
   const fullBacktest = input.backtest ?? runBacktest({ draws: sortedDraws, rules: input.rules, config: input.config });
+  const historicalBacktestAt = createHistoricalBacktestSnapshotter(fullBacktest);
+  const calculationDetailIndex = new Map(fullBacktest.ruleResults.map((result) => [
+    result.rule.id,
+    new Map(result.details.map((detail) => [detail.currentIssue, detail])),
+  ]));
   const items = sortedDraws.slice(startIndex).flatMap((targetDraw, offset) => {
     const targetIndex = startIndex + offset;
     const previousDraw = sortedDraws[targetIndex - 1];
     const priorDraws = sortedDraws.slice(0, targetIndex);
     if (!previousDraw || priorDraws.length < 2) return [];
+    const historicalBacktest = historicalBacktestAt(previousDraw.issue);
 
     const report = generateCandidatePool({
       draws: priorDraws,
       rules: input.rules,
       config: input.config,
-      backtest: backtestKnownByIssue(fullBacktest, previousDraw.issue),
+      backtest: historicalBacktest,
       validationSummaries: input.validationSummaries,
+      cache: false,
+      signals: buildRuleSignalsFromBacktest({
+        rules: input.rules,
+        backtest: historicalBacktest,
+        calculationBacktest: fullBacktest,
+        currentIssue: previousDraw.issue,
+        fallbackCurrent: normalizeDraw(previousDraw, input.config),
+        fallbackConfig: input.config,
+        fallbackPeriodIndex: targetIndex - 1,
+        calculationDetailIndex,
+        validationSummaries: input.validationSummaries,
+      }),
     });
     const attributes = getNumberAttributes(targetDraw.special, input.config);
     const top8Numbers = report.topNumbers8.map((candidate) => candidate.number);

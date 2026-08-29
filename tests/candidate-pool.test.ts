@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { buildReferenceObservation, clearCandidatePoolCache, generateCandidatePool, getCandidatePoolCacheSize } from "@/lib/candidate-pool/candidate-pool";
+import { describe, expect, it, vi } from "vitest";
+import { buildReferenceObservation, clearCandidatePoolCache, compactReferenceObservationBacktest, generateCandidatePool, getCandidatePoolCacheSize } from "@/lib/candidate-pool/candidate-pool";
 import { runBacktest } from "@/lib/backtest/run-backtest";
 import { seedConfig, seedDraws, seedRules } from "@/lib/data/seed";
+import * as formulaEngine from "@/lib/formula-engine/formula-engine";
 
 describe("candidate pool", () => {
   it("caches identical candidate reports", () => {
@@ -215,5 +216,43 @@ describe("candidate pool", () => {
       hitTop8: expect.any(Boolean),
     });
     expect(observation.items.every((item) => item.top8Numbers.length <= 8)).toBe(true);
+  });
+
+  it("defaults to 10 periods and keeps the selectable observation range between 10 and 200", () => {
+    const confirmedRules = seedRules.slice(0, 2).map((rule) => ({ ...rule, manuallyConfirmed: true }));
+    const draws = seedDraws.slice(-30);
+
+    const defaultObservation = buildReferenceObservation({ draws, rules: confirmedRules, config: seedConfig });
+    const belowMinimum = buildReferenceObservation({ draws, rules: confirmedRules, config: seedConfig, window: 1 });
+    const aboveMaximum = buildReferenceObservation({ draws, rules: confirmedRules, config: seedConfig, window: 500 });
+
+    expect(defaultObservation.window).toBe(10);
+    expect(belowMinimum.window).toBe(10);
+    expect(aboveMaximum.window).toBe(200);
+    expect(aboveMaximum.total).toBeLessThanOrEqual(200);
+  });
+
+  it("reuses backtest calculation details instead of recalculating every formula for every observed issue", () => {
+    const rules = seedRules.slice(0, 3).map((rule) => ({ ...rule, manuallyConfirmed: true }));
+    const draws = seedDraws.slice(-24);
+    const backtest = runBacktest({ draws, rules, config: seedConfig });
+    const calculateSpy = vi.spyOn(formulaEngine, "calculateRule");
+
+    clearCandidatePoolCache();
+    buildReferenceObservation({ draws, rules, config: seedConfig, backtest: compactReferenceObservationBacktest(backtest), window: 20 });
+
+    expect(calculateSpy).not.toHaveBeenCalled();
+    calculateSpy.mockRestore();
+  });
+
+  it("does not fill the live recommendation cache with one-off historical snapshots", () => {
+    const rules = seedRules.slice(0, 3).map((rule) => ({ ...rule, manuallyConfirmed: true }));
+    const draws = seedDraws.slice(-24);
+    const backtest = runBacktest({ draws, rules, config: seedConfig });
+
+    clearCandidatePoolCache();
+    buildReferenceObservation({ draws, rules, config: seedConfig, backtest, window: 20 });
+
+    expect(getCandidatePoolCacheSize()).toBe(0);
   });
 });
