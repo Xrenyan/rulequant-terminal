@@ -3650,7 +3650,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     ["results", "本期结果", "号码与生肖排序"],
                     ["evidence", "公式依据", isCandidateReferencePreparing ? "整理中" : `${candidateReport.signalCount} 条公式依据`],
                     ["history", "历史复盘", `${referenceHistory.length} 次保存`],
-                    ["combo", "自选公式组合", `${selectedComboRuleIds.length || Math.min(6, referenceRuleCount)} 条已选`],
+                    ["combo", "自选公式组合", `${selectedComboRuleIds.length} 条已选`],
                     ["operations", "运行状态", isCandidateReferencePreparing ? "整理中" : exceptionRules.length ? `${exceptionRules.length} 条异常` : "状态正常"],
                   ].map(([key, label, hint]) => (
                     <button key={key} type="button" role="tab" aria-selected={candidateWorkspaceTab === key} className={cn("rq-workspace-tab", candidateWorkspaceTab === key && "rq-workspace-tab--active")} onClick={() => {

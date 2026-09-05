@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { Panel } from "@/components/ui/panel";
+import { withProjectBasePath } from "@/lib/network/urls";
 
 const GROUPS: Array<{ key: GuideGroup; title: string; description: string }> = [
   { key: "start", title: "快速开始", description: "第一次使用，从这里照着走" },
@@ -33,12 +34,12 @@ export function SystemGuide({ initialTopicSlug, initialSection, returnTo, mode =
       if (mode === "settings") params.set("tab", "guide");
       params.set("topic", slug);
       if (returnTo) params.set("returnTo", returnTo);
-      window.history.replaceState(window.history.state, "", `${mode === "settings" ? "/config" : "/help"}?${params}`);
+      window.history.replaceState(window.history.state, "", withProjectBasePath(`${mode === "settings" ? "/config" : "/help"}?${params}`));
     }
   };
   const back = () => {
     setSelectedSlug("");
-    if (typeof window !== "undefined") window.history.replaceState(window.history.state, "", mode === "settings" ? "/config?tab=guide" : "/help");
+    if (typeof window !== "undefined") window.history.replaceState(window.history.state, "", withProjectBasePath(mode === "settings" ? "/config?tab=guide" : "/help"));
   };
   if (topic) return <GuideTopicView topic={topic} initialSection={initialSection} returnTo={returnTo} onBack={back} onSelectTopic={selectTopic} />;
   return <div className="rq-system-guide">

@@ -28,6 +28,7 @@ export type GuideTopic = {
   aliases: string[];
   route?: string;
   screenshot?: GuideScreenshot;
+  screenshots?: GuideScreenshot[];
   sections: GuideSection[];
   related: string[];
 };

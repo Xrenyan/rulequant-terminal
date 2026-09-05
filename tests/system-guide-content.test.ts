@@ -42,18 +42,20 @@ describe("system guide catalog", () => {
     }
   });
 
-  it("ships optimized real WebP captures for every illustrated workflow", () => {
-    const sources = [...new Set(guideTopics.flatMap((topic) => topic.screenshot?.src ? [topic.screenshot.src] : []))];
-    expect(sources).toHaveLength(10);
+  it("ships valid bounded screenshot assets for every illustrated workflow", () => {
+    const sources = [...new Set(guideTopics.flatMap((topic) => [...(topic.screenshot ? [topic.screenshot.src] : []), ...(topic.screenshots ?? []).map((shot) => shot.src)]))];
+    expect(sources.length).toBeGreaterThanOrEqual(10);
     let totalBytes = 0;
     for (const source of sources) {
       const path = resolve(process.cwd(), "public", source.replace(/^\//, ""));
       const bytes = readFileSync(path);
       totalBytes += statSync(path).size;
-      expect(bytes.subarray(0, 4).toString("ascii"), source).toBe("RIFF");
-      expect(bytes.subarray(8, 12).toString("ascii"), source).toBe("WEBP");
-      expect(bytes.length, source).toBeGreaterThan(20_000);
+      const isWebp = bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP";
+      const isPng = bytes.subarray(0, 8).toString("hex") === "89504e470d0a1a0a";
+      expect(isWebp || isPng, source).toBe(true);
+      expect(bytes.length, source).toBeGreaterThan(5_000);
+      expect(bytes.length, source).toBeLessThan(700_000);
     }
-    expect(totalBytes).toBeLessThan(3 * 1024 * 1024);
+    expect(totalBytes).toBeLessThan(6 * 1024 * 1024);
   });
 });

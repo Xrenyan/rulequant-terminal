@@ -13,6 +13,14 @@ export function uniqueResolvedUrls(urls: string[], baseUrl: string) {
   return resolved;
 }
 
+/** Public assets and history.replaceState do not receive Next Link's base-path handling. */
+export function withProjectBasePath(path: string): string {
+  const configured = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").trim().replace(/^\/+|\/+$/g, "");
+  const prefix = configured ? `/${configured}` : "";
+  if (!prefix || !path.startsWith("/") || path.startsWith("//") || path === prefix || path.startsWith(`${prefix}/`)) return path;
+  return `${prefix}${path}`;
+}
+
 type JsonCacheEntry = {
   expiresAt: number;
   value?: unknown;

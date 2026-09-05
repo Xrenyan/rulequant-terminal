@@ -5,8 +5,10 @@ import { ImageOff, Maximize2, X } from "lucide-react";
 import Image from "next/image";
 import { createPortal } from "react-dom";
 import type { GuideScreenshot } from "@/content/system-guide";
+import { withProjectBasePath } from "@/lib/network/urls";
 
 export function AnnotatedScreenshot({ screenshot }: { screenshot: GuideScreenshot }) {
+  const imageSrc = withProjectBasePath(screenshot.src);
   const [zoomed, setZoomed] = useState(false);
   const [imageError, setImageError] = useState(false);
   const openRef = useRef<HTMLButtonElement>(null);
@@ -37,14 +39,14 @@ export function AnnotatedScreenshot({ screenshot }: { screenshot: GuideScreensho
     };
   }, [zoomed]);
 
-  return <figure className="rq-guide-shot">
+  return <figure className="rq-guide-shot" style={screenshot.width < 640 ? { maxWidth: screenshot.width, marginInline: "auto" } : undefined}>
     <div className="rq-guide-shot__image">
-      {imageError ? <div className="rq-guide-shot__error" role="status"><ImageOff className="h-5 w-5" /><strong>界面图片暂时无法显示</strong><p>下方编号文字包含完整说明，可以继续阅读和操作。</p></div> : <picture><Image src={screenshot.src} width={screenshot.width} height={screenshot.height} alt={screenshot.alt} loading="eager" fetchPriority="high" decoding="async" unoptimized onError={() => setImageError(true)} /></picture>}
+      {imageError ? <div className="rq-guide-shot__error" role="status"><ImageOff className="h-5 w-5" /><strong>界面图片暂时无法显示</strong><p>下方编号文字包含完整说明，可以继续阅读和操作。</p></div> : <picture><Image src={imageSrc} width={screenshot.width} height={screenshot.height} alt={screenshot.alt} loading="eager" fetchPriority="high" decoding="async" unoptimized onError={() => setImageError(true)} /></picture>}
       {!imageError && screenshot.callouts.map((callout) => <button key={callout.number} type="button" data-guide-callout={callout.number} className="rq-guide-shot__hotspot" style={{ left: `${callout.x}%`, top: `${callout.y}%` }} aria-label={`${callout.number}：${callout.title}。${callout.body}`}><span>{callout.number}</span></button>)}
       {!imageError && <button ref={openRef} type="button" className="rq-guide-shot__zoom" onClick={() => setZoomed(true)}><Maximize2 className="h-4 w-4" />放大界面图</button>}
     </div>
     <figcaption>{screenshot.caption}</figcaption>
     <ol className="rq-guide-shot__callouts">{screenshot.callouts.map((callout) => <li key={callout.number}><b>{callout.number}</b><div><strong>{callout.title}</strong><p>{callout.body}</p></div></li>)}</ol>
-    {zoomed && typeof document !== "undefined" && createPortal(<div className="rq-guide-zoom" role="presentation"><button type="button" className="rq-guide-zoom__backdrop" aria-label="关闭放大界面图" onClick={() => setZoomed(false)} /><section role="dialog" aria-modal="true" aria-label="放大的界面说明图"><header><strong>{screenshot.alt}</strong><button ref={closeRef} type="button" aria-label="关闭放大界面图" onClick={() => setZoomed(false)}><X className="h-5 w-5" /></button></header><div><Image src={screenshot.src} width={screenshot.width} height={screenshot.height} alt={screenshot.alt} unoptimized /></div></section></div>, document.body)}
+    {zoomed && typeof document !== "undefined" && createPortal(<div className="rq-guide-zoom" role="presentation"><button type="button" className="rq-guide-zoom__backdrop" aria-label="关闭放大界面图" onClick={() => setZoomed(false)} /><section role="dialog" aria-modal="true" aria-label="放大的界面说明图"><header><strong>{screenshot.alt}</strong><button ref={closeRef} type="button" aria-label="关闭放大界面图" onClick={() => setZoomed(false)}><X className="h-5 w-5" /></button></header><div><Image src={imageSrc} width={screenshot.width} height={screenshot.height} alt={screenshot.alt} unoptimized /></div></section></div>, document.body)}
   </figure>;
 }

@@ -1,4 +1,5 @@
 import { chartAndTermTopics } from "./charts-and-terms";
+import { analysisToolTopics } from "./analysis-tools";
 import { gettingStartedTopics } from "./getting-started";
 import { primaryModuleTopics } from "./primary-modules";
 import { secondaryToolTopics } from "./secondary-tools";
@@ -11,6 +12,7 @@ export const guideTopics: GuideTopic[] = [
   ...gettingStartedTopics,
   ...primaryModuleTopics,
   ...secondaryToolTopics,
+  ...analysisToolTopics,
   ...chartAndTermTopics,
   ...troubleshootingTopics,
 ];

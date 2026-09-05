@@ -20,6 +20,7 @@ export function GuideTopicView({ topic, initialSection, returnTo, onBack, onSele
       <nav className="rq-guide-topic__toc" aria-label="本主题目录"><strong>本页目录</strong>{topic.sections.map((section) => <a key={section.anchor} href={`#guide-${topic.slug}-${section.anchor}`} aria-current={initialSection === section.anchor ? "location" : undefined}>{section.title}</a>)}</nav>
       <div className="rq-guide-topic__body">
         {topic.screenshot && <AnnotatedScreenshot screenshot={topic.screenshot} />}
+        {topic.screenshots?.map((screenshot) => <AnnotatedScreenshot key={screenshot.src} screenshot={screenshot} />)}
         <div className="rq-guide-topic__quick" aria-label="本页先看">{quickSections.map((section) => <GuideSectionView key={section.anchor} topic={topic} section={section} />)}</div>
         {detailSections.map((section) => <GuideSectionView key={section.anchor} topic={topic} section={section} />)}
         <section className="rq-guide-related"><span>相关说明</span><h2>继续学习</h2><div>{related.map((item) => <button key={item.slug} type="button" onClick={() => onSelectTopic(item.slug)}><span><strong>{item.title}</strong><small>{item.summary}</small></span><ArrowRight className="h-4 w-4" /></button>)}</div></section>

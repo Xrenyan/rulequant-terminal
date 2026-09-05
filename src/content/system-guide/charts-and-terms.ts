@@ -9,7 +9,8 @@ function chart(slug: string, title: string, summary: string, aliases: string[], 
     { kind: "example", anchor: "example", title: "完整示例", paragraphs: [`示例：${example}`] },
     { kind: "misunderstanding", anchor: "caveat", title: "不能这样理解", paragraphs: ["历史次数、位置或颜色深浅不代表下一期一定出现，也不代表官方概率。"] },
   ];
-  return { slug, title, summary, group: "chart", keywords: [title, "图表", "怎么看"], aliases, sections, related };
+  return { slug, title, summary, group: "chart", keywords: [title, "图表", "怎么看"], aliases, sections, related,
+    screenshot: slug === "evidence-matrix" ? { src: "/help/screens/evidence-complete.png", width: 1440, height: 1000, alt: "放大后的完整结果矩阵，包含全部12个生肖", caption: "实图：生肖没有只取前六个；每期包含全部12个，0次也保留。靶心标记实际开奖位置。", callouts: [] } : undefined };
 }
 
 export const chartAndTermTopics: GuideTopic[] = [
