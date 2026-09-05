@@ -71,7 +71,7 @@ export function FormulaAnalysisOverview({
         <article>
           <header><span><ShieldCheck className="h-4 w-4" />公式健康</span><Badge tone={attentionFormulas ? "yellow" : "green"}>{attentionFormulas ? `${attentionFormulas} 条需留意` : "全部正常"}</Badge></header>
           <strong>{healthyFormulas}<small> / {report.health.rows.length} 条状态正常</small></strong>
-          <p>异常包括样本不足、连续未通过、近期波动或计算错误；健康度只用于排查公式。</p>
+          <p>需要留意的情况包括可核对期数少、连续出错、近期表现变化较大或算不出结果；用于提醒你检查公式。</p>
         </article>
         <article>
           <header><span><Database className="h-4 w-4" />数据健康</span><Badge tone={report.dataHealth.status === "healthy" ? "green" : "yellow"}>{report.dataHealth.status === "healthy" ? "状态正常" : "需要检查"}</Badge></header>
@@ -79,7 +79,7 @@ export function FormulaAnalysisOverview({
           <p>{dataStale ? "数据超过36小时未更新，请先确认最新开奖是否已同步。" : `最近数据为 ${report.dataHealth.latestIssue ?? "-"} 期，未发现阻断分析的问题。`}</p>
         </article>
         <article>
-          <header><span><Clock3 className="h-4 w-4" />样本覆盖</span><Badge tone={coverageComplete ? "green" : "yellow"}>{coverageComplete ? "覆盖完整" : "样本较少"}</Badge></header>
+          <header><span><Clock3 className="h-4 w-4" />已核对期数</span><Badge tone={coverageComplete ? "green" : "yellow"}>{coverageComplete ? "期数完整" : "期数较少"}</Badge></header>
           <strong>{records.length}<small> / {report.window} 个已开奖期</small></strong>
           <p>{coverageComplete ? `已覆盖最近${report.window}个已开奖期；待开奖期单独保留，不计入指标。` : `当前只有${records.length}个可验证期，比例与连续表现需要谨慎理解。`}</p>
         </article>
@@ -88,7 +88,7 @@ export function FormulaAnalysisOverview({
       <div className="rq-analysis-overview__health-action"><Button size="sm" variant="ghost" onClick={onOpenDiagnostics}><ShieldCheck className="h-4 w-4" />查看公式诊断</Button></div>
 
       <Panel className="rq-analysis-overview__recent">
-        <header><div><span>最近三期</span><h2>实际落点记录</h2></div><p>点击一行后，下方只出现一个明确的核验入口。</p></header>
+        <header><div><span>最近三期</span><h2>实际落点记录</h2></div><p>先选一期，再点“查看此期明细”，就能找到当时得到这个结果的公式。</p></header>
         <div className="rq-analysis-overview__records" role="list" aria-label="最近三期实际落点">
           {latestRecords.map((record) => (
             <button

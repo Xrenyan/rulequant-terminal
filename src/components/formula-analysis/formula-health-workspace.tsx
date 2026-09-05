@@ -17,8 +17,8 @@ import { ExpandableVisualization } from "@/components/ui/expandable-visualizatio
 import { FormulaEffect } from "@/components/formula-analysis/formula-effect";
 
 const STATUS_LABELS: Record<FormulaHealthStatus, { label: string; explanation: string; tone: "green" | "yellow" | "rose" | "slate" }> = {
-  normal: { label: "状态正常", explanation: "样本足够，近期未出现明显连续未通过或大幅波动。", tone: "green" },
-  "sample-low": { label: "样本不足", explanation: "少于10个可验证期，只展示事实，不宜解读为稳定表现。", tone: "yellow" },
+  normal: { label: "状态正常", explanation: "可核对期数足够，最近没有明显连续出错或表现大幅变化。", tone: "green" },
+  "sample-low": { label: "期数不足", explanation: "可核对的记录少于10期，暂时不能据此判断表现是否稳定。", tone: "yellow" },
   "consecutive-failure": { label: "连续未通过", explanation: "最近至少连续3期未通过，需要先核对公式和数据。", tone: "rose" },
   volatile: { label: "近期波动", explanation: "最近10期和较长窗口相差至少15个百分点。", tone: "yellow" },
   "calculation-error": { label: "计算异常", explanation: "公式在当前数据或配置下无法完成计算。", tone: "rose" },
@@ -35,7 +35,7 @@ function PairRows({ rows, empty, onOpenIssue }: { rows: FormulaPairDiagnostic[];
   return <div className="rq-health-pairs__list">{rows.map((row) => (
     <article key={`${row.kind}:${row.leftRuleId}:${row.rightRuleId}`} data-pair-row={row.kind}>
       <header><div><strong>{row.leftRuleName}</strong><span>与</span><strong>{row.rightRuleName}</strong></div><Badge tone={row.kind === "duplicate" ? "cyan" : "rose"}>{row.kind === "duplicate" ? "高度重复" : "方向冲突"}</Badge></header>
-      <div><span>相似度 <b>{Math.round(row.score * 100)}%</b></span><span>共同样本 {row.commonPeriods} 期</span><span>重合期 {row.overlapPeriods} 期</span><span>完全相同 {row.exactMatchPeriods} 期</span></div>
+      <div><span>结果相近程度 <b>{Math.round(row.score * 100)}%</b></span><span>共同核对 {row.commonPeriods} 期</span><span>结果有重合 {row.overlapPeriods} 期</span><span>完全相同 {row.exactMatchPeriods} 期</span></div>
       <footer><small>证据期次</small>{row.exampleIssues.length ? row.exampleIssues.map((issue) => <button key={issue} type="button" data-pair-issue={issue} onClick={() => onOpenIssue(issue)}>{issue}</button>) : <span>暂无可列举期次</span>}</footer>
     </article>
   ))}</div>;
@@ -123,7 +123,7 @@ export function FormulaHealthWorkspace({ report, onOpenIssue }: { report: Formul
               return <tr key={row.ruleId} data-health-row={row.ruleId}>
                 <td data-label="公式"><strong>{row.ruleName}</strong><p>已选 {report.window} 期：{metricText(row, report.window)}</p><details><summary>这条公式表现怎么样</summary><FormulaEffect effect={row.effect} onOpenIssue={onOpenIssue} /></details></td>
                 <td data-label="状态"><Badge tone={state.tone}>{state.label}</Badge><small>{state.explanation}</small></td>
-                <td data-label="最近10期"><b>{metricText(row, 10)}</b>{row.windows[10].sampleSize < 10 && <small>样本不足10期</small>}</td>
+                <td data-label="最近10期"><b>{metricText(row, 10)}</b>{row.windows[10].sampleSize < 10 && <small>可核对记录不足10期</small>}</td>
                 <td data-label="最近30期"><b>{metricText(row, 30)}</b></td>
                 <td data-label="最近50期"><b>{metricText(row, 50)}</b></td>
                 <td data-label="当前连续通过">{row.currentSuccessStreak} 期</td>
@@ -137,11 +137,11 @@ export function FormulaHealthWorkspace({ report, onOpenIssue }: { report: Formul
       </Panel>
 
       <Panel className="rq-health-pairs">
-        <header><div><span>公式关系诊断</span><h2>高度重复与方向冲突</h2><p>只比较相同结果类型；至少共同出现 {report.pairs.minimumCommonPeriods} 期。重复阈值 {Math.round(report.pairs.duplicateThreshold * 100)}%，冲突阈值 {Math.round(report.pairs.conflictThreshold * 100)}%。</p></div><div className="rq-segmented-control"><Button size="sm" variant={pairMode === "duplicate" ? "primary" : "ghost"} aria-pressed={pairMode === "duplicate"} onClick={() => setPairMode("duplicate")}><CopyCheck className="h-4 w-4" />高度重复</Button><Button size="sm" variant={pairMode === "conflict" ? "primary" : "ghost"} aria-pressed={pairMode === "conflict"} onClick={() => setPairMode("conflict")}><AlertTriangle className="h-4 w-4" />方向冲突</Button></div></header>
+        <header><div><span>公式关系诊断</span><h2>高度重复与方向冲突</h2><p>只比较同一种结果，且两条公式至少都有 {report.pairs.minimumCommonPeriods} 期可核对记录。结果相近程度达到 {Math.round(report.pairs.duplicateThreshold * 100)}% 才列为高度重复；排除和支持意见的重合达到 {Math.round(report.pairs.conflictThreshold * 100)}% 才提醒方向冲突。</p></div><div className="rq-segmented-control"><Button size="sm" variant={pairMode === "duplicate" ? "primary" : "ghost"} aria-pressed={pairMode === "duplicate"} onClick={() => setPairMode("duplicate")}><CopyCheck className="h-4 w-4" />高度重复</Button><Button size="sm" variant={pairMode === "conflict" ? "primary" : "ghost"} aria-pressed={pairMode === "conflict"} onClick={() => setPairMode("conflict")}><AlertTriangle className="h-4 w-4" />方向冲突</Button></div></header>
         <div className="rq-health-pairs__explain"><CircleAlert className="h-4 w-4" /><p>{pairMode === "duplicate" ? "两条公式经常给出高度相似的结果集合，可能重复贡献同一种意见。" : "排除与支持公式经常指向相同结果，需要逐期核对是否逻辑相抵。"}</p></div>
-        <PairRows rows={pairMode === "duplicate" ? report.pairs.duplicates : report.pairs.conflicts} empty={pairMode === "duplicate" ? "当前筛选没有达到阈值的高度重复公式。" : "当前筛选没有达到阈值的方向冲突公式。"} onOpenIssue={onOpenIssue} />
+        <PairRows rows={pairMode === "duplicate" ? report.pairs.duplicates : report.pairs.conflicts} empty={pairMode === "duplicate" ? "当前没有发现达到上述程度的重复公式。" : "当前没有发现达到上述程度的方向冲突。"} onOpenIssue={onOpenIssue} />
       </Panel>
-      <p className="rq-health-workspace__note"><Braces className="h-4 w-4" />通过率必须同时看分子/分母和样本期数；不要只看百分比。</p>
+      <p className="rq-health-workspace__note"><Braces className="h-4 w-4" />先看核对了几期、其中对了几期，再看百分比；核对期数少时不要急着下结论。</p>
     </div>
   );
 }

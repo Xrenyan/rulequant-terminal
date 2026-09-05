@@ -4,6 +4,8 @@ import { getNumberAttributes, normalizeDraw } from "@/lib/engine/attributes";
 import { runBacktest } from "@/lib/backtest/run-backtest";
 import type { BacktestDetail, BacktestResult, CandidateNumber, CandidatePoolReport, DrawRecord, ReferenceObservationReport, RuleQuantConfig, RuleRecord, RuleSignal } from "@/types/domain";
 import type { RuleValidationSummary } from "@/lib/rules/rule-validation";
+import { collapseIdenticalRuleOutputs } from "@/lib/candidate-pool/signal-output-groups";
+import { FORMULA_ANALYSIS_WINDOWS, normalizeFormulaAnalysisWindow } from "@/lib/formula-analysis/windows";
 
 type GenerateCandidatePoolInput = {
   draws: DrawRecord[];
@@ -16,7 +18,7 @@ type GenerateCandidatePoolInput = {
 };
 
 const RISK_NOTICE = "综合参考结果仅用于历史数据研究、规则公式计算和参考排序，不代表一定正确。";
-export const REFERENCE_OBSERVATION_WINDOWS = Array.from({ length: 20 }, (_, index) => (index + 1) * 10);
+export const REFERENCE_OBSERVATION_WINDOWS = FORMULA_ANALYSIS_WINDOWS;
 const candidatePoolCache = new Map<string, CandidatePoolReport>();
 const CANDIDATE_POOL_CACHE_LIMIT = 32;
 
@@ -237,9 +239,9 @@ function createHistoricalBacktestSnapshotter(backtest: BacktestResult): (knownIs
   });
 }
 
-export function buildReferenceObservation(input: GenerateCandidatePoolInput & { window?: number }): ReferenceObservationReport {
+export function buildReferenceObservation(input: GenerateCandidatePoolInput & { window?: number; collapseIdenticalOutputs?: boolean }): ReferenceObservationReport {
   const sortedDraws = sortDraws(input.draws);
-  const windowSize = Math.min(200, Math.max(10, Math.floor(input.window ?? 10)));
+  const windowSize = normalizeFormulaAnalysisWindow(input.window);
   const startIndex = Math.max(1, sortedDraws.length - windowSize);
   const fullBacktest = input.backtest ?? runBacktest({ draws: sortedDraws, rules: input.rules, config: input.config });
   const historicalBacktestAt = createHistoricalBacktestSnapshotter(fullBacktest);
@@ -254,6 +256,17 @@ export function buildReferenceObservation(input: GenerateCandidatePoolInput & { 
     if (!previousDraw || priorDraws.length < 2) return [];
     const historicalBacktest = historicalBacktestAt(previousDraw.issue);
 
+    const historicalSignals = buildRuleSignalsFromBacktest({
+      rules: input.rules,
+      backtest: historicalBacktest,
+      calculationBacktest: fullBacktest,
+      currentIssue: previousDraw.issue,
+      fallbackCurrent: normalizeDraw(previousDraw, input.config),
+      fallbackConfig: input.config,
+      fallbackPeriodIndex: targetIndex - 1,
+      calculationDetailIndex,
+      validationSummaries: input.validationSummaries,
+    });
     const report = generateCandidatePool({
       draws: priorDraws,
       rules: input.rules,
@@ -261,17 +274,7 @@ export function buildReferenceObservation(input: GenerateCandidatePoolInput & { 
       backtest: historicalBacktest,
       validationSummaries: input.validationSummaries,
       cache: false,
-      signals: buildRuleSignalsFromBacktest({
-        rules: input.rules,
-        backtest: historicalBacktest,
-        calculationBacktest: fullBacktest,
-        currentIssue: previousDraw.issue,
-        fallbackCurrent: normalizeDraw(previousDraw, input.config),
-        fallbackConfig: input.config,
-        fallbackPeriodIndex: targetIndex - 1,
-        calculationDetailIndex,
-        validationSummaries: input.validationSummaries,
-      }),
+      signals: input.collapseIdenticalOutputs ? collapseIdenticalRuleOutputs(historicalSignals, input.rules) : historicalSignals,
     });
     const attributes = getNumberAttributes(targetDraw.special, input.config);
     const top8Numbers = report.topNumbers8.map((candidate) => candidate.number);

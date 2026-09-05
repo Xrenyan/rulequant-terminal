@@ -429,6 +429,7 @@ export type ReferenceHistoryEvidenceSummary = {
 
 export type ReferenceHistoryItem = {
   schemaVersion: 2;
+  analysisConfigKey?: string;
   id: string;
   signature: string;
   generatedAt: string;

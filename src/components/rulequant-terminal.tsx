@@ -102,6 +102,11 @@ const SystemGuide = dynamic(
   { ssr: false, loading: SystemGuideLoading },
 );
 
+const FormulaGroupComparison = dynamic(() => import("@/components/formula-group-comparison").then((module) => module.FormulaGroupComparison), { ssr: false });
+const FormulaDetailInsights = dynamic(() => import("@/components/formula-detail-insights").then((module) => module.FormulaDetailInsights), { ssr: false });
+const FormulaObservationMonitor = dynamic(() => import("@/components/formula-observation-panel").then((module) => module.FormulaObservationMonitor), { ssr: false });
+const CandidateRankChange = dynamic(() => import("@/components/candidate-rank-change").then((module) => module.CandidateRankChange), { ssr: false });
+
 const SpecialAnalysisView = dynamic(
   () => import("@/components/special-analysis-view").then((module) => module.SpecialAnalysisView),
   { loading: SpecialAnalysisLoading },
@@ -127,7 +132,7 @@ function FormulaResultStatisticsLoading() {
         <div>{Array.from({ length: 7 }, (_, index) => <i key={index} />)}</div>
         <div>{Array.from({ length: 7 }, (_, index) => <i key={index} />)}</div>
       </section>
-      <p>正在载入完整统计、证据明细与可视化入口…</p>
+      <p>正在整理统计图表和公式明细…</p>
     </div>
   );
 }
@@ -295,7 +300,7 @@ export function isNavItemActive(itemKey: ViewKey, activeView: ViewKey): boolean 
 }
 
 function SystemGuideLoading() {
-  return <div className="rq-guide-loading" role="status" aria-busy="true"><BookOpen className="h-6 w-6" /><strong>正在打开使用说明…</strong><span>说明书按需加载，不影响其他页面速度。</span></div>;
+  return <div className="rq-guide-loading" role="status" aria-busy="true"><BookOpen className="h-6 w-6" /><strong>正在打开使用说明…</strong><span>可按页面名称或想解决的问题搜索。</span></div>;
 }
 const REMOTE_DRAW_IMPORT_ENDPOINT = "https://rulequant-terminal.vercel.app/api/import-draws-from-url";
 const AUTO_SYNC_INTERVAL_MS = 10 * 60 * 1000;
@@ -1611,7 +1616,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const isRuleManagementCalculating = activeView === "rules" && isBackgroundBacktestCalculating;
   const ruleManagementBacktestError = activeView === "rules" ? backgroundBacktestError : "";
   const backtest = backgroundBacktest ?? EMPTY_BACKTEST;
-  const selectedRuleResult = useMemo(() => backtest.ruleResults.find((item) => item.rule.id === selectedRule?.id) ?? backtest.ruleResults[0], [backtest, selectedRule?.id]);
+  const selectedRuleResult = useMemo(() => backtest.ruleResults.find((item) => item.rule.id === selectedRule?.id), [backtest, selectedRule?.id]);
   const shouldBuildValidation = Boolean(backgroundBacktest) && (
     activeView === "dashboard"
     || activeView === "rules"
@@ -1794,6 +1799,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     const saveTimer = window.setTimeout(() => {
       void store.saveReferenceHistory(buildReferenceHistoryItem({
         report: candidateReport,
+        config,
         saveType: "auto",
         dataSourceLabel,
         recordCount: activeDraws.length,
@@ -1801,7 +1807,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       }));
     }, 500);
     return () => window.clearTimeout(saveTimer);
-  }, [activeDraws.length, activeView, candidateReport, dataSourceLabel, referenceHistory, store]);
+  }, [activeDraws.length, activeView, candidateReport, config, dataSourceLabel, referenceHistory, store]);
   const shouldBuildReferenceObservation = activeView === "candidate-pool"
     && candidateWorkspaceTab === "history"
     && isCandidatePoolReady
@@ -1888,11 +1894,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     return resolveReferenceHistoryOutcomes(referenceHistory, activeDraws, config);
   }, [activeDraws, activeView, candidateWorkspaceTab, config, referenceHistory]);
   const manualComboRules = useMemo(() => {
-    const selected = rules.filter((rule) => selectedComboRuleIds.includes(rule.id));
-    return selected.length ? selected : rules.filter((rule) => canRuleParticipateInReference(rule, ruleValidationById.get(rule.id))).slice(0, 6);
+    return rules.filter((rule) => selectedComboRuleIds.includes(rule.id) && canRuleParticipateInReference(rule, ruleValidationById.get(rule.id)));
   }, [rules, ruleValidationById, selectedComboRuleIds]);
   const manualComboReport = useMemo(() => {
-    if (activeView !== "candidate-pool" || candidateWorkspaceTab !== "combo" || !isCandidatePoolReady) return EMPTY_CANDIDATE_REPORT;
+    if (activeView !== "candidate-pool" || candidateWorkspaceTab !== "combo" || !isCandidatePoolReady || !manualComboRules.length) return EMPTY_CANDIDATE_REPORT;
     return generateCandidatePool({ draws: researchDraws, rules: manualComboRules, config, backtest: candidateBacktest, validationSummaries: ruleValidationSummaries });
   }, [activeView, candidateWorkspaceTab, isCandidatePoolReady, researchDraws, manualComboRules, config, candidateBacktest, ruleValidationSummaries]);
   const manualDrawValidation = useMemo(() => {
@@ -2383,13 +2388,14 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     }
     const record = buildReferenceHistoryItem({
       report,
+      config,
       saveType,
       dataSourceLabel,
       recordCount: activeDraws.length,
       note,
     });
     await store.saveReferenceHistory(record);
-    setReferenceStatus(`已保存 ${record.baseIssue ?? "-"} 期综合推荐档案：Top8/12/16/18、全量49号码、生肖Top7/8/9、全量12生肖和证据摘要都已入库。`);
+    setReferenceStatus(`已保存 ${record.baseIssue ?? "-"} 期综合推荐档案：Top8/12/16/18、全量49号码、生肖Top7/8/9、全量12生肖和公式依据摘要都已入库。`);
   }
 
   async function saveReferenceArchiveForIssue(issue: string) {
@@ -2423,6 +2429,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
 
       const record = buildReferenceHistoryItem({
         report: archiveReport,
+        config,
         saveType: "manual",
         dataSourceLabel,
         recordCount: archiveDraws.length,
@@ -2621,6 +2628,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       }}
     >
       {pendingRoute && <div className="rq-route-progress" role="status" aria-label="正在打开页面"><span /></div>}
+      <FormulaObservationMonitor draws={activeDraws} rules={rules} config={config} ready={hasHydrated} />
       <div className="rq-shell-grid relative z-10 grid grid-cols-1 lg:grid-cols-[228px_1fr]">
         <aside className="rq-sidebar sticky top-0 hidden h-[calc(100vh-24px)] border-r p-4 lg:block">
           <Link href="/dashboard" className="rq-brand mb-6 flex items-center gap-3 rounded-xl border p-3">
@@ -2752,7 +2760,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                 {isBackgroundBacktestCalculating ? (
                   <><span className="rq-progress-spinner" aria-hidden="true" /><div><strong>页面已打开，正在整理公式数据</strong><small>页面可以继续操作，历史表现和综合依据完成后会自动显示。</small></div></>
                 ) : (
-                  <><XCircle className="h-5 w-5" /><div><strong>公式数据暂未完成</strong><small>{backgroundBacktestError}</small></div></>
+                  <><XCircle className="h-5 w-5" /><div><strong>公式数据暂未完成</strong><small>公式暂时未能算完，请重试；如仍未完成，请检查开奖数据是否齐全。</small></div></>
                 )}
               </div>
             )}
@@ -2822,7 +2830,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                             <span className="sr-only" role="status">正在生成号码依据</span>
                             {Array.from({ length: 8 }, (_, index) => <span key={index} className="rq-top-number rq-skeleton-tile" aria-hidden="true"><i /><i /></span>)}
                           </>
-                        ) : <span className="rq-inline-empty col-span-full">{candidateReportError || "暂无可用证据，请先同步并计算公式。"}</span>}
+                        ) : <span className="rq-inline-empty col-span-full">{candidateReportError ? "综合结果暂未生成，请重试并检查开奖数据。" : "暂无公式依据，请先同步并计算公式。"}</span>}
                       </div>
                     </div>
                     <div className="mt-5 border-t border-white/[0.08] pt-4">
@@ -2833,7 +2841,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                             <span className="sr-only" role="status">正在整理生肖依据</span>
                             {Array.from({ length: 7 }, (_, index) => <span key={index} className="rq-zodiac-skeleton" aria-hidden="true" />)}
                           </>
-                        ) : <span className="rq-inline-empty">{candidateReportError || "暂无可用证据"}</span>}
+                        ) : <span className="rq-inline-empty">{candidateReportError ? "综合结果暂未生成，请重试。" : "暂无公式依据"}</span>}
                       </div>
                     </div>
                   </Panel>
@@ -3090,6 +3098,22 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   )}
                 </Panel>
 
+                {selectedRule && <FormulaDetailInsights
+                  key={selectedRule.id}
+                  rule={selectedRule}
+                  result={selectedRuleResult?.rule.id === selectedRule.id ? selectedRuleResult : undefined}
+                  draws={activeDraws}
+                  config={config}
+                  onOpenIssue={(issue) => {
+                    setLedgerVisibleState({ ruleId: selectedRuleId, count: selectedRuleLedger?.entries.length ?? 200 });
+                    window.setTimeout(() => {
+                      const row = document.getElementById(`formula-ledger-${issue}`);
+                      if (row instanceof HTMLDetailsElement) row.open = true;
+                      row?.scrollIntoView({ block: "center", behavior: "smooth" });
+                      row?.focus({ preventScroll: true });
+                    }, 100);
+                  }}
+                />}
                 <Panel className="p-4 sm:p-5">
                   <h3 className="font-semibold text-white">逐期计算流水账</h3>
                   <div className="mt-4 space-y-3 pr-2">
@@ -3159,7 +3183,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                             <span>全部历史 {candidate.successRate}%</span>
                             <span>最近10期 {candidate.recentRate}%</span>
                             <span>稳定程度 {formulaStabilityLabel(candidate.stabilityGap)}</span>
-                            <span>样本 {candidate.total}期</span>
+                            <span>已核对 {candidate.total}期</span>
                             <span>当前连对 {candidate.currentStreak}期</span>
                             <span>历史错期 {candidate.failed}</span>
                           </div>
@@ -3219,7 +3243,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     <Button className="w-full sm:w-auto" variant="primary" disabled={sourceLoading} onClick={() => void fetchSourceDraws(true, "replace")}>
                       <RefreshCw className="h-4 w-4" />{sourceLoading ? "同步中" : "同步并写入本地库"}
                     </Button>
-                    <Button className="w-full sm:w-auto" onClick={() => exportDrawsCsv(activeDraws)}><Download className="h-4 w-4" />导出 CSV</Button>
+                    <Button className="w-full sm:w-auto" onClick={() => exportDrawsCsv(activeDraws)}><Download className="h-4 w-4" />下载开奖表（CSV）</Button>
                   </div>
                 </div>
                 <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-400">
@@ -3400,14 +3424,14 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                      {isRuleManagementCalculating ? (
                        <><span className="rq-progress-spinner" aria-hidden="true" /><div><strong>公式库已打开，正在整理历史表现</strong><small>现在可以筛选、翻页和查看规则，成功率与最近表现会自动补齐。</small></div></>
                      ) : ruleManagementBacktestError ? (
-                       <><XCircle className="h-5 w-5" /><div><strong>历史表现暂未完成</strong><small>{ruleManagementBacktestError}</small></div></>
+                       <><XCircle className="h-5 w-5" /><div><strong>历史表现暂未完成</strong><small>暂时未能整理完成，请重试并检查开奖数据。</small></div></>
                      ) : (
                        <><CheckCircle2 className="h-5 w-5" /><div><strong>历史表现已就绪</strong><small>已完成 {backtest.ruleResults.length} 条启用公式的历史回放与状态整理。</small></div></>
                      )}
                    </div>
                    {rulesWorkspaceTab === "library" && <>
                   <div className="rq-smart-note mb-4 p-3 text-sm leading-6">
-                    智能学习排行会根据历史成功率、最近10期表现、当前连对、连错和错期自动调权；只是帮助排序和降权，所有结果仍然来自公式计算证据。
+                    智能学习排行会根据历史成功率、最近10期表现、当前连对、连错和错期自动调权；只是帮助排序和降权，排序依据是实际算出的结果与历史记录。
                   </div>
                   <div className="rq-master-detail">
                     <section className="rq-master-pane" aria-label="公式列表">
@@ -3624,7 +3648,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                 <nav className="rq-workspace-tabs rq-candidate-workspace-tabs" role="tablist" aria-label="综合参考工作区">
                   {[
                     ["results", "本期结果", "号码与生肖排序"],
-                    ["evidence", "公式依据", isCandidateReferencePreparing ? "整理中" : `${candidateReport.signalCount} 条证据`],
+                    ["evidence", "公式依据", isCandidateReferencePreparing ? "整理中" : `${candidateReport.signalCount} 条公式依据`],
                     ["history", "历史复盘", `${referenceHistory.length} 次保存`],
                     ["combo", "自选公式组合", `${selectedComboRuleIds.length || Math.min(6, referenceRuleCount)} 条已选`],
                     ["operations", "运行状态", isCandidateReferencePreparing ? "整理中" : exceptionRules.length ? `${exceptionRules.length} 条异常` : "状态正常"],
@@ -3649,10 +3673,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   <Metric label="用户提供公式" value={userProvidedRuleCount} hint="默认可参与" tone="green" />
                   <Metric label="人工新增公式" value={manualRuleCount} hint="用户决定" tone="cyan" />
                   <Metric label="系统推荐公式" value={systemRecommendedRuleCount} hint="确认后参与" tone="violet" />
-                  <Metric label="可计算公式" value={calculableRuleCount} hint="无变量错误" tone="cyan" />
+                  <Metric label="可计算公式" value={calculableRuleCount} hint="已通过计算检查" tone="cyan" />
                   <Metric label="实际参与公式" value={candidateReport.ruleCount} hint="本次计算" tone="green" />
                   <Metric label="样例已核对" value={checkedSampleRuleCount} hint={`未核对 ${uncheckedSampleRuleCount}`} tone="yellow" />
-                  <Metric label="本次生成证据" value={candidateReport.signalCount} hint="支持/排除" />
+                  <Metric label="本次公式依据" value={candidateReport.signalCount} hint="支持/排除" />
                   <Metric label="结果生成时间" value={(referenceGeneratedAt || candidateReport.generatedAt) ? new Date(referenceGeneratedAt || candidateReport.generatedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }) : "-"} hint="本次结果" />
                   <Metric label="同步状态" value={isUsingSyncedData ? "已使用最新数据" : "需要同步"} hint={latestRawDraw?.issue ? `期号 ${latestRawDraw.issue}` : "未同步"} tone={isUsingSyncedData ? "green" : "yellow"} />
                 </div>
@@ -3740,6 +3764,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   report={manualComboReport}
                   validationById={ruleValidationById}
                 />
+                <FormulaGroupComparison draws={activeDraws} rules={rules} config={config} backtest={backgroundBacktest ?? undefined} selectedRuleIds={selectedComboRuleIds} onSelect={setSelectedComboRuleIds} />
                 </>}
                   </section>
                 )}
@@ -3779,7 +3804,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                         </div>
                       </div>
                       <div className="mb-4 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.055] p-3 text-xs leading-5 text-cyan-50/85">
-                        先看重点 Top 8；它会优先选择直接支持更强、反对更少、净证据更好的号码。Top 18 只作为宽参考，不建议当作主选择范围。
+                        Top 8 显示排序靠前的 8 个号码；Top 18 扩大到 18 个。排序会综合支持与排除公式，请一起核对对应依据。
                       </div>
                       {candidateTab === "numbers8" && <CandidateNumberList items={candidateReport.topNumbers8} focus={candidateFocus} onFocus={setCandidateFocus} compact />}
                       {candidateTab === "numbers12" && <CandidateNumberList items={candidateReport.topNumbers12} focus={candidateFocus} onFocus={setCandidateFocus} compact />}
@@ -3791,7 +3816,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       {candidateTab === "zodiacs8" && <CandidateZodiacList items={candidateReport.topZodiacs8} focus={candidateFocus} onFocus={setCandidateFocus} />}
                       {candidateTab === "zodiacs7" && <CandidateZodiacList items={candidateReport.topZodiacs7} focus={candidateFocus} onFocus={setCandidateFocus} />}
                     </Panel>
-                    <CandidateEvidencePanel candidate={focusedCandidate} />
+                    <div className="min-w-0"><CandidateEvidencePanel candidate={focusedCandidate} />
+                      <CandidateRankChange key={focusedCandidate && ("number" in focusedCandidate ? focusedCandidate.number : focusedCandidate.zodiac)} report={candidateReport} candidate={focusedCandidate} history={referenceHistory} config={config} ruleIds={rules.map((rule) => rule.id)} onOpenRule={store.setSelectedRule} />
+                    </div>
                   </div>
                 ))}
 
@@ -3921,7 +3948,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                       </div>
                       {hasCalculation(item) ? (
                         <div className="mt-3 space-y-1 text-xs text-slate-400">
-                          {item.calculation.process.slice(0, 5).map((line) => <p key={line}>{line}</p>)}
+                          {item.calculation.process.map((line, index) => <p key={`${index}:${line}`}>{line}</p>)}
                         </div>
                       ) : <p className="mt-3 text-sm text-rose-200">{item.error}</p>}
                     </div>
@@ -3936,12 +3963,13 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                 config={config}
                 updateConfig={store.updateConfig}
                 resetSeed={store.resetSeed}
+                diagnostics={[backgroundBacktestError, candidateReportError, referenceObservationError].filter(Boolean)}
               />
             )}
 
             {activeView === "reports" && (
               <div className="rq-export-grid">
-                <ExportTile icon={Database} title="开奖数据" desc="导出 CSV / Excel 格式的当前验证开奖数据" action={() => exportDrawsCsv(activeDraws)} />
+                <ExportTile icon={Database} title="开奖数据" desc="下载当前开奖表（CSV 格式，可用 Excel 打开）" action={() => exportDrawsCsv(activeDraws)} />
                 <ExportTile icon={Layers3} title="规则库备份" desc="保存当前全部规则，用于备份或迁移" action={() => exportJson(rules, "rulequant-rules.json")} />
                 <ExportTile icon={FileDown} title="全部公式 Word (.docx)" desc="导出手机和电脑都能打开的标准 Word 文档，包含新增公式、统一排版、总览和逐条详情" action={() => exportRuleLibraryWord(rules)} />
                 <ExportTile icon={Settings2} title="属性配置备份" desc="保存生肖、波色、五行和计算口径" action={() => exportJson(config, "rulequant-config.json")} />
@@ -4056,7 +4084,7 @@ function DiscoveryDetailPanel({
         </div>
       </div>
       <div className="mt-4 grid grid-cols-1 gap-2 text-xs text-slate-400 sm:grid-cols-4">
-        <span>样本期数 {candidate.total}</span>
+        <span>已核对 {candidate.total}期</span>
         <span>历史通过 {candidate.success}</span>
         <span>当前连对 {candidate.currentStreak}</span>
         <span>历史得分 {candidate.score}</span>
@@ -4084,7 +4112,7 @@ function DiscoveryDetailPanel({
 
 function FormulaLedgerRow({ entry }: { entry: FormulaLedgerEntry }) {
   return (
-    <div className={cn(
+    <div id={`formula-ledger-${entry.currentIssue}`} tabIndex={-1} className={cn(
       "rounded-lg border p-4",
       entry.isPending
         ? "border-amber-300/30 bg-amber-300/8"
@@ -5038,11 +5066,11 @@ function EvidenceList({ title, items, tone }: { title: string; items: CandidateE
         <Badge tone={tone}>{items.length}</Badge>
       </div>
       <div className="space-y-2">
-        {items.length === 0 && <p className="rounded-md border border-white/[0.06] bg-white/[0.03] p-3 text-sm text-slate-500">暂无对应证据</p>}
+        {items.length === 0 && <p className="rounded-md border border-white/[0.06] bg-white/[0.03] p-3 text-sm text-slate-500">暂无对应公式</p>}
         {primaryItems.map(renderEvidence)}
         {restItems.length > 0 && (
           <details className="rounded-md border border-white/[0.06] bg-black/15 p-3">
-            <summary className="cursor-pointer text-sm text-slate-300">查看全部 {items.length} 条证据</summary>
+            <summary className="cursor-pointer text-sm text-slate-300">查看全部 {items.length} 条公式依据</summary>
             <div className="mt-3 space-y-2">
               {restItems.map((item, index) => renderEvidence(item, index + 3))}
             </div>
@@ -5159,7 +5187,7 @@ function ManualCombinationPanel({
                 {candidateNumberLabel(item)}
               </span>
             ))}
-            {!report.topNumbers18.length && <span className="col-span-9 text-sm text-slate-500">请选择可参与的公式。</span>}
+            {!report.topNumbers18.length && <span className="col-span-full text-sm text-slate-500">请选择可参与的公式。</span>}
           </div>
           <p className="rq-manual-result__label">生肖 Top 9</p>
           <div className="rq-manual-zodiac-list">
@@ -5272,7 +5300,7 @@ function ReferenceObservationPanel({
                   <div className="rq-observation-entry__identity">
                     <span>{item.issue}期</span>
                     <strong>开 {padNumber(item.special)} {item.zodiac}</strong>
-                    <small>用 {item.previousIssue ?? "-"} 期以前数据 · {item.ruleCount} 条公式 · {item.signalCount} 条证据</small>
+                    <small>用 {item.previousIssue ?? "-"} 期以前数据 · {item.ruleCount} 条公式 · {item.signalCount} 条公式依据</small>
                   </div>
                   <div className="rq-observation-entry__badges">
                     <Badge tone={item.hitNumberRank <= 18 ? "cyan" : "yellow"}>49码排第 {item.hitNumberRank} 位</Badge>
@@ -5397,7 +5425,7 @@ function ReferenceHistoryPanel({
           </p>
         </div>
         <div className="rq-reference-history__actions">
-          <Button size="sm" disabled={!records.length} onClick={onExportJson}><FileJson className="h-4 w-4" />JSON</Button>
+          <Button size="sm" disabled={!records.length} onClick={onExportJson}><FileJson className="h-4 w-4" />下载完整备份（JSON）</Button>
           <Button size="sm" disabled={!records.length} onClick={onExportExcel}><Download className="h-4 w-4" />Excel</Button>
           <Button size="sm" disabled={!records.length} onClick={onExportWord}><FileDown className="h-4 w-4" />Word</Button>
           <Button size="sm" disabled={!records.length} onClick={onExportText}><Download className="h-4 w-4" />文本</Button>
@@ -5425,7 +5453,7 @@ function ReferenceHistoryPanel({
                     </div>
                     <div className="rq-history-record__context">
                       <span><small>本期开奖记录</small><strong>{record.latestNumbers.map((number) => numberWithZodiac(number, config)).join("  ")}</strong></span>
-                      <span><small>计算规模</small><strong>{record.ruleCount} 条公式 · {record.signalCount} 条证据</strong></span>
+                      <span><small>计算规模</small><strong>{record.ruleCount} 条公式 · {record.signalCount} 条公式依据</strong></span>
                       <span><small>后续开奖</small><strong>{actualDrawLabel}</strong></span>
                     </div>
                   </button>
@@ -5502,7 +5530,7 @@ function ReferenceHistoryPanel({
                       </div>
                     </details>
                     <details className="rounded-md border border-white/[0.08] bg-black/15 p-3">
-                      <summary className="cursor-pointer text-sm text-slate-300">查看证据摘要</summary>
+                      <summary className="cursor-pointer text-sm text-slate-300">查看公式依据摘要</summary>
                       <div className="mt-3 grid gap-2">
                         {record.evidenceSummary.slice(0, 40).map((item, index) => (
                           <div key={`${item.ruleId}-${index}`} className="rounded-md border border-white/[0.06] bg-white/[0.025] p-2 text-xs text-slate-300">
@@ -5511,7 +5539,7 @@ function ReferenceHistoryPanel({
                             <span className="ml-2 text-slate-500">{signalTargetTypeLabel(item.targetType)}：{item.targets.join("、")} · 影响分 {item.scoreDelta} · 历史 {item.successRate}% · 近况 {item.recentRate}%</span>
                           </div>
                         ))}
-                        {!record.evidenceSummary.length && <p className="text-xs text-slate-500">暂无证据摘要。</p>}
+                        {!record.evidenceSummary.length && <p className="text-xs text-slate-500">暂无公式依据摘要。</p>}
                         {record.evidenceSummary.length > 40 && <p className="text-xs text-slate-500">仅展示前 40 条，完整证据请导出 JSON/Excel。</p>}
                       </div>
                     </details>
@@ -5539,7 +5567,7 @@ function CandidateEvidencePanel({ candidate }: { candidate?: CandidateNumber | C
   if (!candidate) {
     return (
       <Panel className="p-5">
-        <h3 className="font-semibold text-white">证据面板</h3>
+        <h3 className="font-semibold text-white">公式依据</h3>
         <p className="mt-3 text-sm text-slate-500">暂无候选数据。</p>
       </Panel>
     );
@@ -5564,11 +5592,11 @@ function CandidateEvidencePanel({ candidate }: { candidate?: CandidateNumber | C
         <Panel className="p-3"><p className="text-slate-500">反对规则</p><p className="mt-1 font-mono text-[20px] text-white">{candidate.opposeCount}</p></Panel>
       </div>
       <div className="mt-4 rounded-md border border-cyan-300/20 bg-cyan-300/[0.06] p-3 text-sm leading-6 text-cyan-50">
-        入选原因：综合分 {candidate.score}，支持证据 {candidate.supportCount} 条，反对证据 {candidate.opposeCount} 条；证据来自最新一期公式计算和公式历史表现，仅供公式研究和参考排序。
+        入选原因：综合分 {candidate.score}，支持依据 {candidate.supportCount} 条，反对依据 {candidate.opposeCount} 条；证据来自最新一期公式计算和公式历史表现，仅供公式研究和参考排序。
       </div>
       <div className="mt-5 space-y-5">
-        <EvidenceList title="支持证据" items={candidate.supportRules} tone="green" />
-        <EvidenceList title="反对证据" items={candidate.opposeRules} tone="rose" />
+        <EvidenceList title="支持依据" items={candidate.supportRules} tone="green" />
+        <EvidenceList title="反对依据" items={candidate.opposeRules} tone="rose" />
       </div>
     </Panel>
   );
@@ -5601,10 +5629,12 @@ function ConfigEditor({
   config,
   updateConfig,
   resetSeed,
+  diagnostics = [],
 }: {
   config: ReturnType<typeof useRuleQuantStore.getState>["config"];
   updateConfig: (config: ReturnType<typeof useRuleQuantStore.getState>["config"]) => Promise<void>;
   resetSeed: () => Promise<void>;
+  diagnostics?: string[];
 }) {
   const searchParams = useSearchParams();
   const [text, setText] = useState("");
@@ -5686,7 +5716,8 @@ function ConfigEditor({
         </>}
 
         {settingsTab === "maintenance" && <>
-          <div className="rq-section-head"><div><p className="rq-eyebrow">数据维护</p><h2>备份与恢复</h2><p>危险操作集中在这里，避免日常使用时误触。</p></div></div>
+          <details className="mb-4 rounded-xl border border-white/10 p-4"><summary>高级维护：计算运行记录</summary><p className="mt-2 text-sm">用于排查尚未完成的计算。重试后记录可能更新。</p>{diagnostics.length ? diagnostics.map((message, index) => <pre className="mt-2 whitespace-pre-wrap break-all text-xs" key={`${index}:${message}`}>{message}</pre>) : <p className="mt-2 text-sm">目前没有待处理的计算报错。</p>}</details>
+          <div className="rq-section-head"><div><p className="rq-eyebrow">数据维护</p><h2>备份与恢复</h2><p>下载备份后再恢复或重置，方便保留当前数据。</p></div></div>
           <div className="rq-maintenance-actions">
             <button type="button" onClick={() => exportJson(config, "rulequant-config.json")}><FileJson /><span><strong>导出当前配置</strong><small>保存为配置备份</small></span></button>
             <button type="button" className="is-danger" onClick={() => { if (window.confirm("确认恢复示例数据吗？当前本地修改会被替换。")) void resetSeed(); }}><RefreshCw /><span><strong>恢复示例数据</strong><small>此操作需要再次确认</small></span></button>

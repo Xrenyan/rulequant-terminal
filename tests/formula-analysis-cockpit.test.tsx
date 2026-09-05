@@ -88,7 +88,7 @@ describe("formula analysis overview", () => {
     const report = makeReport();
     const onOpenEvidence = vi.fn();
     const view = await render(<FormulaAnalysisOverview report={report} onOpenEvidence={onOpenEvidence} onOpenLanding={vi.fn()} onOpenDiagnostics={vi.fn()} />);
-    expect(view.textContent).not.toContain("查看此期明细");
+    expect([...view.querySelectorAll("button")].some((button) => button.textContent?.includes("查看此期明细"))).toBe(false);
 
     const row = view.querySelectorAll("[data-overview-record]")[1];
     expect(row.getAttribute("role")).toBeNull();
@@ -174,7 +174,7 @@ describe("formula health workspace", () => {
     expect(view.textContent).toContain(`${row.windows[30].successes}/${row.windows[30].sampleSize}`);
     expect(view.textContent).toContain(`${row.windows[50].successes}/${row.windows[50].sampleSize}`);
     expect(view.textContent).toContain("连续未通过");
-    expect(view.textContent).toContain("样本不足");
+    expect(view.textContent).toContain("期数不足");
     expect(view.querySelector('[data-label="计算说明"] details')?.textContent).toContain("最近未通过期次");
     expect(view.querySelectorAll("[data-health-status-filter]")).toHaveLength(5);
     const shares = [...view.querySelectorAll<HTMLElement>("[data-health-status-share]")]
@@ -208,9 +208,9 @@ describe("formula health workspace", () => {
 
     expect(view.textContent).toContain("高度重复");
     expect(view.textContent).toContain("方向冲突");
-    expect(view.textContent).toContain("共同样本 10 期");
-    expect(view.textContent).toContain("相似度 86%");
-    expect(view.textContent).toContain("重复阈值 80%");
+    expect(view.textContent).toContain("共同核对 10 期");
+    expect(view.textContent).toContain("结果相近程度 86%");
+    expect(view.textContent).toContain("结果相近程度达到 80%");
     const issue = view.querySelector<HTMLButtonElement>('[data-pair-issue="2026210"]')!;
     await click(issue);
     expect(onOpenIssue).toHaveBeenCalledWith("2026210");

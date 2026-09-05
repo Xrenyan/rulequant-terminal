@@ -27,6 +27,7 @@ export type ResolvedReferenceHistoryItem = ReferenceHistoryItem & {
 
 type BuildReferenceHistoryOptions = {
   report: CandidatePoolReport;
+  config?: RuleQuantConfig;
   saveType: "auto" | "manual";
   dataSourceLabel: string;
   recordCount: number;
@@ -164,6 +165,7 @@ export function buildReferenceHistoryItem(input: BuildReferenceHistoryOptions): 
 
   return {
     schemaVersion: 2,
+    analysisConfigKey: input.config ? JSON.stringify(input.config) : undefined,
     id: `reference-${input.report.latestIssue ?? "unknown"}-${stableHash(signature)}`,
     signature,
     generatedAt: input.report.generatedAt,
