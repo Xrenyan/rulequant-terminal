@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { CandidateRankChange } from "@/components/candidate-rank-change";
 import { generateCandidatePool } from "@/lib/candidate-pool/candidate-pool";
 import { buildReferenceHistoryItem } from "@/lib/reference-history/reference-history";
 import { explainRankChange } from "@/lib/reference-history/rank-change";
@@ -34,5 +37,28 @@ describe("rank change explanation", () => {
     const changedNumbers = report.allNumbers.map((n) => n.number === firstNumber.number ? { ...n, supportRules: n.supportRules.filter((s) => s !== source) } : n);
     const change = explainRankChange({ ...next, allNumbers: changedNumbers }, zodiac, [previous], config)!;
     expect(change.changes.find((c) => c.ruleId === source.ruleId)?.delta).toBeCloseTo(-source.scoreDelta / report.allNumbers.filter((n) => n.zodiac === zodiac.zodiac).length);
+  });
+  it("renders added and removed influences as changes specific to the selected candidate", () => {
+    const old = report.allNumbers.find((number) => number.supportRules.length > 0)!;
+    const removed = old.supportRules[0];
+    const added = report.allNumbers
+      .flatMap((number) => number.supportRules)
+      .find((rule) => !old.supportRules.some((existing) => existing.ruleId === rule.ruleId))!;
+    const candidate = { ...old, supportRules: [added, ...old.supportRules.filter((rule) => rule.ruleId !== removed.ruleId)] };
+    const current = { ...next, allNumbers: report.allNumbers.map((number) => number.number === candidate.number ? candidate : number) };
+
+    const markup = renderToStaticMarkup(createElement(CandidateRankChange, {
+      report: current,
+      candidate,
+      history: [previous],
+      config,
+      ruleIds: [added.ruleId, removed.ruleId],
+      onOpenRule: () => undefined,
+    }));
+
+    expect(markup).toContain("本期开始影响它");
+    expect(markup).toContain("本期不再影响它");
+    expect(markup).not.toContain("新加入计算");
+    expect(markup).not.toContain("不再参与");
   });
 });
