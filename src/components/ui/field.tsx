@@ -89,12 +89,13 @@ export function Select({
     }
     const availableBelow = window.innerHeight - rect.bottom - 18;
     const availableAbove = rect.top - 18;
-    const maxHeight = Math.max(180, Math.min(360, Math.max(availableBelow, availableAbove)));
     const opensAbove = availableBelow < 220 && availableAbove > availableBelow;
+    const maxHeight = Math.max(0, Math.min(360, opensAbove ? availableAbove : availableBelow));
     setMenuStyle({
       left: Math.max(12, Math.min(rect.left, window.innerWidth - rect.width - 12)),
-      top: opensAbove ? undefined : rect.bottom + 8,
-      bottom: opensAbove ? window.innerHeight - rect.top + 8 : undefined,
+      // Explicitly clear the opposite CSS inset; undefined leaves the stylesheet's top active.
+      top: opensAbove ? "auto" : rect.bottom + 8,
+      bottom: opensAbove ? window.innerHeight - rect.top + 8 : "auto",
       width: Math.max(rect.width, 220),
       maxHeight,
     });
