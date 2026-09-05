@@ -7,13 +7,16 @@ import type {
   FormulaHealthStatus,
 } from "@/lib/formula-analysis/types";
 import type { DrawRecord, RuleQuantConfig, RuleRecord } from "@/types/domain";
+import { FORMULA_ANALYSIS_WINDOWS, normalizeFormulaAnalysisWindow } from "@/lib/formula-analysis/windows";
+import { evaluateFormulaEffect } from "@/lib/formula-analysis/formula-effect";
 
-const HEALTH_WINDOWS: FormulaAnalysisWindow[] = [10, 30, 50];
+const HEALTH_WINDOWS = FORMULA_ANALYSIS_WINDOWS;
 
 type BuildFormulaHealthReportInput = {
   draws: DrawRecord[];
   rules: RuleRecord[];
   config: RuleQuantConfig;
+  window?: FormulaAnalysisWindow;
 };
 
 function compareIssues(left: DrawRecord, right: DrawRecord): number {
@@ -103,11 +106,12 @@ export function buildFormulaHealthReport(input: BuildFormulaHealthReportInput): 
       longestFailureStreak: longestFailureStreak(values),
       skippedCount: 0,
       error: result.error,
+      effect: evaluateFormulaEffect({ rule: result.rule, details: result.details, config: input.config, draws, window: input.window, error: result.error }),
       latestFailureIssues: result.details
         .filter((detail) => !detail.success)
         .map((detail) => detail.currentIssue)
         .reverse()
-        .slice(0, 10),
+        .slice(0, normalizeFormulaAnalysisWindow(input.window)),
     };
     return { ...base, status: healthStatus(base) };
   });

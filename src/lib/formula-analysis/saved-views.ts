@@ -18,7 +18,8 @@ const TABS = new Set<FormulaAnalysisTab>([
   "diagnostics",
   "evidence",
 ]);
-const WINDOWS = new Set<FormulaAnalysisWindow>([10, 30, 50]);
+import { FORMULA_ANALYSIS_WINDOWS, normalizeFormulaAnalysisWindow } from "@/lib/formula-analysis/windows";
+const WINDOWS = new Set<FormulaAnalysisWindow>(FORMULA_ANALYSIS_WINDOWS);
 const ACTIONS = new Set<FormulaSummaryAction>(["exclude", "include"]);
 const TARGET_TYPES = new Set<FormulaSummaryTargetType>([
   "zodiac",
@@ -50,8 +51,7 @@ function sortedUniqueIds(value: string | string[]): string[] {
 
 function parseWindow(value: string | null): FormulaAnalysisWindow | undefined {
   if (value === null) return undefined;
-  const candidate = Number(value) as FormulaAnalysisWindow;
-  return WINDOWS.has(candidate) ? candidate : undefined;
+  return normalizeFormulaAnalysisWindow(value);
 }
 
 function parseTargetType(value: string | null): FormulaSummaryTargetType | undefined {
@@ -104,7 +104,7 @@ export function parseAnalysisSearchParams(params: URLSearchParams): FormulaAnaly
 export function serializeAnalysisSearchParams(filters: FormulaAnalysisFilters): URLSearchParams {
   const params = new URLSearchParams();
   params.set("tab", filters.tab);
-  params.set("range", String(filters.window));
+  params.set("range", String(normalizeFormulaAnalysisWindow(filters.window)));
   params.set("action", filters.action);
   params.set("type", filters.targetType);
   const ruleIds = sortedUniqueIds(filters.ruleIds);
@@ -114,7 +114,7 @@ export function serializeAnalysisSearchParams(filters: FormulaAnalysisFilters): 
     if (filters.compare.kind === "group") {
       params.set("compareValue", sortedUniqueIds(filters.compare.ruleIds).join(","));
     } else {
-      params.set("compareValue", String(filters.compare.value));
+      params.set("compareValue", String(filters.compare.kind === "window" ? normalizeFormulaAnalysisWindow(filters.compare.value) : filters.compare.value));
     }
   }
   return params;
@@ -135,7 +135,10 @@ function isFilters(value: unknown): value is FormulaAnalysisFilters {
     && candidate.ruleIds.every((id) => typeof id === "string")
     && Boolean(candidate.compare)
     && typeof candidate.compare === "object"
-    && ["none", "window", "group", "target-type"].includes(candidate.compare.kind);
+    && (candidate.compare.kind === "none"
+      || candidate.compare.kind === "window" && WINDOWS.has(candidate.compare.value)
+      || candidate.compare.kind === "target-type" && TARGET_TYPES.has(candidate.compare.value)
+      || candidate.compare.kind === "group" && Array.isArray(candidate.compare.ruleIds) && candidate.compare.ruleIds.every((id) => typeof id === "string"));
 }
 
 function isSavedView(value: unknown): value is SavedFormulaAnalysisView {

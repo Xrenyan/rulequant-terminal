@@ -6,7 +6,9 @@ import type {
 } from "@/lib/formula-summary/formula-summary";
 import type { FormulaDrawLandingAnalysis } from "@/lib/formula-summary/formula-draw-landing";
 
-export type FormulaAnalysisWindow = 10 | 30 | 50;
+import type { FormulaAnalysisWindow } from "@/lib/formula-analysis/windows";
+import type { FormulaEffect } from "@/lib/formula-analysis/formula-effect";
+export type { FormulaAnalysisWindow } from "@/lib/formula-analysis/windows";
 
 export type FormulaAnalysisTab = "overview" | "landing" | "diagnostics" | "evidence";
 
@@ -62,6 +64,7 @@ export type FormulaHealthRow = {
   error?: string;
   status: FormulaHealthStatus;
   latestFailureIssues: string[];
+  effect: FormulaEffect;
 };
 
 export type FormulaHealthReport = {

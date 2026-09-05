@@ -23,7 +23,7 @@ class MemoryStorage implements Storage {
 describe("formula analysis saved views", () => {
   it("parses safe URL defaults and rejects unsupported parity or size types", () => {
     expect(parseAnalysisSearchParams(new URLSearchParams("range=99&action=other&type=parity&tab=bad")))
-      .toEqual(FORMULA_ANALYSIS_DEFAULT_FILTERS);
+      .toEqual({ ...FORMULA_ANALYSIS_DEFAULT_FILTERS, window: 100 });
   });
 
   it("round-trips one comparison dimension and sorted formula ids", () => {

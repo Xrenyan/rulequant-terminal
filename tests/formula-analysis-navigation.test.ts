@@ -32,7 +32,7 @@ describe("formula result analysis navigation", () => {
     for (const label of ["概览", "落点趋势", "公式诊断", "明细核验"]) {
       expect(cockpit).toContain(label);
     }
-    for (const label of ["最近10期", "最近30期", "最近50期", "保存视图", "排除结果", "支持结果"]) {
+    for (const label of ["分析期数", "保存视图", "排除结果", "支持结果"]) {
       expect(toolbar).toContain(label);
     }
     expect(toolbar).not.toContain("单双");

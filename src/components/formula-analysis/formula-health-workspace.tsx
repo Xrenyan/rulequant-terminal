@@ -7,12 +7,14 @@ import type {
   FormulaHealthRow,
   FormulaHealthStatus,
   FormulaPairDiagnostic,
+  FormulaAnalysisWindow,
 } from "@/lib/formula-analysis/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
 import { Panel } from "@/components/ui/panel";
 import { ExpandableVisualization } from "@/components/ui/expandable-visualization";
+import { FormulaEffect } from "@/components/formula-analysis/formula-effect";
 
 const STATUS_LABELS: Record<FormulaHealthStatus, { label: string; explanation: string; tone: "green" | "yellow" | "rose" | "slate" }> = {
   normal: { label: "状态正常", explanation: "样本足够，近期未出现明显连续未通过或大幅波动。", tone: "green" },
@@ -23,7 +25,7 @@ const STATUS_LABELS: Record<FormulaHealthStatus, { label: string; explanation: s
 };
 const STATUS_ORDER: FormulaHealthStatus[] = ["normal", "sample-low", "consecutive-failure", "volatile", "calculation-error"];
 
-function metricText(row: FormulaHealthRow, window: 10 | 30 | 50): string {
+function metricText(row: FormulaHealthRow, window: FormulaAnalysisWindow): string {
   const metric = row.windows[window];
   return `${metric.successRate}% · ${metric.successes}/${metric.sampleSize}`;
 }
@@ -112,14 +114,14 @@ export function FormulaHealthWorkspace({ report, onOpenIssue }: { report: Formul
       </section>
 
       <Panel className="rq-health-table-panel">
-        <header><div><span>公式健康表</span><h2>10 / 30 / 50 期表现</h2></div><Badge tone="slate">显示 {rows.length} / {report.health.rows.length} 条</Badge></header>
+        <header><div><span>公式健康表</span><h2>已选最近 {report.window} 期 · 同看 10 / 30 / 50 期表现</h2></div><Badge tone="slate">显示 {rows.length} / {report.health.rows.length} 条</Badge></header>
         <div className="rq-health-table-scroll">
           <table className="rq-health-table">
             <thead><tr><th scope="col">公式</th><th scope="col">状态</th><th scope="col">最近10期</th><th scope="col">最近30期</th><th scope="col">最近50期</th><th scope="col">当前连续通过</th><th scope="col">当前连续未通过</th><th scope="col">最长连续未通过</th><th scope="col">计算说明</th></tr></thead>
             <tbody>{rows.map((row) => {
               const state = STATUS_LABELS[row.status];
               return <tr key={row.ruleId} data-health-row={row.ruleId}>
-                <td data-label="公式"><strong>{row.ruleName}</strong></td>
+                <td data-label="公式"><strong>{row.ruleName}</strong><p>已选 {report.window} 期：{metricText(row, report.window)}</p><details><summary>这条公式表现怎么样</summary><FormulaEffect effect={row.effect} onOpenIssue={onOpenIssue} /></details></td>
                 <td data-label="状态"><Badge tone={state.tone}>{state.label}</Badge><small>{state.explanation}</small></td>
                 <td data-label="最近10期"><b>{metricText(row, 10)}</b>{row.windows[10].sampleSize < 10 && <small>样本不足10期</small>}</td>
                 <td data-label="最近30期"><b>{metricText(row, 30)}</b></td>
@@ -127,7 +129,7 @@ export function FormulaHealthWorkspace({ report, onOpenIssue }: { report: Formul
                 <td data-label="当前连续通过">{row.currentSuccessStreak} 期</td>
                 <td data-label="当前连续未通过">{row.currentFailureStreak} 期</td>
                 <td data-label="最长连续未通过">{row.longestFailureStreak} 期</td>
-                <td data-label="计算说明"><details><summary>查看异常期次</summary><p><b>最近未通过期次</b>{row.latestFailureIssues.join("、") || "暂无"}</p>{row.error && <p><b>问题说明</b>{row.error}</p>}</details></td>
+                <td data-label="计算说明"><details><summary>查看异常期次</summary><p><b>最近未通过期次</b>{row.latestFailureIssues.length ? row.latestFailureIssues.map((issue) => <Button key={issue} size="sm" variant="ghost" onClick={() => onOpenIssue(issue)}>{issue}</Button>) : "暂无"}</p>{row.error && <p><b>问题说明</b>{row.error}</p>}</details></td>
               </tr>;
             })}</tbody>
           </table>

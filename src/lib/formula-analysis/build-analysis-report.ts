@@ -1,6 +1,7 @@
 import { buildDataHealthReport } from "@/lib/formula-analysis/data-health";
 import { buildFormulaPairDiagnostics } from "@/lib/formula-analysis/formula-conflicts";
 import { buildFormulaHealthReport } from "@/lib/formula-analysis/formula-health";
+import { normalizeFormulaAnalysisWindow } from "@/lib/formula-analysis/windows";
 import type {
   FormulaAnalysisReport,
   FormulaAnalysisWindow,
@@ -122,6 +123,7 @@ export function clearFormulaAnalysisReportCache(): void {
 export function buildFormulaAnalysisReport(
   input: FormulaAnalysisReportInput,
 ): FormulaAnalysisReport {
+  input = { ...input, window: normalizeFormulaAnalysisWindow(input.window) };
   const key = cacheIdentity(input);
   const cached = cacheGet(key);
   if (cached) return cached;
@@ -148,7 +150,7 @@ export function buildFormulaAnalysisReport(
     latestPeriod: periods.at(-1),
     contributionCount,
   };
-  const health = buildFormulaHealthReport({ draws: input.draws, rules, config: input.config });
+  const health = buildFormulaHealthReport({ draws: input.draws, rules, config: input.config, window: input.window });
   const pairs = buildFormulaPairDiagnostics({ periods });
   const landing = buildFormulaDrawLandingAnalysis({
     periods,

@@ -175,7 +175,7 @@ describe("formula health workspace", () => {
     expect(view.textContent).toContain(`${row.windows[50].successes}/${row.windows[50].sampleSize}`);
     expect(view.textContent).toContain("连续未通过");
     expect(view.textContent).toContain("样本不足");
-    expect(view.querySelector("details")?.textContent).toContain("最近未通过期次");
+    expect(view.querySelector('[data-label="计算说明"] details')?.textContent).toContain("最近未通过期次");
     expect(view.querySelectorAll("[data-health-status-filter]")).toHaveLength(5);
     const shares = [...view.querySelectorAll<HTMLElement>("[data-health-status-share]")]
       .map((item) => Number(item.dataset.healthStatusShare));

@@ -6,12 +6,9 @@ import type { FormulaSummaryTargetType } from "@/lib/formula-summary/formula-sum
 import type { RuleRecord } from "@/types/domain";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/field";
+import { FORMULA_ANALYSIS_WINDOWS, normalizeFormulaAnalysisWindow } from "@/lib/formula-analysis/windows";
 
-const WINDOWS = [
-  { value: 10, label: "最近10期" },
-  { value: 30, label: "最近30期" },
-  { value: 50, label: "最近50期" },
-] as const;
+const WINDOWS = FORMULA_ANALYSIS_WINDOWS.map((value) => ({ value, label: `最近${value}期` }));
 
 const TARGET_TYPES: Array<{ value: FormulaSummaryTargetType; label: string }> = [
   { value: "zodiac", label: "生肖" },
@@ -55,17 +52,9 @@ export function FormulaAnalysisToolbar({
   return (
     <section className="rq-analysis-toolbar" aria-label="分析筛选条件">
       <div className="rq-analysis-toolbar__primary">
-        <div className="rq-segmented-control" aria-label="分析期数">
-          {WINDOWS.map((item) => (
-            <Button
-              key={item.value}
-              size="sm"
-              variant={filters.window === item.value ? "primary" : "ghost"}
-              aria-pressed={filters.window === item.value}
-              onClick={() => onChange({ ...filters, window: item.value })}
-            >{item.label}</Button>
-          ))}
-        </div>
+        <label>分析期数<Select aria-label="分析期数" value={filters.window} onChange={(event) => onChange({ ...filters, window: normalizeFormulaAnalysisWindow(event.target.value) })}>
+          {WINDOWS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+        </Select></label>
         <div className="rq-segmented-control" aria-label="公式动作">
           <Button size="sm" variant={filters.action === "exclude" ? "primary" : "ghost"} aria-pressed={filters.action === "exclude"} onClick={() => onChange({ ...filters, action: "exclude" })}>排除结果</Button>
           <Button size="sm" variant={filters.action === "include" ? "primary" : "ghost"} aria-pressed={filters.action === "include"} onClick={() => onChange({ ...filters, action: "include" })}>支持结果</Button>
@@ -84,7 +73,7 @@ export function FormulaAnalysisToolbar({
           ...filters,
           compare: event.target.value === "none"
             ? { kind: "none" }
-            : { kind: "window", value: Number(event.target.value) as 10 | 30 | 50 },
+            : { kind: "window", value: normalizeFormulaAnalysisWindow(event.target.value) },
         })}>
           <option value="none">不对比</option>
           {WINDOWS.filter((item) => item.value !== filters.window).map((item) => <option key={item.value} value={item.value}>对比{item.label}</option>)}
