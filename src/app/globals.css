@@ -4034,13 +4034,13 @@ option { background: var(--rq-panel-strong); color: var(--rq-text); }
 .rq-expandable-visualization__open:hover { border-color: color-mix(in srgb, var(--rq-accent) 34%, var(--rq-border)); background: var(--rq-content-hover); }
 .rq-visualization-dialog { position: fixed; inset: 0; z-index: 160; display: grid; place-items: center; padding: 22px; }
 .rq-visualization-dialog__backdrop { position: absolute; inset: 0; width: 100%; border: 0; background: rgba(8, 15, 25, .72); backdrop-filter: blur(14px); }
-.rq-visualization-dialog > section { position: relative; z-index: 1; display: grid; width: min(1460px, 97vw); max-height: 94vh; overflow: hidden; border: 1px solid rgba(255,255,255,.18); border-radius: 24px; background: var(--rq-popover-solid); box-shadow: 0 36px 100px rgba(0,0,0,.42); }
+.rq-visualization-dialog > section { position: relative; z-index: 1; display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(1460px, 97vw); max-height: 94dvh; overflow: hidden; border: 1px solid rgba(255,255,255,.18); border-radius: 24px; background: var(--rq-popover-solid); box-shadow: 0 36px 100px rgba(0,0,0,.42); }
 .rq-visualization-dialog > section > header { display: flex; min-height: 58px; align-items: center; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--rq-border); padding: 8px 10px 8px 18px; }
 .rq-visualization-dialog > section > header div { display: grid; gap: 2px; }
 .rq-visualization-dialog > section > header small { color: var(--rq-muted); font-size: 8.5px; }
 .rq-visualization-dialog > section > header strong { font-size: 14px; }
 .rq-visualization-dialog > section > header button { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 12px; color: var(--rq-text); }
-.rq-visualization-dialog__content { min-width: 0; overflow: auto; padding: 18px; overscroll-behavior: contain; }
+.rq-visualization-dialog__content { min-width: 0; min-height: 0; overflow: auto; padding: 18px; overscroll-behavior: contain; }
 .rq-visualization-dialog__content .rq-formula-landing-chart { min-width: 760px; }
 .rq-visualization-dialog__content .rq-analysis-comparison { min-width: 900px; }
 .rq-visualization-dialog__content .rq-formula-complete-matrix { max-height: none !important; }
@@ -6772,4 +6772,46 @@ body::after {
   .rq-analysis-loading__canvas span { animation: none; }
   .rq-analysis-cockpit *,
   .rq-analysis-filter-layer * { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
+
+/* Reading and touch access: retain the existing glass surfaces and color tokens. */
+.rq-evidence-load-more { margin-top: 10px; min-height: 44px; }
+.rq-visualization-swipe-hint { margin-bottom: 10px; color: var(--rq-muted); font-size: 13px; }
+.rq-evidence-detail code { white-space: pre-wrap; }
+.rq-evidence-matrix-panel > header::after { content: "左右滑动表格可见全部结果，期次列固定在左侧"; color: var(--rq-muted); font-size: 13px; }
+.rq-evidence-matrix-panel > header { flex-wrap: wrap; }
+.rq-analysis-filter-sheet > header { position: sticky; top: -10px; z-index: 3; background: var(--rq-popover-solid); }
+.rq-visualization-dialog > section > header { padding-top: max(8px, env(safe-area-inset-top)); }
+.rq-visualization-dialog__content { padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+@media (max-width: 767px) {
+  .rq-shell { font-size: 16px; line-height: 1.55; }
+  .rq-shell main, .rq-shell main > *, .rq-analysis-cockpit, .rq-evidence-workspace { min-width: 0; max-width: 100%; }
+  .rq-shell :is(p, small, label, summary),
+  .rq-visualization-dialog :is(p, small, label),
+  .rq-analysis-filter-sheet :is(p, small, label) { font-size: 14px !important; line-height: 1.55; }
+  .rq-shell :is(input, select, textarea), .rq-analysis-filter-sheet :is(input, select) { min-height: 44px; font-size: 16px !important; }
+  .rq-shell main button, .rq-shell .rq-guide-breadcrumb button,
+  .rq-analysis-filter-sheet button, .rq-visualization-dialog button:not(.rq-visualization-dialog__backdrop) { min-height: 44px; }
+  .rq-shell :is(code, p, h1, h2, h3, b, strong) { overflow-wrap: anywhere; }
+  .rq-evidence-list > button b, .rq-evidence-detail :is(code, b),
+  .rq-evidence-detail ol, .rq-evidence-targets i { font-size: 14px; }
+  .rq-evidence-workspace__focus strong, .rq-evidence-toolbar label > span,
+  .rq-evidence-legend, .rq-evidence-list-panel > header span { font-size: 14px; }
+  .rq-evidence-detail > div, .rq-evidence-workspace__head { grid-template-columns: minmax(0, 1fr); }
+  .rq-evidence-list { max-height: min(55dvh, 520px); overscroll-behavior: contain; }
+  .rq-evidence-load-more { width: 100%; }
+  .rq-evidence-matrix-panel > header::after { font-size: 13px; }
+  .rq-analysis-filter-sheet { max-height: calc(100dvh - env(safe-area-inset-top) - 16px); overscroll-behavior: contain; }
+  .rq-visualization-dialog > section { height: 100dvh; max-height: 100dvh; }
+  .rq-visualization-dialog > section > header { flex-shrink: 0; }
+  .rq-visualization-dialog > section > header button { flex: 0 0 44px; }
+  .rq-visualization-dialog > section > header strong { overflow-wrap: anywhere; }
+  .rq-shell .rq-guide-topic__body section { scroll-margin-top: 100px; }
+  .rq-analysis-kpi > span, .rq-analysis-overview__chart header > div > span,
+  .rq-analysis-overview__status header span, .rq-analysis-cockpit__hero-meta span { font-size: 13px; }
+  .rq-analysis-kpi > span { flex-wrap: wrap; }
+  .rq-analysis-cockpit__hero p { display: block; overflow: visible; -webkit-line-clamp: unset; }
+  .rq-analysis-tabs { overflow-x: auto; }
+  .rq-formula-complete-matrix__cell > strong,
+  .rq-formula-complete-matrix__number-cell > strong { font-size: 14px; }
 }

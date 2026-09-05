@@ -23,6 +23,15 @@ export function FormulaEvidenceWorkspace({ report, initialRecord, initialIssue }
   const [focusedIssue, setFocusedIssue] = useState(initialRecord?.calculationIssue ?? initialIssue ?? "all");
   const [query, setQuery] = useState("");
   const [selectedContributionId, setSelectedContributionId] = useState("");
+  const selectionKey = `${selectedTargetKey}|${focusedIssue}|${query}`;
+  const [page, setPage] = useState({ report, selectionKey, limit: 40 });
+  const limit = page.report === report && page.selectionKey === selectionKey ? page.limit : 40;
+  const [detailReport, setDetailReport] = useState(report);
+
+  const resetSelection = () => {
+    setSelectedContributionId("");
+    setPage({ report, selectionKey: "", limit: 40 });
+  };
 
   const target = report.landing.domain.find((item) => item.targetKey === selectedTargetKey);
   const allContributions = useMemo(() => report.summary.periods.flatMap((period) => period.contributions).filter((contribution) => (
@@ -31,23 +40,24 @@ export function FormulaEvidenceWorkspace({ report, initialRecord, initialIssue }
     && (focusedIssue === "all" || contribution.calculationIssue === focusedIssue)
     && contribution.targets.some((item) => formulaTargetKey(item) === selectedTargetKey)
   )), [focusedIssue, report.action, report.summary.periods, report.targetType, selectedTargetKey]);
-  const visibleContributions = useMemo(() => {
+  const filteredContributions = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("zh-CN");
-    return allContributions.filter((contribution) => !normalized || `${contribution.ruleName} ${contribution.formula} ${contribution.calculationIssue}`.toLocaleLowerCase("zh-CN").includes(normalized)).slice(0, 40);
+    return allContributions.filter((contribution) => !normalized || `${contribution.ruleName} ${contribution.formula} ${contribution.calculationIssue}`.toLocaleLowerCase("zh-CN").includes(normalized));
   }, [allContributions, query]);
-  const selectedContribution = visibleContributions.find((item) => item.id === selectedContributionId);
+  const visibleContributions = filteredContributions.slice(0, limit);
+  const selectedContribution = detailReport === report ? visibleContributions.find((item) => item.id === selectedContributionId) : undefined;
   const focusActual = (record: FormulaDrawLandingRecord) => {
     setSelectedTargetKey(record.actualTargetKey);
     setFocusedIssue(record.calculationIssue);
-    setSelectedContributionId("");
+    resetSelection();
   };
   const changeTarget = (targetKey: string) => {
     setSelectedTargetKey(targetKey);
-    setSelectedContributionId("");
+    resetSelection();
   };
   const changeIssue = (issue: string) => {
     setFocusedIssue(issue);
-    setSelectedContributionId("");
+    resetSelection();
   };
   return (
     <div className="rq-evidence-workspace">
@@ -59,23 +69,25 @@ export function FormulaEvidenceWorkspace({ report, initialRecord, initialIssue }
       <section className="rq-evidence-toolbar" data-evidence-toolbar aria-label="明细核验筛选">
         <label><span>计算期</span><Select aria-label="选择计算期" value={focusedIssue} onChange={(event) => changeIssue(event.target.value)}><option value="all">全部计算期</option>{report.summary.periods.map((period) => <option key={period.calculationIssue} value={period.calculationIssue}>{period.calculationIssue} → {period.isPending ? "待开奖" : period.targetLabel}</option>)}</Select></label>
         <label><span>结果</span><Select aria-label="选择结果" value={selectedTargetKey} onChange={(event) => changeTarget(event.target.value)}>{report.landing.domain.map((item) => <option key={item.targetKey} value={item.targetKey}>{item.label}</option>)}</Select></label>
-        <label><span><Search className="h-4 w-4" />搜索贡献公式</span><Input aria-label="搜索贡献公式" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="名称、公式或期次" /></label>
-        <Button size="sm" variant="ghost" onClick={() => { setFocusedIssue("all"); setQuery(""); setSelectedContributionId(""); }}><Eraser className="h-4 w-4" />清除定位</Button>
+        <label><span><Search className="h-4 w-4" />搜索贡献公式</span><Input aria-label="搜索贡献公式" value={query} onChange={(event) => { setQuery(event.target.value); resetSelection(); }} placeholder="名称、公式或期次" /></label>
+        <Button size="sm" variant="ghost" onClick={() => { setFocusedIssue("all"); setQuery(""); resetSelection(); }}><Eraser className="h-4 w-4" />清除定位</Button>
       </section>
 
       <Panel className="rq-evidence-matrix-panel">
-        <header><div><span>完整结果域 · 0 次也保留</span><h2>分布矩阵</h2></div><div className="rq-evidence-legend"><span><Target className="h-4 w-4" />实际开奖</span><span><i />次数越高颜色越深</span></div></header>
+        <header><div><span>全部结果 · 包含 0 次</span><h2>分布矩阵</h2></div><div className="rq-evidence-legend"><span><Target className="h-4 w-4" />实际开奖</span><span><i />次数越高颜色越深</span></div></header>
         <ExpandableVisualization title="完整结果分布矩阵"><FormulaCompleteMatrix analysis={report.landing} targetType={report.targetType} selectedTargetKey={selectedTargetKey} focusedIssue={focusedIssue} onFocusActualRecord={focusActual} onSelectTarget={changeTarget} onFocusIssue={changeIssue} /></ExpandableVisualization>
       </Panel>
 
       <Panel className="rq-evidence-list-panel">
-        <header><div><span>{target?.label ?? "-"} · {focusedIssue === "all" ? `最近${report.window}期` : `${focusedIssue}计算期`}</span><h2>贡献公式明细</h2><p>先选中一条记录，下方只展示这一条的计算依据，避免每行重复按钮。</p></div><Badge tone="slate">{allContributions.length} 条</Badge></header>
-        {allContributions.length === 0 ? <div className="rq-evidence-empty"><CircleAlert className="h-5 w-5" /><strong>当前选择是 0 次，没有贡献公式</strong><p>这是正常结果，不会自动换成其他结果，也不会编造证据。</p></div> : (
+        <header><div><span>{target?.label ?? "-"} · {focusedIssue === "all" ? `最近${report.window}期` : `${focusedIssue}计算期`}</span><h2>贡献公式明细</h2><p>点击公式记录，下方会显示代入数字、输出结果和计算过程。</p></div><Badge tone="slate">{filteredContributions.length} 条符合筛选</Badge></header>
+        {allContributions.length === 0 ? <div className="rq-evidence-empty"><CircleAlert className="h-5 w-5" /><strong>当前选择是 0 次，没有贡献公式</strong><p>当期没有公式指向这个结果。可以换一个期次或结果继续核对。</p></div> : (
           <>
             <div className="rq-evidence-list" role="listbox" aria-label="贡献公式记录">
-              {visibleContributions.map((contribution) => <button key={contribution.id} type="button" role="option" data-evidence-row={contribution.id} aria-selected={selectedContributionId === contribution.id} className={cn(selectedContributionId === contribution.id && "is-selected")} onClick={() => setSelectedContributionId(contribution.id)}><span><ListChecks className="h-4 w-4" /><b>{contribution.ruleName}</b><small>{contribution.calculationIssue} 计算 → {contribution.targetLabel}</small></span><span className="rq-evidence-targets">{contribution.targets.map((item) => <i key={formulaTargetKey(item)}>{displayTarget(item)}</i>)}</span></button>)}
+              {visibleContributions.map((contribution) => <button key={contribution.id} type="button" role="option" data-evidence-row={contribution.id} aria-selected={selectedContribution?.id === contribution.id} className={cn(selectedContribution?.id === contribution.id && "is-selected")} onClick={() => { setSelectedContributionId(contribution.id); setDetailReport(report); }}><span><ListChecks className="h-4 w-4" /><b>{contribution.ruleName}</b><small>{contribution.calculationIssue} 计算 → {contribution.targetLabel}</small></span><span className="rq-evidence-targets">{contribution.targets.map((item) => <i key={formulaTargetKey(item)}>{displayTarget(item)}</i>)}</span></button>)}
             </div>
-            {visibleContributions.length < allContributions.length && <p className="rq-evidence-window-note">为保持页面流畅，当前先显示前40条；搜索仍覆盖全部 {allContributions.length} 条记录。</p>}
+            <p className="rq-evidence-window-note" role="status">已显示 {visibleContributions.length} / {filteredContributions.length} 条符合筛选的记录（当前选择共 {allContributions.length} 条）</p>
+            {filteredContributions.length === 0 && <p className="rq-evidence-empty">没有找到匹配的公式，请换个关键词或清空搜索。</p>}
+            {visibleContributions.length < filteredContributions.length && <Button className="rq-evidence-load-more" onClick={() => setPage({ report, selectionKey, limit: limit + 40 })}>继续显示后 {Math.min(40, filteredContributions.length - limit)} 条</Button>}
           </>
         )}
         {selectedContribution && <EvidenceDetail contribution={selectedContribution} />}
