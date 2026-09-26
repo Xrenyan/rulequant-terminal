@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Maximize2, X } from "lucide-react";
 import { createPortal } from "react-dom";
+import { useOverlayMotion } from "./use-overlay-motion";
 
 type ScrollPosition = { element: HTMLElement; top: number; left: number };
 
@@ -28,6 +29,7 @@ export function ExpandableVisualization({ title, children }: { title: string; ch
   const openRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
+  const backdropRef = useRef<HTMLButtonElement>(null);
   const inlineRef = useRef<HTMLDivElement | null>(null);
   const pendingScroll = useRef<ScrollPosition[] | null>(null);
   const [portalHost, setPortalHost] = useState<HTMLDivElement | null>(null);
@@ -65,12 +67,14 @@ export function ExpandableVisualization({ title, children }: { title: string; ch
 
   useLayoutEffect(() => () => { portalHost?.remove(); }, [portalHost]);
 
+  const { requestClose, cancel: cancelMotion } = useOverlayMotion({ open: expanded, surfaceRef: dialogRef, backdropRef, onClose: () => changeExpanded(false) });
+
   useEffect(() => {
     if (!expanded) return;
     const previousOverflow = document.documentElement.style.overflow;
     const returnFocus = openRef.current;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); changeExpanded(false); }
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); requestClose(); }
       if (event.key !== "Tab" || !dialogRef.current) return;
       const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), summary, [tabindex]:not([tabindex="-1"])')).filter((element) => {
         if (element.closest("[hidden]")) return false;
@@ -98,16 +102,16 @@ export function ExpandableVisualization({ title, children }: { title: string; ch
       document.removeEventListener("keydown", onKeyDown);
       queueMicrotask(() => returnFocus?.focus({ preventScroll: true }));
     };
-  }, [expanded, changeExpanded]);
+  }, [expanded, requestClose]);
 
   return <div className="rq-expandable-visualization">
-    <button ref={openRef} type="button" aria-haspopup="dialog" aria-expanded={expanded} className="rq-expandable-visualization__open" onClick={() => { if (inlineRef.current) inlineRef.current.style.minHeight = `${inlineRef.current.getBoundingClientRect().height}px`; changeExpanded(true); }}><Maximize2 className="h-4 w-4" />放大图表</button>
+    <button ref={openRef} type="button" aria-haspopup="dialog" aria-expanded={expanded} className="rq-expandable-visualization__open" onClick={() => { cancelMotion(); if (inlineRef.current) inlineRef.current.style.minHeight = `${inlineRef.current.getBoundingClientRect().height}px`; changeExpanded(true); }}><Maximize2 className="h-4 w-4" />放大图表</button>
     <div ref={attachInline} />
     {portalHost && createPortal(
       <div className={expanded ? "rq-visualization-dialog" : "rq-visualization-inline"}>
-        <button type="button" style={{ display: expanded ? undefined : "none" }} className="rq-visualization-dialog__backdrop" tabIndex={-1} aria-hidden="true" onClick={() => changeExpanded(false)} />
+        <button ref={backdropRef} type="button" style={{ display: expanded ? undefined : "none" }} className="rq-visualization-dialog__backdrop" tabIndex={-1} aria-hidden="true" onClick={requestClose} />
         <section ref={dialogRef} role={expanded ? "dialog" : undefined} aria-modal={expanded ? true : undefined} aria-label={expanded ? `放大${title}` : undefined}>
-          <header style={{ display: expanded ? undefined : "none" }}><div><small>{expanded ? "全屏查看" : null}</small><strong>{expanded ? title : null}</strong></div><button ref={closeRef} type="button" aria-label="关闭放大图表" onClick={() => changeExpanded(false)}><X className="h-5 w-5" /></button></header>
+          <header style={{ display: expanded ? undefined : "none" }}><div><small>{expanded ? "全屏查看" : null}</small><strong>{expanded ? title : null}</strong></div><button ref={closeRef} type="button" aria-label="关闭放大图表" onClick={requestClose}><X className="h-5 w-5" /></button></header>
           <div className={expanded ? "rq-visualization-dialog__content" : undefined}><p style={{ display: expanded ? undefined : "none" }} className="rq-visualization-swipe-hint">左右滑动图表可见全部内容，较长内容可上下滚动。</p>{children}</div>
         </section>
       </div>,

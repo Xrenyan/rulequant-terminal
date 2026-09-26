@@ -6892,3 +6892,26 @@ body::after {
 @media (prefers-reduced-motion: reduce) {
   .rq-button, .rq-workspace-tab, .rq-rule-row { transition: none; }
 }
+
+/* Responsive motion: brief feedback, no whole-page blur or permanent control layers. */
+.rq-view-enter { animation: rq-content-arrive 160ms ease-out both; }
+@keyframes rq-content-arrive { from { opacity: .7; } to { opacity: 1; } }
+.rq-button, .rq-link-button, .rq-nav-item, .rq-workspace-tab,
+.rq-candidate-tile, .rq-rule-row, .rq-theme-toggle { will-change: auto; }
+.rq-analysis-workspace { min-width: 0; }
+.rq-analysis-tabs { scroll-snap-type: x proximity; }
+.rq-analysis-tabs [role="tab"] { scroll-snap-align: start; touch-action: manipulation; }
+.rq-analysis-filter-backdrop { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.rq-analysis-filter-sheet { overscroll-behavior: contain; scrollbar-gutter: stable; }
+.rq-analysis-toolbar__mobile-trigger, .rq-expandable-visualization__open,
+.rq-visualization-dialog > section > header button { touch-action: manipulation; transition: background-color 120ms ease, opacity 120ms ease; }
+.rq-analysis-toolbar__mobile-trigger:active, .rq-expandable-visualization__open:active { opacity: .72; }
+body:has(.rq-analysis-filter-layer) > .rq-select__backdrop { z-index: 180; }
+body:has(.rq-analysis-filter-layer) > .rq-select__menu { z-index: 181; }
+@media (prefers-reduced-motion: reduce) {
+  .rq-view-enter, .rq-select__menu, .rq-select__backdrop { animation: none; }
+  .rq-button, .rq-link-button, .rq-nav-item, .rq-workspace-tab,
+  .rq-candidate-tile, .rq-rule-row, .rq-theme-toggle,
+  .rq-analysis-toolbar__mobile-trigger, .rq-expandable-visualization__open,
+  .rq-visualization-dialog > section > header button { transition: none; }
+}

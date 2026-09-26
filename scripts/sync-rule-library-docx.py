@@ -15,6 +15,7 @@ from docx.text.paragraph import Paragraph
 
 
 CATEGORY_BY_LABEL = {
+    "杀特码": "kill_number",
     "杀一肖": "kill_zodiac",
     "选生肖": "include_zodiac",
     "杀一波": "kill_color",
@@ -63,7 +64,8 @@ RENAMED_RULES = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Sync RuleQuant seed rules from an exported Word library.")
     parser.add_argument("document", type=Path)
-    parser.add_argument("rules", type=Path)
+    parser.add_argument("rules", type=Path, nargs="?")
+    parser.add_argument("--candidates-json", action="store_true", help="Extract candidates only; never modify the library.")
     return parser.parse_args()
 
 
@@ -324,6 +326,19 @@ def build_rule(
 def main() -> None:
     args = parse_args()
     expected_total, snapshot_date, synced_at = parse_snapshot_metadata(args.document)
+    if args.candidates_json:
+        entries = extract_entries(args.document)
+        if len(entries) != expected_total:
+            raise ValueError(f"文档公式数量异常：文件名标注 {expected_total}，实际提取 {len(entries)}")
+        print(json.dumps({
+            "document": args.document.name,
+            "snapshotDate": snapshot_date,
+            "sourceTotal": expected_total,
+            "rules": [build_rule(entry, None, args.document.name, snapshot_date, synced_at) for entry in entries],
+        }, ensure_ascii=False))
+        return
+    if args.rules is None:
+        raise ValueError("必须指定规则文件，或使用 --candidates-json 只提取候选公式")
     with args.rules.open(encoding="utf-8") as handle:
         existing_rules = json.load(handle)
 

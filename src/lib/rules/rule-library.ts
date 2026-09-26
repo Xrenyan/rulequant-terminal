@@ -78,14 +78,14 @@ function canonicalAttribute(attribute: string) {
   }
 }
 
-export function canonicalFormulaForSignature(formula: string): string {
+export function canonicalFormulaForSignature(formula: string, orderMode: RuleRecord["orderMode"] = "L"): string {
   let normalized = compact(formula)
     .normalize("NFKC")
     .replace(/([1-7])\uFE0F?\u20E3/g, "$1")
     .replace(/[，、；;]/g, "+")
     .replace(/\s+/g, "")
     .replace(/[^+\-*/()]+/g, canonicalVariableName)
-    .replace(/落([1-6])/g, "平$1")
+    .replace(/落([1-6])/g, orderMode === "D" ? "落$1" : "平$1")
     .replace(/(?:落7|平7|特号)/g, "特码")
     .replace(/(^|[+\-*/(])特(?=$|[+\-*/)])/g, "$1特码")
     .replace(/特(?=(?:头|尾|合|合数|合尾|合数尾|段|波|波色|波色值|行|五行|五行值|单双|奇偶|大小|位))/g, "特码")
@@ -96,15 +96,16 @@ export function canonicalFormulaForSignature(formula: string): string {
     .replace(/肖位/g, "位")
     .replace(/期(?:号|数)尾/g, "期尾")
     .replace(
-      /(合数尾|合尾|合数|合|波色值|波色|波|五行值|五行|行|头|尾|段|单双|奇偶|大小|位)\((平[1-6]|特码)\)/g,
+      /(合数尾|合尾|合数|合|波色值|波色|波|五行值|五行|行|头|尾|段|单双|奇偶|大小|位)\(((?:平|落)[1-6]|特码)\)/g,
       (_, attribute: string, position: string) => `${position}${canonicalAttribute(attribute)}`,
     )
     .replace(
-      /(平[1-6]|特码)(合数尾|合尾|合数|合|波色值|波色|波|五行值|五行|行|头|尾|段|单双|奇偶|大小|位)/g,
+      /((?:平|落)[1-6]|特码)(合数尾|合尾|合数|合|波色值|波色|波|五行值|五行|行|头|尾|段|单双|奇偶|大小|位)/g,
       (_, position: string, attribute: string) => `${position}${canonicalAttribute(attribute)}`,
     );
 
-  if (normalized.includes("+") && !/[\-*/]/.test(normalized)) {
+  // Only flat sums are commutative here. Splitting inside an attribute function changes its meaning.
+  if (normalized.includes("+") && !/[\-*/()]/.test(normalized)) {
     normalized = normalized.split("+").filter(Boolean).sort((a, b) => a.localeCompare(b, "zh-CN", { numeric: true })).join("+");
   }
   return normalized;
@@ -115,7 +116,7 @@ export function buildRuleSignature(rule: Pick<RuleRecord, "category" | "target" 
     rule.category,
     rule.target,
     rule.orderMode,
-    canonicalFormulaForSignature(rule.formula),
+    canonicalFormulaForSignature(rule.formula, rule.orderMode),
     compact(rule.normalizer),
     normalizedPattern(rule.positionPattern).join(","),
     compact(rule.anchorIssue),

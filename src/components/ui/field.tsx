@@ -156,7 +156,11 @@ export function Select({
       event.preventDefault();
       toggleMenu();
     }
-    if (event.key === "Escape") setOpen(false);
+    if (event.key === "Escape" && open) {
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(false);
+    }
   };
 
   return (
@@ -186,6 +190,11 @@ export function Select({
             role="listbox"
             aria-labelledby={controlId}
             style={menuStyle}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape") return;
+              event.preventDefault(); event.stopPropagation(); setOpen(false);
+              triggerRef.current?.focus({ preventScroll: true });
+            }}
           >
             {mobileSheet && <div className="rq-select__sheet-head"><span>{props["aria-label"] ?? "请选择"}</span><i /></div>}
             {options.map((option) => (

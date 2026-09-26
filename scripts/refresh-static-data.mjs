@@ -2,6 +2,7 @@ import fs from "node:fs";
 import https from "node:https";
 import path from "node:path";
 import zlib from "node:zlib";
+import { fileURLToPath } from "node:url";
 
 const endpoint = process.env.RULEQUANT_CLOUD_STATE_URL || "https://rulequant-terminal.vercel.app/api/cloud/state";
 const drawImportEndpoint = process.env.RULEQUANT_DRAW_IMPORT_URL || "https://rulequant-terminal.vercel.app/api/import-draws-from-url";
@@ -46,6 +47,14 @@ function mergeByKey(localItems, remoteItems, getKey) {
   return [...merged.values()];
 }
 
+// This script runs before dependency installation in the hourly workflow.
+// Keep its dependency-free canonicalizer in parity with rule-library.ts (covered by fixture tests).
+const RULE_VARIABLE_ALIASES = {
+  总分: "总数", 总分和: "总数", 总和: "总数", 总分尾: "总数尾", 总分合: "总数合", 总和合: "总数合",
+  总分合尾: "总数合尾", 总和合尾: "总数合尾", 总合尾: "总数合尾", 期数头: "期头", 期号头: "期头",
+  期数合: "期合", 期号合: "期合", 期数合尾: "期合尾", 期号合尾: "期合尾",
+};
+
 function canonicalRuleAttribute(attribute) {
   switch (attribute) {
     case "合数":
@@ -67,14 +76,15 @@ function canonicalRuleAttribute(attribute) {
   }
 }
 
-function canonicalRuleFormula(value) {
+export function canonicalRuleFormula(value, orderMode = "L") {
   let formula = String(value ?? "")
     .trim()
     .normalize("NFKC")
     .replace(/([1-7])\uFE0F?\u20E3/g, "$1")
     .replace(/[，、；;]/g, "+")
     .replace(/\s+/g, "")
-    .replace(/落([1-6])/g, "平$1")
+    .replace(/[^+\-*/()]+/g, (name) => Object.hasOwn(RULE_VARIABLE_ALIASES, name) ? RULE_VARIABLE_ALIASES[name] : name)
+    .replace(/落([1-6])/g, orderMode === "D" ? "落$1" : "平$1")
     .replace(/(?:落7|平7|特号)/g, "特码")
     .replace(/(^|[+\-*/(])特(?=$|[+\-*/)])/g, "$1特码")
     .replace(/特(?=(?:头|尾|合|合数|合尾|合数尾|段|波|波色|波色值|行|五行|五行值|单双|奇偶|大小|位))/g, "特码")
@@ -85,26 +95,26 @@ function canonicalRuleFormula(value) {
     .replace(/肖位/g, "位")
     .replace(/期(?:号|数)尾/g, "期尾")
     .replace(
-      /(合数尾|合尾|合数|合|波色值|波色|波|五行值|五行|行|头|尾|段|单双|奇偶|大小|位)\((平[1-6]|特码)\)/g,
+      /(合数尾|合尾|合数|合|波色值|波色|波|五行值|五行|行|头|尾|段|单双|奇偶|大小|位)\(((?:平|落)[1-6]|特码)\)/g,
       (_, attribute, position) => `${position}${canonicalRuleAttribute(attribute)}`,
     )
     .replace(
-      /(平[1-6]|特码)(合数尾|合尾|合数|合|波色值|波色|波|五行值|五行|行|头|尾|段|单双|奇偶|大小|位)/g,
+      /((?:平|落)[1-6]|特码)(合数尾|合尾|合数|合|波色值|波色|波|五行值|五行|行|头|尾|段|单双|奇偶|大小|位)/g,
       (_, position, attribute) => `${position}${canonicalRuleAttribute(attribute)}`,
     );
 
-  if (formula.includes("+") && !/[\-*/]/.test(formula)) {
+  if (formula.includes("+") && !/[\-*/()]/.test(formula)) {
     formula = formula.split("+").filter(Boolean).sort((a, b) => a.localeCompare(b, "zh-CN", { numeric: true })).join("+");
   }
   return formula;
 }
 
-function ruleSignature(rule) {
+export function ruleSignature(rule) {
   return [
     rule.category ?? rule.type ?? "",
     rule.target ?? "",
     rule.orderMode ?? rule.orderType ?? "",
-    canonicalRuleFormula(rule.formula ?? rule.expression),
+    canonicalRuleFormula(rule.formula ?? rule.expression, rule.orderMode ?? rule.orderType ?? "L"),
     String(rule.normalizer ?? rule.normalizeMode ?? "").trim(),
     (rule.positionPattern ?? []).map(Number).filter(Number.isFinite).join(","),
     String(rule.anchorIssue ?? "").trim(),
@@ -516,7 +526,9 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

@@ -40,4 +40,31 @@ describe("用户确认的期数和总分写法", () => {
     expect(canonicalFormulaForSignature("总数合")).not.toBe(canonicalFormulaForSignature("总数合尾"));
     expect(canonicalFormulaForSignature("期头")).not.toBe(canonicalFormulaForSignature("期尾"));
   });
+
+  it.each(["L", "D", "custom"] as const)("%s 序中文位置和属性别名的实际求值保持不变", (mode) => {
+    const groups = [
+      ["平一", "平码一", "平1", "平1码", "平1号码", "码(平1)", "号码(平码一)"],
+      ["落六", "落码六", "落6", "落6码", "落6号码", "号码(落六)"],
+      ["平三合数尾", "平码三合尾", "平3合尾值", "合数尾(平三)"],
+      ["特行值", "特五行", "特五行值", "特码五行值", "行(特码)"],
+      ["平7", "平码七", "落七", "特", "特码", "特号", "杀码", "L7", "D7"],
+      ["平2位置", "平二位", "平2肖位", "平2生肖位", "位置(平2)"],
+      ["平4头数单", "平四头单", "头单(平4)"],
+      ["期号", "期数"],
+    ];
+    for (const group of groups) {
+      const value = evaluateFormula(group[0], draw, defaultConfig, mode).value;
+      for (const alias of group) {
+        expect(evaluateFormula(alias, draw, defaultConfig, mode).value, alias).toBe(value);
+      }
+    }
+  });
+
+  it("D序的落六仍取第六个落球，不能变成排序后的平码六", () => {
+    expect(evaluateFormula("落六", draw, defaultConfig, "D").value).toBe(35);
+    expect(evaluateFormula("平码六", draw, defaultConfig, "D").value).toBe(40);
+    expect(canonicalFormulaForSignature("落6", "D")).not.toBe(canonicalFormulaForSignature("平6", "D"));
+    expect(canonicalFormulaForSignature("落6", "L")).toBe(canonicalFormulaForSignature("平6", "L"));
+    expect(canonicalFormulaForSignature("尾(落6)", "D")).toBe(canonicalFormulaForSignature("落6尾", "D"));
+  });
 });

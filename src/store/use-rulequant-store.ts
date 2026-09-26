@@ -200,7 +200,11 @@ function mergeLocalRules(baseRules: RuleRecord[], localRules: RuleRecord[]) {
     const signatureIndex = merged.findIndex((rule) => buildRuleSignature(rule) === signature);
     if (signatureIndex >= 0) {
       const baseRule = merged[signatureIndex];
-      const isLocalOwnedRule = localRule.sourceType === "manual" || localRule.sourceType === "txt_import";
+      // The same mathematics arriving under a new shipment ID is not a new local rule.
+      // Keep its identity so saved selection, samples and pause-observation state stay attached.
+      // Real same-ID formula revisions are resolved by the timestamp branch above.
+      const localSource = localRule.sourceType ?? "user_provided";
+      const isLocalOwnedRule = localSource === "manual" || localSource === "txt_import" || localSource === "user_provided";
       const shouldUseLocalDefinition = localRule.sourceType !== "copied" && (
         isLocalOwnedRule ||
         ruleSourcePriority(localRule) > ruleSourcePriority(baseRule) ||

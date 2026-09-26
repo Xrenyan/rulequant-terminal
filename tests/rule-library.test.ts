@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { addRuleToLibrary, addRulesToLibrary, buildRuleSignature, canonicalFormulaForSignature, normalizeRuleDraft } from "@/lib/rules/rule-library";
 import { canRuleParticipateInReference } from "@/lib/rules/rule-validation";
+import { defaultConfig } from "@/lib/config/default-config";
+import { normalizeDraw } from "@/lib/engine/attributes";
+import { evaluateFormula } from "@/lib/formula/evaluate";
 import type { RuleRecord } from "@/types/domain";
 
 function baseRule(overrides: Partial<RuleRecord> = {}): RuleRecord {
@@ -149,5 +152,34 @@ describe("rule library unified add flow", () => {
     const second = baseRule({ formula: "平2尾 - 平1尾" });
 
     expect(buildRuleSignature(first)).not.toBe(buildRuleSignature(second));
+  });
+
+  it("keeps explicit L-order 落 positions distinct from D-order 平 positions", () => {
+    const explicitL = baseRule({ orderMode: "D", formula: "落3头+平5尾+特五行值" });
+    const rankedD = baseRule({ orderMode: "D", formula: "平3头+平5尾+特五行值" });
+    expect(buildRuleSignature(explicitL)).not.toBe(buildRuleSignature(rankedD));
+    expect(addRuleToLibrary({ existingRules: [explicitL], draft: rankedD }).ok).toBe(true);
+    expect(buildRuleSignature({ ...explicitL, orderMode: "L" })).toBe(buildRuleSignature({ ...rankedD, orderMode: "L" }));
+  });
+
+  it("does not merge subtract-48 and subtract-49 normalizers", () => {
+    const first = baseRule({ category: "kill_number", target: "special_number", formula: "平1号码+特码", normalizer: "subtract_48_to_1_49" });
+    const second = { ...first, normalizer: "subtract_49_to_1_49" };
+    expect(buildRuleSignature(first)).not.toBe(buildRuleSignature(second));
+  });
+
+  it("does not reorder addition across attribute-function argument boundaries", () => {
+    const current = normalizeDraw({ issue: "2026268", n1: 11, n2: 7, n3: 20, n4: 9, n5: 25, n6: 35, special: 36 }, defaultConfig);
+    const first = "头(平1+平2)+尾(平3+平4)";
+    const second = "头(平1+平4)+尾(平3+平2)";
+    expect(evaluateFormula(first, current, defaultConfig, "L").value).not.toBe(evaluateFormula(second, current, defaultConfig, "L").value);
+    expect(buildRuleSignature(baseRule({ formula: first }))).not.toBe(buildRuleSignature(baseRule({ formula: second })));
+  });
+
+  it("preserves legacy signature compatibility without expanding new position aliases", () => {
+    expect(canonicalFormulaForSignature("特号合")).toBe(canonicalFormulaForSignature("特码合"));
+    expect(canonicalFormulaForSignature("平一未知")).not.toBe(canonicalFormulaForSignature("平1"));
+    expect(canonicalFormulaForSignature("平1码")).not.toBe(canonicalFormulaForSignature("平1"));
+    expect(canonicalFormulaForSignature("平码一")).not.toBe(canonicalFormulaForSignature("平1"));
   });
 });
