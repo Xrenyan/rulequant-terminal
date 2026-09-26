@@ -65,11 +65,11 @@ export function FormulaAnalysisToolbar({
         <Select aria-label="结果类型" value={filters.targetType} onChange={(event) => onChange({ ...filters, targetType: event.target.value as FormulaSummaryTargetType })}>
           {TARGET_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
         </Select>
-        <Select aria-label="公式组" value={selectedRule} onChange={(event) => onChange({ ...filters, ruleIds: event.target.value === "all" ? [] : [event.target.value] })}>
+        <Select aria-label="选择公式" value={selectedRule} onChange={(event) => onChange({ ...filters, ruleIds: event.target.value === "all" ? [] : [event.target.value] })}>
           <option value="all">全部启用公式</option>
           {enabledRules.map((rule) => <option key={rule.id} value={rule.id}>{rule.name}</option>)}
         </Select>
-        <Select aria-label="对比模式" value={filters.compare.kind === "window" ? String(filters.compare.value) : "none"} onChange={(event) => onChange({
+        <Select aria-label="对比期数" value={filters.compare.kind === "window" ? String(filters.compare.value) : "none"} onChange={(event) => onChange({
           ...filters,
           compare: event.target.value === "none"
             ? { kind: "none" }

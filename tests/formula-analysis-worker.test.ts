@@ -94,6 +94,21 @@ describe("formula analysis report", () => {
     expect(report.pairs.duplicates).toEqual([]);
     expect(report.pairs.conflicts).toEqual([]);
   });
+
+  it("reuses arithmetic and health across action/type filters without leaking renamed labels", () => {
+    clearFormulaAnalysisReportCache();
+    const input = reportInput();
+    const first = buildFormulaAnalysisReport(input);
+    const include = buildFormulaAnalysisReport({ ...input, action: "include" });
+    const tails = buildFormulaAnalysisReport({ ...input, targetType: "tail" });
+    expect(include.health).toBe(first.health);
+    expect(tails.health).toBe(first.health);
+    expect(include.pairs).toBe(first.pairs);
+    const rules = input.rules.map((rule) => ({ ...rule, name: `${rule.name} 新名称` }));
+    const renamed = buildFormulaAnalysisReport({ ...input, rules });
+    expect(renamed.health.rows[0].ruleName).toBe(rules[0].name);
+    expect(renamed.health).not.toBe(first.health);
+  });
 });
 
 describe("formula analysis worker client", () => {
@@ -106,7 +121,7 @@ describe("formula analysis worker client", () => {
     const report = buildFormulaAnalysisReport(input);
     const firstResult = vi.fn();
     startFormulaAnalysisReportRequest(input, { createWorker: () => firstWorker, onResult: firstResult });
-    firstWorker.onmessage?.({ data: { ok: true, report } } as MessageEvent);
+    firstWorker.onmessage?.({ data: { requestId: firstWorker.postMessage.mock.calls[0][0].requestId, ok: true, report } } as MessageEvent);
 
     const createAgain = vi.fn(() => new WorkerStub());
     const cachedResult = vi.fn();
@@ -117,7 +132,7 @@ describe("formula analysis worker client", () => {
     expect(cachedResult).toHaveBeenCalledWith(report, "cache");
   });
 
-  it("uses a worker result once and terminates the settled worker", () => {
+  it("uses a worker result once and keeps the settled worker available for another filter", () => {
     clearFormulaAnalysisReportCache();
     const worker = new WorkerStub();
     const onResult = vi.fn();
@@ -125,33 +140,36 @@ describe("formula analysis worker client", () => {
     startFormulaAnalysisReportRequest(input, { createWorker: () => worker, onResult });
     const report = buildFormulaAnalysisReport(input);
 
-    worker.onmessage?.({ data: { ok: true, report } } as MessageEvent);
-    worker.onmessage?.({ data: { ok: true, report: { ...report, cacheKey: "late" } } } as MessageEvent);
+    const requestId = worker.postMessage.mock.calls[0][0].requestId;
+    worker.onmessage?.({ data: { requestId, ok: true, report } } as MessageEvent);
+    worker.onmessage?.({ data: { requestId, ok: true, report: { ...report, cacheKey: "late" } } } as MessageEvent);
 
-    expect(worker.postMessage).toHaveBeenCalledWith(input);
+    expect(worker.postMessage).toHaveBeenCalledWith({ requestId, input });
     expect(onResult).toHaveBeenCalledTimes(1);
     expect(onResult).toHaveBeenCalledWith(report, "worker");
-    expect(worker.terminate).toHaveBeenCalledTimes(1);
+    expect(worker.terminate).not.toHaveBeenCalled();
   });
 
   it.each(["error", "messageerror", "unsuccessful"] as const)(
-    "falls back synchronously after worker %s and ignores late success",
+    "reports worker %s without blocking the UI with synchronous fallback and ignores late success",
     (failure) => {
       clearFormulaAnalysisReportCache();
       const worker = new WorkerStub();
       const onResult = vi.fn();
+      const onError = vi.fn();
       const input = reportInput();
-      startFormulaAnalysisReportRequest(input, { createWorker: () => worker, onResult });
+      startFormulaAnalysisReportRequest(input, { createWorker: () => worker, onResult, onError });
       const late = buildFormulaAnalysisReport(input);
+      const requestId = worker.postMessage.mock.calls[0][0].requestId;
 
       if (failure === "error") worker.onerror?.({ type: "error" } as ErrorEvent);
       else if (failure === "messageerror") worker.onmessageerror?.(new MessageEvent("messageerror"));
-      else worker.onmessage?.({ data: { ok: false, error: "worker failed" } } as MessageEvent);
-      worker.onmessage?.({ data: { ok: true, report: { ...late, cacheKey: "late" } } } as MessageEvent);
+      else worker.onmessage?.({ data: { requestId, ok: false, error: "worker failed" } } as MessageEvent);
+      worker.onmessage?.({ data: { requestId, ok: true, report: { ...late, cacheKey: "late" } } } as MessageEvent);
 
-      expect(onResult).toHaveBeenCalledTimes(1);
-      expect(onResult.mock.calls[0][1]).toBe("fallback");
-      expect(worker.terminate).toHaveBeenCalledTimes(1);
+      expect(onResult).not.toHaveBeenCalled();
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(worker.terminate).toHaveBeenCalledTimes(failure === "unsuccessful" ? 0 : 1);
     },
   );
 
@@ -164,23 +182,24 @@ describe("formula analysis worker client", () => {
       });
     }
     const onResult = vi.fn();
+    const onError = vi.fn();
     startFormulaAnalysisReportRequest(reportInput(), {
       createWorker: () => {
         if (failure === "constructor") throw new Error("constructor failed");
         return worker;
       },
       onResult,
+      onError,
     });
 
-    expect(onResult).toHaveBeenCalledTimes(1);
-    expect(onResult.mock.calls[0][1]).toBe("fallback");
-    expect(worker.terminate).toHaveBeenCalledTimes(failure === "postMessage" ? 1 : 0);
+    expect(onResult).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
   });
 
   it("disposes an unsettled request and ignores its stale response", () => {
     clearFormulaAnalysisReportCache();
     const oldWorker = new WorkerStub();
-    const currentWorker = new WorkerStub();
+    const currentWorker = oldWorker;
     const onResult = vi.fn();
     const oldInput = reportInput();
     const nextInput = reportInput({ window: 30 });
@@ -194,10 +213,10 @@ describe("formula analysis worker client", () => {
       onResult,
     });
 
-    oldWorker.onmessage?.({ data: { ok: true, report: buildFormulaAnalysisReport(oldInput) } } as MessageEvent);
-    currentWorker.onmessage?.({ data: { ok: true, report: buildFormulaAnalysisReport(nextInput) } } as MessageEvent);
+    oldWorker.onmessage?.({ data: { requestId: oldWorker.postMessage.mock.calls[0][0].requestId, ok: true, report: buildFormulaAnalysisReport(oldInput) } } as MessageEvent);
+    currentWorker.onmessage?.({ data: { requestId: currentWorker.postMessage.mock.calls[1][0].requestId, ok: true, report: buildFormulaAnalysisReport(nextInput) } } as MessageEvent);
 
-    expect(oldWorker.terminate).toHaveBeenCalledTimes(1);
+    expect(oldWorker.terminate).not.toHaveBeenCalled();
     expect(onResult).toHaveBeenCalledTimes(1);
     expect(onResult.mock.calls[0][0].window).toBe(30);
   });

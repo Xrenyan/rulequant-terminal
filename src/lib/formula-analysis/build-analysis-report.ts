@@ -1,4 +1,5 @@
 import { buildDataHealthReport } from "@/lib/formula-analysis/data-health";
+import { backtestMathKey } from "@/lib/backtest/backtest-identity";
 import { buildFormulaPairDiagnostics } from "@/lib/formula-analysis/formula-conflicts";
 import { buildFormulaHealthReport } from "@/lib/formula-analysis/formula-health";
 import { normalizeFormulaAnalysisWindow } from "@/lib/formula-analysis/windows";
@@ -37,6 +38,22 @@ export type FormulaAnalysisReportInput = {
 
 const MAX_CACHE_ENTRIES = 4;
 const reportCache = new Map<string, FormulaAnalysisReport>();
+const summaryCache = new Map<string, ReturnType<typeof buildFormulaSummaryReport>>();
+const healthCache = new Map<string, ReturnType<typeof buildFormulaHealthReport>>();
+const pairCache = new Map<string, ReturnType<typeof buildFormulaPairDiagnostics>>();
+
+function cachedLayer<T>(cache: Map<string, T>, key: string, create: () => T): T {
+  const existing = cache.get(key);
+  if (existing !== undefined) {
+    cache.delete(key);
+    cache.set(key, existing);
+    return existing;
+  }
+  const value = create();
+  cache.set(key, value);
+  while (cache.size > MAX_CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
+  return value;
+}
 
 function sortedUnique(values: string[] | undefined): string[] {
   return [...new Set(values ?? [])].sort();
@@ -118,6 +135,9 @@ function formulaErrors(periods: FormulaSummaryPeriod[]) {
 
 export function clearFormulaAnalysisReportCache(): void {
   reportCache.clear();
+  summaryCache.clear();
+  healthCache.clear();
+  pairCache.clear();
 }
 
 export function buildFormulaAnalysisReport(
@@ -133,12 +153,14 @@ export function buildFormulaAnalysisReport(
     ? input.rules.filter((rule) => requestedRuleIds.has(rule.id))
     : input.rules;
   const selectedRuleIds = rules.map((rule) => rule.id).sort();
-  const rawSummary = buildFormulaSummaryReport({
+  // Action/type switches change chart selection, not arithmetic or formula health.
+  const layerKey = `${backtestMathKey({ ...input, rules })}\u001f${input.window}\u001f${JSON.stringify(rules.map((rule) => [rule.id, rule.name]))}`;
+  const rawSummary = cachedLayer(summaryCache, layerKey, () => buildFormulaSummaryReport({
     draws: input.draws,
     rules,
     config: input.config,
     maxPeriods: input.window + 1,
-  });
+  }));
   const periods = filterPeriods(rawSummary.periods, input.targetType);
   const contributionCount = periods.reduce(
     (total, period) => total + period.contributions.length,
@@ -150,8 +172,8 @@ export function buildFormulaAnalysisReport(
     latestPeriod: periods.at(-1),
     contributionCount,
   };
-  const health = buildFormulaHealthReport({ draws: input.draws, rules, config: input.config, window: input.window });
-  const pairs = buildFormulaPairDiagnostics({ periods });
+  const health = cachedLayer(healthCache, layerKey, () => buildFormulaHealthReport({ draws: input.draws, rules, config: input.config, window: input.window }));
+  const pairs = cachedLayer(pairCache, `${layerKey}\u001f${input.targetType}`, () => buildFormulaPairDiagnostics({ periods }));
   const landing = buildFormulaDrawLandingAnalysis({
     periods,
     action: input.action,

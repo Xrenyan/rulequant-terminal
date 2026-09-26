@@ -14,6 +14,7 @@ type Input = {
 };
 
 export function runSampleChecks(input: Input): SampleCheckResult[] {
+  if (!input.cases.length) return [];
   const backtest = input.backtest ?? runBacktest({ draws: input.draws, rules: input.rules, config: input.config });
 
   return input.cases.map((sampleCase) => {

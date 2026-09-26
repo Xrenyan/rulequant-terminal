@@ -36,6 +36,7 @@ function normalizeFormula(value: string): string {
 
 function categoryFromText(text: string, formula: string): RuleCategory {
   const scope = `${text}\n${formula}`;
+  if (/杀(?:一?个?)?特码|杀特号/.test(scope)) return "kill_number";
   if (/九肖/.test(scope)) return "nine_zodiac";
   if (/八肖管两期|管2期/.test(scope)) return "eight_zodiac_two_period";
   if (/八肖/.test(scope)) return "eight_zodiac";
@@ -55,6 +56,8 @@ function categoryFromText(text: string, formula: string): RuleCategory {
 
 function normalizerFor(category: RuleCategory): string {
   switch (category) {
+    case "kill_number":
+      return "subtract_49_to_1_49";
     case "kill_zodiac":
       return "subtract_48_to_1_49";
     case "kill_sum":
@@ -105,6 +108,7 @@ function targetFor(category: RuleCategory): string {
       return "special_tail";
     case "kill_head":
       return "special_head";
+    case "kill_number":
     case "kill_half_head":
     case "kill_half_color":
     case "kill_door":

@@ -22,7 +22,7 @@ describe("analysis range and effect controls", () => {
       const last = [...document.querySelectorAll('[role="option"]')].find((item) => item.textContent === "最近200期")!;
       await act(async () => { last.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
       expect(onChange).toHaveBeenCalledWith({ ...FORMULA_ANALYSIS_DEFAULT_FILTERS, window: 200 });
-      await act(async () => { host.querySelector('[aria-label="对比模式"]')!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+      await act(async () => { host.querySelector('[aria-label="对比期数"]')!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
       expect([...document.querySelectorAll('[role="option"]')].some((item) => item.textContent === "对比最近200期")).toBe(true);
     } finally { await act(async () => root.unmount()); }
   });

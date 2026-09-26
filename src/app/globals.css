@@ -6669,9 +6669,9 @@ body::after {
 }
 
 @media (max-width: 767px) {
-  .rq-settings-nav { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 5px; }
+  .rq-settings-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 5px; }
   .rq-settings-nav button { min-height: 50px; padding: 7px 4px; text-align: center; }
-  .rq-settings-nav button strong { font-size: 10.5px; }
+  .rq-settings-nav button strong { font-size: 12px; white-space: nowrap; }
   .rq-settings-nav button small { display: none; }
   .rq-system-guide__hero { padding-right: 62px; }
   .rq-system-guide__hero > svg { position: absolute; top: 18px; right: 18px; grid-row: auto; }
@@ -6814,4 +6814,81 @@ body::after {
   .rq-analysis-tabs { overflow-x: auto; }
   .rq-formula-complete-matrix__cell > strong,
   .rq-formula-complete-matrix__number-cell > strong { font-size: 14px; }
+}
+
+/* Long-history visualizations: bounded rows, stable fullscreen, quiet interaction. */
+.rq-matrix-window.is-number { display: block; padding: 0; }
+.rq-evidence-matrix-panel .rq-formula-complete-matrix.rq-matrix-window { max-height: none; overflow: visible; }
+.rq-matrix-window__toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; padding: 12px; border-bottom: 1px solid var(--rq-border); background: var(--rq-content-grouped); border-radius: 16px 16px 0 0; }
+.rq-matrix-window__toolbar label { display: grid; gap: 5px; flex: 1 1 160px; color: var(--rq-muted); font-size: 12px; }
+.rq-matrix-window__toolbar input, .rq-matrix-window__toolbar select { width: 100%; min-height: 44px; border: 1px solid var(--rq-border); border-radius: 12px; padding: 8px 10px; background: var(--rq-content-raised); color: var(--rq-text); font-size: 14px; }
+.rq-matrix-window__toolbar > span { padding-block: 12px; color: var(--rq-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.rq-matrix-window__viewport { position: relative; height: min(560px, 65dvh); overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-color: var(--rq-border) transparent; }
+.rq-matrix-window__space { position: relative; }
+.rq-matrix-window__head { position: sticky; top: 0; z-index: 4; min-height: 50px; background: var(--rq-content-raised); }
+.rq-matrix-window__row { box-sizing: border-box; }
+.rq-matrix-window__cells { display: contents; }
+.rq-matrix-window .rq-formula-complete-matrix__number-cell { height: 48px; min-height: 48px; }
+.rq-matrix-window .rq-formula-complete-matrix__number-period { padding: 8px; }
+.rq-matrix-window .rq-formula-complete-matrix__number-period > header { height: 44px; margin-bottom: 7px; }
+.rq-matrix-window__empty { padding: 24px; color: var(--rq-muted); text-align: center; }
+.rq-matrix-window :is(input, select):focus-visible { outline: 2px solid var(--rq-accent-strong); outline-offset: 2px; }
+.rq-formula-complete-matrix button:active { transform: scale(.97); }
+.rq-visualization-inline, .rq-visualization-inline > section { min-width: 0; }
+.rq-visualization-dialog__backdrop { backdrop-filter: none; background: rgba(8, 15, 25, .62); }
+.rq-visualization-dialog > section { border-color: var(--rq-border); box-shadow: 0 22px 70px rgba(0, 0, 0, .25); }
+.rq-formula-landing-chart__legend, .rq-formula-landing-chart__detail { position: sticky; left: 0; }
+.rq-formula-landing-chart__detail { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--rq-border); border-radius: 12px; background: var(--rq-content-grouped); color: var(--rq-text-soft); font-size: 12px; line-height: 1.5; }
+.rq-health-pagination { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; padding: 12px 0 0; color: var(--rq-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.rq-health-pagination > span:first-child { margin-right: auto; }
+.rq-health-pagination button { min-height: 44px; }
+@media (max-width: 767px) {
+  .rq-matrix-window__toolbar { gap: 8px; padding: 10px; }
+  .rq-matrix-window__toolbar label { flex-basis: 130px; }
+  .rq-matrix-window__toolbar > span { width: 100%; padding: 2px 0; }
+  .rq-matrix-window__toolbar input, .rq-matrix-window__toolbar select { font-size: 16px; }
+  .rq-health-pagination { justify-content: space-between; }
+  .rq-health-pagination > span:first-child { width: 100%; }
+  /* The cell already labels its number. Keep the actual-result badge compact on phones. */
+  .rq-formula-complete-matrix__number-cell .rq-formula-complete-matrix__actual-marker { padding: 2px; }
+  .rq-formula-complete-matrix__number-cell .rq-formula-complete-matrix__actual-marker small { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rq-formula-complete-matrix button, .rq-expandable-visualization button, .rq-visualization-dialog button { transition: none; animation: none; }
+  .rq-formula-complete-matrix button:active { transform: none; }
+}
+
+/* Compact continuous feedback: preserve the existing palette and keep heavy surfaces still. */
+.rq-observation-shortcut {
+  display: inline-flex; align-items: center; min-height: 36px; padding: 7px 12px;
+  border: 1px solid color-mix(in srgb, var(--rq-warn) 34%, transparent);
+  border-radius: 999px; color: color-mix(in srgb, var(--rq-warn) 60%, var(--rq-text)); background: color-mix(in srgb, var(--rq-warn) 6%, transparent); font-size: 12px;
+  text-decoration: none; font-weight: 600;
+}
+.rq-observation-notice {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+  padding: 12px 16px; border: 1px solid color-mix(in srgb, var(--rq-warn) 20%, transparent); border-radius: 18px;
+  background: color-mix(in srgb, var(--rq-content-grouped) 95%, var(--rq-warn));
+  color: var(--rq-text); font-size: 13px; line-height: 1.6;
+}
+.rq-observation-notice > div { display: grid; gap: 3px; flex: 1; min-width: 180px; }
+.rq-observation-notice > div > span { color: var(--rq-text-soft); }
+.rq-observation-notice .rq-link-button { min-height: 40px; }
+.rq-rules-workspace-tabs { overflow-x: auto; scrollbar-width: thin; }
+.rq-rules-workspace-tabs > button { flex-shrink: 0; }
+.rq-button, .rq-workspace-tab, .rq-rule-row {
+  transition-property: background-color, border-color, box-shadow, color, transform;
+  transition-duration: 150ms; transition-timing-function: cubic-bezier(.2,.7,.25,1);
+}
+.rq-button:focus-visible, .rq-workspace-tab:focus-visible, .rq-observation-shortcut:focus-visible {
+  outline: 3px solid #427ddd80; outline-offset: 3px;
+}
+.rq-observation-shortcut:focus-visible { outline-color: var(--rq-accent-strong); }
+@media (max-width: 640px) {
+  .rq-observation-notice { padding: 12px; gap: 8px; }
+  .rq-observation-notice > div { flex-basis: 100%; }
+  .rq-observation-shortcut { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rq-button, .rq-workspace-tab, .rq-rule-row { transition: none; }
 }

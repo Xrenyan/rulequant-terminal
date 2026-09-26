@@ -1,4 +1,5 @@
 import type { RuleRecord, RuleSourceType } from "@/types/domain";
+import { canonicalVariableName } from "@/lib/formula/variable-aliases";
 
 export type RuleLibraryDraft = Partial<RuleRecord> & {
   id?: string;
@@ -83,6 +84,7 @@ export function canonicalFormulaForSignature(formula: string): string {
     .replace(/([1-7])\uFE0F?\u20E3/g, "$1")
     .replace(/[，、；;]/g, "+")
     .replace(/\s+/g, "")
+    .replace(/[^+\-*/()]+/g, canonicalVariableName)
     .replace(/落([1-6])/g, "平$1")
     .replace(/(?:落7|平7|特号)/g, "特码")
     .replace(/(^|[+\-*/(])特(?=$|[+\-*/)])/g, "$1特码")

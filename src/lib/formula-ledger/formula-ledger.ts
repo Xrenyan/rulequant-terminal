@@ -102,6 +102,8 @@ function equationLine(formula: string, variables: Record<string, number>, rawRes
 function finalOutputLabel(rule: RuleRecord, mappedResult: Array<number | string>): string {
   const value = mappedResult.join("、");
   switch (rule.category) {
+    case "kill_number":
+      return `杀特码 ${value}`;
     case "kill_zodiac":
       return `杀${value}`;
     case "include_zodiac":
@@ -154,6 +156,8 @@ function mappingLine(rule: RuleRecord, calculation: Pick<RuleCalculation, "final
   const mapped = calculation.mappedResult.join("、");
   const finalResult = Array.isArray(calculation.finalResult) ? calculation.finalResult.join("、") : calculation.finalResult;
   switch (rule.category) {
+    case "kill_number":
+      return `归一到 ${finalResult}；排除特码 ${mapped}`;
     case "kill_zodiac":
     case "include_zodiac":
     case "kill_element":

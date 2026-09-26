@@ -120,6 +120,8 @@ export function getFormulaDiscoveryCacheSize(): number {
 
 function normalizerFor(category: RuleCategory): string {
   switch (category) {
+    case "kill_number":
+      return "subtract_49_to_1_49";
     case "kill_zodiac":
       return "subtract_48_to_1_49";
     case "kill_sum":
@@ -143,6 +145,8 @@ function normalizerFor(category: RuleCategory): string {
 
 function targetFor(category: RuleCategory): string {
   switch (category) {
+    case "kill_number":
+      return "special_number";
     case "kill_zodiac":
     case "six_zodiac":
     case "eight_zodiac":
@@ -273,6 +277,7 @@ function recentRate(result: RuleBacktestResult): number {
 
 function categoryBaseline(category: RuleCategory): number {
   switch (category) {
+    case "kill_number": return 48 / 49 * 100;
     case "kill_zodiac": return 91.67;
     case "kill_tail": return 90;
     case "kill_sum": return 92.3;

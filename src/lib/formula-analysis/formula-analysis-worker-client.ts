@@ -1,19 +1,19 @@
 import {
-  buildFormulaAnalysisReport,
   formulaAnalysisInputKey,
   type FormulaAnalysisReportInput,
 } from "@/lib/formula-analysis/build-analysis-report";
 import type { FormulaAnalysisReport } from "@/lib/formula-analysis/types";
 
-type FormulaAnalysisWorkerResponse =
-  | { ok: true; report: FormulaAnalysisReport }
-  | { ok: false; error: string };
+export type FormulaAnalysisWorkerRequest = { requestId: number; input: FormulaAnalysisReportInput };
+export type FormulaAnalysisWorkerResponse =
+  | { requestId: number; ok: true; report: FormulaAnalysisReport }
+  | { requestId: number; ok: false; error: string };
 
 export type FormulaAnalysisWorkerPort = {
   onmessage: ((event: MessageEvent<FormulaAnalysisWorkerResponse>) => void) | null;
   onerror: ((event: ErrorEvent) => void) | null;
   onmessageerror: ((event: MessageEvent) => void) | null;
-  postMessage(message: FormulaAnalysisReportInput): void;
+  postMessage(message: FormulaAnalysisWorkerRequest): void;
   terminate(): void;
 };
 
@@ -25,6 +25,9 @@ type StartFormulaAnalysisReportOptions = {
 
 const MAX_CLIENT_CACHE_ENTRIES = 8;
 const completedReports = new Map<string, FormulaAnalysisReport>();
+const pending = new Map<number, { inputKey: string; options: StartFormulaAnalysisReportOptions }>();
+let sharedWorker: FormulaAnalysisWorkerPort | undefined;
+let nextRequestId = 0;
 
 function rememberReport(key: string, report: FormulaAnalysisReport): void {
   completedReports.delete(key);
@@ -38,6 +41,17 @@ function rememberReport(key: string, report: FormulaAnalysisReport): void {
 
 export function clearFormulaAnalysisWorkerResultCache(): void {
   completedReports.clear();
+  pending.clear();
+  sharedWorker?.terminate();
+  sharedWorker = undefined;
+}
+
+function failWorker(message: string): void {
+  const requests = [...pending.values()];
+  pending.clear();
+  sharedWorker?.terminate();
+  sharedWorker = undefined;
+  requests.forEach(({ options }) => options.onError?.(message));
 }
 
 function defaultWorker(): FormulaAnalysisWorkerPort {
@@ -61,53 +75,30 @@ export function startFormulaAnalysisReportRequest(
     });
     return () => { disposed = true; };
   }
-  let worker: FormulaAnalysisWorkerPort | undefined;
-  let settled = false;
-  let disposed = false;
-
-  const terminate = () => {
-    worker?.terminate();
-  };
-  const settle = (report: FormulaAnalysisReport, source: "worker" | "fallback") => {
-    if (settled || disposed) return;
-    settled = true;
-    rememberReport(inputKey, report);
-    terminate();
-    options.onResult(report, source);
-  };
-  const recover = (cause: unknown) => {
-    if (settled || disposed) return;
-    try {
-      settle(buildFormulaAnalysisReport(input), "fallback");
-    } catch (fallbackError) {
-      settled = true;
-      terminate();
-      const message = fallbackError instanceof Error
-        ? fallbackError.message
-        : cause instanceof Error
-          ? cause.message
-          : "公式分析暂时无法完成";
-      options.onError?.(message);
-    }
-  };
-
+  const requestId = ++nextRequestId;
   try {
-    worker = (options.createWorker ?? defaultWorker)();
-    worker.onmessage = (event) => {
-      if (settled || disposed) return;
-      if (event.data.ok) settle(event.data.report, "worker");
-      else recover(new Error(event.data.error));
-    };
-    worker.onerror = () => recover(new Error("公式分析线程暂时无法启动"));
-    worker.onmessageerror = () => recover(new Error("公式分析线程消息无法读取"));
-    worker.postMessage(input);
+    if (!sharedWorker) {
+      const worker = (options.createWorker ?? defaultWorker)();
+      sharedWorker = worker;
+      worker.onmessage = ({ data }) => {
+        if (sharedWorker !== worker) return;
+        const request = pending.get(data.requestId);
+        if (!request) return;
+        pending.delete(data.requestId);
+        if (data.ok) {
+          rememberReport(request.inputKey, data.report);
+          request.options.onResult(data.report, "worker");
+        } else request.options.onError?.(data.error);
+      };
+      worker.onerror = () => { if (sharedWorker === worker) failWorker("分析暂时中断，请重新选择条件后重试。"); };
+      worker.onmessageerror = () => { if (sharedWorker === worker) failWorker("分析结果读取失败，请重试。"); };
+    }
+    pending.set(requestId, { inputKey, options });
+    sharedWorker.postMessage({ requestId, input });
   } catch (error) {
-    recover(error);
+    pending.delete(requestId);
+    failWorker("分析暂时无法启动，请重试。");
+    options.onError?.(error instanceof Error ? error.message : "分析暂时无法启动，请重试。");
   }
-
-  return () => {
-    if (disposed) return;
-    disposed = true;
-    if (!settled) terminate();
-  };
+  return () => { pending.delete(requestId); };
 }

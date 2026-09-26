@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent, type KeyboardEvent } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -42,6 +42,7 @@ import type { FormulaDiscoveryCandidate } from "@/lib/formula-discovery/formula-
 import { buildFormulaLedger, buildOneClickFormulaResults, type FormulaLedgerEntry, type OneClickFormulaResult } from "@/lib/formula-ledger/formula-ledger";
 import { parseDrawFile, parseDrawText } from "@/lib/parsers/draw-parser";
 import { parseRuleTextFile } from "@/lib/parsers/rule-text-parser";
+import { parsePastedKillNumberRule } from "@/lib/parsers/pasted-kill-number-rule";
 import { runSampleChecks } from "@/lib/sample-check/run-sample-checks";
 import { sampleDifferenceCopy } from "@/lib/sample-check/presentation";
 import { getNumberAttributes, normalizeDraw } from "@/lib/engine/attributes";
@@ -86,6 +87,13 @@ import { ContextHelpLink, PRIMARY_VIEW_GUIDE_TARGETS } from "@/components/system
 import { cn } from "@/lib/utils";
 import { paginateItems } from "@/lib/pagination";
 import { fetchJsonWithSessionCache } from "@/lib/network/urls";
+import { drawRevision, mergeCheckedDraws } from "@/lib/draws/draw-revision";
+import { useSessionView } from "@/lib/storage/use-session-view";
+import { readBrowserLocalStorage, writeBrowserLocalStorage } from "@/lib/storage/safe-browser-storage";
+import { backtestMathKey, startBacktestRequest } from "@/lib/backtest/backtest-worker-client";
+import { refreshBacktestRuleMetadata } from "@/lib/backtest/run-backtest";
+import { useRuleObservation, type RuleObservationController } from "@/lib/rule-observation/use-rule-observation";
+import { RuleObservationPanel, RuleObservationSettings } from "@/components/rule-observation-panel";
 
 const FormulaResultStatisticsView = dynamic(
   () => import("@/components/formula-result-statistics-view").then((module) => module.FormulaResultStatisticsView),
@@ -217,10 +225,6 @@ function exportWorkbook(sheets: Record<string, unknown[]>, filename: string) {
   void loadExporters().then((module) => module.exportWorkbook(sheets, filename));
 }
 
-function exportBacktestExcel(result: BacktestResult) {
-  void loadExporters().then((module) => module.exportBacktestExcel(result));
-}
-
 function exportSampleReport(results: Parameters<Awaited<ReturnType<typeof loadExporters>>["exportSampleReport"]>[0]) {
   void loadExporters().then((module) => module.exportSampleReport(results));
 }
@@ -251,10 +255,6 @@ function exportRuleLibraryWord(rules: RuleRecord[]) {
   void loadExporters()
     .then((module) => module.exportRuleLibraryWord(rules))
     .catch((error) => window.alert(`Word 文档生成失败：${error instanceof Error ? error.message : String(error)}`));
-}
-
-function exportHtmlReport(result: BacktestResult, rules: RuleRecord[], config: RuleQuantConfig) {
-  void loadExporters().then((module) => module.exportHtmlReport(result, rules, config));
 }
 
 export type ViewKey =
@@ -355,6 +355,7 @@ const viewLabels: Record<ViewKey, string> = {
 const categories: Array<{ value: RuleCategory; label: string }> = [
   { value: "include_zodiac", label: "选生肖" },
   { value: "kill_zodiac", label: "杀一肖" },
+  { value: "kill_number", label: "杀特码" },
   { value: "kill_color", label: "杀波色" },
   { value: "kill_half_color", label: "杀半波" },
   { value: "include_color", label: "参考波色" },
@@ -464,6 +465,7 @@ type UrlImportResponse = {
 };
 
 let lastAutomaticSourceCheckAt = 0;
+let initialSourceCheckComplete = false;
 let sourceSessionSnapshot: { records: DrawRecord[]; summaries: UrlImportSummary[]; status: string } | undefined;
 
 type CandidateFocus = { type: "number"; value: number } | { type: "zodiac"; value: string } | null;
@@ -560,6 +562,7 @@ function categoryLabel(category: RuleCategory) {
 
 function normalizerLabel(normalizer: string) {
   if (normalizer === "auto") return "自动识别公式口径";
+  if (normalizer === "subtract_49_to_1_49") return "超过49连续减49，归一到1–49";
   if (normalizer === "subtract_48_to_1_49" || normalizer === "zodiac_minus_48") return "按 1–49 循环归一";
   if (normalizer === "mod_10") return "按尾数 0–9 循环";
   if (normalizer === "mod_3") return "按三类结果循环";
@@ -1013,25 +1016,8 @@ function IssuePicker({ value, options, onChange }: { value: string; options: str
 }
 
 function buildBackgroundBacktestKey(draws: DrawRecord[], rules: RuleRecord[], config: RuleQuantConfig) {
-  return JSON.stringify({
-    draws: draws.map((draw) => [draw.issue, draw.n1, draw.n2, draw.n3, draw.n4, draw.n5, draw.n6, draw.special]),
-    rules: rules.map((rule) => [
-      rule.id,
-      rule.updatedAt,
-      rule.enabled,
-      rule.category,
-      rule.orderMode,
-      rule.formula,
-      rule.normalizer,
-      rule.target,
-      rule.positionPattern,
-      rule.anchorIssue ?? "",
-      rule.anchorPatternIndex ?? "",
-      rule.periodSpan,
-      rule.verifyOffset ?? "",
-    ]),
-    config,
-  });
+  // Display/reference preferences refresh the view, but the worker reuses unchanged mathematics.
+  return `${backtestMathKey({ draws, rules, config })}:${JSON.stringify(rules.map((rule) => [rule.id, rule.name, rule.enabled, rule.manuallyConfirmed, rule.participatesInReference, rule.sourceType]))}`;
 }
 
 function FormulaDiscoveryPendingPanel({
@@ -1281,15 +1267,16 @@ function buildRuleFromFormData(formData: FormData, options: { existingRule?: Rul
   const rawId = String(formData.get("id") || "");
   const id = options.forceNew || !rawId ? `rule-${Date.now()}` : rawId;
   const existingRule = options.forceNew ? undefined : options.existingRule;
+  const category = String(formData.get("category") || "kill_zodiac") as RuleCategory;
 
   return {
     id,
     name: String(formData.get("name") || "未命名规则"),
-    category: String(formData.get("category") || "kill_zodiac") as RuleCategory,
+    category,
     orderMode: String(formData.get("orderMode") || "L") as RuleRecord["orderMode"],
     formula: String(formData.get("formula") || "平1 + 特码尾"),
-    normalizer: String(formData.get("normalizer") || "auto"),
-    target: String(formData.get("target") || "special"),
+    normalizer: category === "kill_number" ? "subtract_49_to_1_49" : String(formData.get("normalizer") || "auto"),
+    target: category === "kill_number" ? "special_number" : String(formData.get("target") || "special"),
     verifyMode: "next_special",
     positionPattern: parsePositionPattern(formData.get("positionPattern")),
     anchorIssue: String(formData.get("anchorIssue") || "") || undefined,
@@ -1336,6 +1323,7 @@ export function RuleQuantTerminal({ activeView }: { activeView: ViewKey }) {
 }
 
 function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const activeGuideTarget = activeView === "formula-analysis"
     ? PRIMARY_VIEW_GUIDE_TARGETS["formula-result-statistics"]
@@ -1346,6 +1334,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const store = useRuleQuantStore();
   const { draws, rules, samples, operationLogs, ruleBackups, referenceHistory, config, selectedRuleId, cloudStateMeta, cloudPublishStatus, cloudPublishMessage, hasHydrated } = store;
   const hydrate = store.hydrate;
+  const saveReferenceToStore = store.saveReferenceHistory;
+  const replaceDrawsInStore = store.replaceDraws;
+  const importDrawsToStore = store.importDraws;
   const [importText, setImportText] = useState("期号,平1,平2,平3,平4,平5,平6,特码\n2026166,8,13,19,27,35,44,6");
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [previewDraws, setPreviewDraws] = useState<DrawRecord[]>([]);
@@ -1356,16 +1347,18 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const [sourceSummaries, setSourceSummaries] = useState<UrlImportSummary[]>(() => sourceSessionSnapshot?.summaries ?? []);
   const [sourceStatus, setSourceStatus] = useState(() => sourceSessionSnapshot?.status ?? "");
   const [sourceLoading, setSourceLoading] = useState(false);
+  const [firstSourceCheckComplete, setFirstSourceCheckComplete] = useState(initialSourceCheckComplete);
   const referenceAutoSavedSignature = useRef("");
   const [candidateTab, setCandidateTab] = useState<"numbers8" | "numbers12" | "numbers18" | "numbers16" | "numbers49" | "zodiacs12" | "zodiacs9" | "zodiacs8" | "zodiacs7">("numbers8");
   const [candidateWorkspaceTab, setCandidateWorkspaceTab] = useState<"results" | "evidence" | "history" | "combo" | "operations">("results");
   const [evidencePage, setEvidencePage] = useState(0);
-  const [rulesWorkspaceTab, setRulesWorkspaceTab] = useState<"library" | "health" | "reconcile">("library");
+  const [rulesWorkspaceTab, setRulesWorkspaceTab] = useSessionView<"library" | "health" | "reconcile" | "observation">("rules-tab", "library");
   const [candidateFocus, setCandidateFocus] = useState<CandidateFocus>(null);
   const [referenceGeneratedAt, setReferenceGeneratedAt] = useState("");
   const [referenceRunId, setReferenceRunId] = useState(0);
   const [referenceCalculating, setReferenceCalculating] = useState(false);
   const [referenceStatus, setReferenceStatus] = useState("");
+  const [exportStatus, setExportStatus] = useState({ loading: false, message: "" });
   const [oneClickCalculating, setOneClickCalculating] = useState(false);
   const [oneClickStatus, setOneClickStatus] = useState("");
   const [pendingRoute, setPendingRoute] = useState("");
@@ -1402,8 +1395,12 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const [discoveryRefreshId, setDiscoveryRefreshId] = useState(0);
   const [discoveryElapsedSeconds, setDiscoveryElapsedSeconds] = useState(0);
   const [ruleLibraryStatus, setRuleLibraryStatus] = useState("");
-  const [lastCalculationAt, setLastCalculationAt] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("rulequant:lastCalculationAt") ?? ""));
-  const [lastSyncAt, setLastSyncAt] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("rulequant:lastSyncAt") ?? ""));
+  const [lastCalculationAt, setLastCalculationAt] = useState(() => readBrowserLocalStorage("rulequant:lastCalculationAt"));
+  const [lastSyncAt, setLastSyncAt] = useState(() => readBrowserLocalStorage("rulequant:lastSyncAt"));
+  const [metadataStorageError, setMetadataStorageError] = useState(false);
+  const saveLocalMetadata = useCallback((key: string, value: string) => {
+    if (!writeBrowserLocalStorage(key, value)) setMetadataStorageError(true);
+  }, []);
   const [ledgerVisibleState, setLedgerVisibleState] = useState({ ruleId: "", count: 20 });
   const [oneClickMode, setOneClickMode] = useState<"latest" | "manual">("latest");
   const [manualDraw, setManualDraw] = useState<DrawRecord>(() => ({
@@ -1416,10 +1413,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     n6: 6,
     special: 7,
   }));
-  const [ruleFilter, setRuleFilter] = useState<RuleCategory | "all">("all");
-  const [ruleLibraryFilter, setRuleLibraryFilter] = useState<RuleLibraryFilter>("all");
-  const [ruleSort, setRuleSort] = useState<RuleSortKey>("smart");
-  const [rulePage, setRulePage] = useState(0);
+  const [ruleFilter, setRuleFilter] = useSessionView<RuleCategory | "all">("rules-category", "all");
+  const [ruleLibraryFilter, setRuleLibraryFilter] = useSessionView<RuleLibraryFilter>("rules-filter", "all");
+  const [ruleSort, setRuleSort] = useSessionView<RuleSortKey>("rules-sort", "smart");
+  const [rulePage, setRulePage] = useSessionView("rules-page", 0);
   const [mobileRuleToolsOpen, setMobileRuleToolsOpen] = useState(false);
   const [oneClickPage, setOneClickPage] = useState(0);
   const [selectedComboRuleIds, setSelectedComboRuleIds] = useState<string[]>([]);
@@ -1430,6 +1427,18 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  useEffect(() => {
+    const complete = () => setFirstSourceCheckComplete(true);
+    window.addEventListener("rulequant:source-checked", complete);
+    return () => window.removeEventListener("rulequant:source-checked", complete);
+  }, []);
+
+  useEffect(() => {
+    if (activeView !== "rules" || searchParams.get("tab") !== "observation") return;
+    const timer = window.setTimeout(() => setRulesWorkspaceTab("observation"), 0);
+    return () => window.clearTimeout(timer);
+  }, [activeView, searchParams, setRulesWorkspaceTab]);
 
   useEffect(() => {
     let disposed = false;
@@ -1498,7 +1507,6 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       : activeView === "formula-editor" && editorRuleId
         ? rules.find((rule) => rule.id === editorRuleId)
         : selectedRule;
-  const ledgerVisibleCount = ledgerVisibleState.ruleId === selectedRuleId ? ledgerVisibleState.count : 20;
   const websiteDraws = useMemo(() => sortDrawRecords(sourceRecords), [sourceRecords]);
   const manualLocalDraws = useMemo(() => sortDrawRecords(draws.filter(isManualDrawRecord)), [draws]);
   const activeDraws = useMemo(
@@ -1506,6 +1514,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     [draws, manualLocalDraws, websiteDraws],
   );
   const normalizedDraws = useMemo(() => activeDraws.map((draw) => normalizeDraw(draw, config)), [activeDraws, config]);
+  const observation = useRuleObservation({ draws: activeDraws, rules, config, ready: hasHydrated, activationReady: firstSourceCheckComplete });
+  const futureReferenceRules = useMemo(() => rules.filter((rule) => !observation.pausedRuleIds.has(rule.id)), [rules, observation.pausedRuleIds]);
+  const participationRevision = [...observation.pausedRuleIds].sort().join(",");
   const latestDraw = normalizedDraws.at(-1);
   const latestRawDraw = activeDraws.at(-1);
   const latestPeriodIndex = Math.max(normalizedDraws.length - 1, 0);
@@ -1516,18 +1527,21 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const isCloudData = Boolean(cloudStateMeta?.enabled && cloudStateMeta.recordCount);
   const hasSharedDraws = hasLiveDraws || isCloudData || websiteDraws.length > 0 || hasManualDraws;
   const isStaticShareHost = typeof window !== "undefined" && (window.location.hostname.endsWith("github.io") || process.env.NEXT_PUBLIC_STATIC_EXPORT === "true");
-  const hasCloudAdminToken = typeof window !== "undefined" && Boolean(window.localStorage.getItem("rulequant:adminToken"));
+  const hasCloudAdminToken = Boolean(readBrowserLocalStorage("rulequant:adminToken"));
   const showCloudPublishControls = hasCloudAdminToken || !isStaticShareHost;
   const cloudSyncAt = cloudStateMeta?.updatedAt ? new Date(cloudStateMeta.updatedAt).toLocaleString("zh-CN", { hour12: false }) : "";
   const staticSnapshotAt = isStaticShareHost && hasSharedDraws ? (cloudSyncAt || latestRawDraw?.date || "静态快照") : "";
   const displayLastSyncAt = lastSyncAt || cloudSyncAt || staticSnapshotAt;
   const isUsingSyncedData = websiteDraws.length > 0 || isCloudData || hasLiveDraws;
+  const usingBackupSnapshot = sourceStatus.includes("快照") || sourceStatus.includes("已保存开奖") || isStaticShareHost;
   const dataSourceLabel = sourceLoading
     ? "同步中"
+    : usingBackupSnapshot
+      ? `已保存开奖 · ${latestRawDraw?.issue ?? "—"}期`
     : websiteDraws.length && hasManualDraws
       ? "网站全年数据 + 人工录入"
     : websiteDraws.length
-        ? "网站全年数据"
+        ? "已同步开奖记录"
         : isCloudData && hasManualDraws
           ? "已同步开奖记录 + 人工补充"
           : isCloudData
@@ -1563,52 +1577,57 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     activeView === "backtest" ||
     activeView === "reports" ||
     (activeView === "candidate-pool" && isCandidatePoolReady);
+  const detailRuleIds = useMemo(() => [...new Set([
+    ...samples.map((sample) => sample.ruleId),
+    ...((activeView === "formula-detail" || activeView === "backtest") && selectedRule ? [selectedRule.id] : []),
+  ])].sort(), [samples, activeView, selectedRule]);
+  const fullBacktestDetails = activeView === "reports";
   const backgroundBacktestKey = useMemo(
-    () => usesBackgroundBacktest ? buildBackgroundBacktestKey(activeDraws, rules, config) : "",
-    [usesBackgroundBacktest, activeDraws, rules, config],
+    () => usesBackgroundBacktest ? `${buildBackgroundBacktestKey(activeDraws, rules, config)}:${fullBacktestDetails ? "full" : detailRuleIds.join(",")}` : "",
+    [usesBackgroundBacktest, activeDraws, rules, config, fullBacktestDetails, detailRuleIds],
   );
   useEffect(() => {
     if (!usesBackgroundBacktest || !backgroundBacktestKey) return;
 
     const cached = backgroundBacktestCache.get(backgroundBacktestKey);
     if (cached) {
+      const currentRules = new Map(rules.map((rule) => [rule.id, rule]));
+      const refreshed = { ...cached, ruleResults: cached.ruleResults.map((result) => refreshBacktestRuleMetadata(result, currentRules.get(result.rule.id) ?? result.rule)) };
       backgroundBacktestCache.delete(backgroundBacktestKey);
-      backgroundBacktestCache.set(backgroundBacktestKey, cached);
+      backgroundBacktestCache.set(backgroundBacktestKey, refreshed);
       let disposed = false;
       queueMicrotask(() => {
-        if (!disposed) setBackgroundBacktestState({ key: backgroundBacktestKey, result: cached, loading: false, error: "" });
+        if (!disposed) setBackgroundBacktestState({ key: backgroundBacktestKey, result: refreshed, loading: false, error: "" });
       });
       return () => { disposed = true; };
     }
 
-    const worker = new Worker(new URL("../workers/backtest.worker.ts", import.meta.url));
     let disposed = false;
     queueMicrotask(() => {
       if (!disposed) setBackgroundBacktestState({ key: backgroundBacktestKey, loading: true, error: "" });
     });
-    worker.onmessage = (event: MessageEvent<{ ok: boolean; backtest?: BacktestResult; error?: string }>) => {
+    const cancel = startBacktestRequest({ draws: activeDraws, rules, config }, {
+      detailRuleIds,
+      fullDetails: fullBacktestDetails,
+      onResult: (result) => {
       if (disposed) return;
-      if (!event.data.ok || !event.data.backtest) {
-        setBackgroundBacktestState({ key: backgroundBacktestKey, loading: false, error: event.data.error ?? "历史表现计算失败" });
-        return;
-      }
-      backgroundBacktestCache.set(backgroundBacktestKey, event.data.backtest);
+      backgroundBacktestCache.set(backgroundBacktestKey, result);
       while (backgroundBacktestCache.size > BACKGROUND_BACKTEST_CACHE_LIMIT) {
         const oldestKey = backgroundBacktestCache.keys().next().value;
         if (!oldestKey) break;
         backgroundBacktestCache.delete(oldestKey);
       }
-      setBackgroundBacktestState({ key: backgroundBacktestKey, result: event.data.backtest, loading: false, error: "" });
-    };
-    worker.onerror = () => {
-      if (!disposed) setBackgroundBacktestState({ key: backgroundBacktestKey, loading: false, error: "历史表现暂时无法整理，请刷新后重试" });
-    };
-    worker.postMessage({ draws: activeDraws, rules, config });
+      startTransition(() => setBackgroundBacktestState({ key: backgroundBacktestKey, result, loading: false, error: "" }));
+      },
+      onError: (error) => {
+        if (!disposed) setBackgroundBacktestState({ key: backgroundBacktestKey, loading: false, error });
+      },
+    });
     return () => {
       disposed = true;
-      worker.terminate();
+      cancel();
     };
-  }, [usesBackgroundBacktest, activeDraws, rules, config, backgroundBacktestKey]);
+  }, [usesBackgroundBacktest, activeDraws, rules, config, backgroundBacktestKey, detailRuleIds, fullBacktestDetails]);
 
   const backgroundBacktest = backgroundBacktestState.key === backgroundBacktestKey ? backgroundBacktestState.result : undefined;
   const isBackgroundBacktestCalculating = usesBackgroundBacktest && backgroundBacktestState.key === backgroundBacktestKey && backgroundBacktestState.loading;
@@ -1622,6 +1641,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     || activeView === "rules"
     || activeView === "formula-detail"
     || activeView === "sample-check"
+    || activeView === "reports"
     || (activeView === "candidate-pool" && isCandidatePoolReady)
   );
   const validationSampleResults = useMemo(() => {
@@ -1645,7 +1665,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     }
     return backtest.ruleResults.filter((result) => result.rule.enabled && !result.error && result.total > 0).length;
   }, [backtest.ruleResults, rules]);
-  const referenceRuleCount = useMemo(() => rules.filter((rule) => canRuleParticipateInReference(rule, ruleValidationById.get(rule.id))).length, [rules, ruleValidationById]);
+  const referenceRuleCount = useMemo(() => futureReferenceRules.filter((rule) => canRuleParticipateInReference(rule, ruleValidationById.get(rule.id))).length, [futureReferenceRules, ruleValidationById]);
   const pendingRuleCount = useMemo(() => ruleValidationSummaries.filter((summary) => summary.status === "unchecked").length, [ruleValidationSummaries]);
   const excludedRuleCount = Math.max(enabledRuleCount - referenceRuleCount, 0);
   const userProvidedRuleCount = useMemo(() => rules.filter((rule) => (rule.sourceType ?? "user_provided") === "user_provided").length, [rules]);
@@ -1706,8 +1726,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   const inspectedRuleSummary = inspectedRule ? ruleValidationById.get(inspectedRule.id) : undefined;
   const sampleResults = useMemo(() => {
     if (activeView !== "sample-check" && activeView !== "reports") return [];
-    return validationSampleResults.length ? validationSampleResults : runSampleChecks({ cases: samples, draws: activeDraws, rules, config });
-  }, [activeView, validationSampleResults, samples, activeDraws, rules, config]);
+    return validationSampleResults;
+  }, [activeView, validationSampleResults]);
   const nextOutputs = useMemo<NextOutputItem[]>(() => {
     if (activeView !== "next-output") return [];
     if (!latestDraw) return [];
@@ -1722,13 +1742,14 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       });
   }, [activeView, rules, latestDraw, latestPeriodIndex, config]);
   const researchDraws = activeDraws;
-  const shouldBuildCandidateReport = Boolean(backgroundBacktest) && (
+  const referenceValidationSummaries = useMemo(() => ruleValidationSummaries.map((summary) => ({ ...summary, backtest: undefined })), [ruleValidationSummaries]);
+  const shouldBuildCandidateReport = observation.ready && Boolean(backgroundBacktest) && (
     activeView === "dashboard"
     || (activeView === "candidate-pool" && isCandidatePoolReady)
     || activeView === "reports"
   );
   const candidateBacktest = backtest;
-  const candidateReportKey = shouldBuildCandidateReport ? `${backgroundBacktestKey}:${referenceRunId}` : "";
+  const candidateReportKey = shouldBuildCandidateReport ? `${backgroundBacktestKey}:${referenceRunId}:participation:${participationRevision}` : "";
   useEffect(() => {
     if (!shouldBuildCandidateReport || !candidateReportKey) return;
     const cached = candidatePoolReportCache.get(candidateReportKey);
@@ -1771,16 +1792,16 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     };
     worker.postMessage({
       draws: researchDraws,
-      rules,
+      rules: futureReferenceRules,
       config,
       backtest: compactCandidateBacktest(candidateBacktest),
-      validationSummaries: ruleValidationSummaries,
+      validationSummaries: referenceValidationSummaries,
     });
     return () => {
       disposed = true;
       worker.terminate();
     };
-  }, [shouldBuildCandidateReport, candidateReportKey, researchDraws, rules, config, candidateBacktest, ruleValidationSummaries]);
+  }, [shouldBuildCandidateReport, candidateReportKey, researchDraws, futureReferenceRules, config, candidateBacktest, referenceValidationSummaries]);
   const candidateReport = candidateReportState.key === candidateReportKey && candidateReportState.report ? candidateReportState.report : EMPTY_CANDIDATE_REPORT;
   const evidencePagination = useMemo(
     () => paginateItems(candidateReport.signals, evidencePage, 15),
@@ -1788,7 +1809,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   );
   const isCandidateReportCalculating = shouldBuildCandidateReport && (candidateReportState.key !== candidateReportKey || candidateReportState.loading);
   const candidateReportError = shouldBuildCandidateReport && candidateReportState.key === candidateReportKey ? candidateReportState.error : "";
-  const isCandidateReferencePreparing = isBackgroundBacktestCalculating || isCandidateReportCalculating;
+  const isCandidateReferencePreparing = !observation.ready || isBackgroundBacktestCalculating || isCandidateReportCalculating;
   useEffect(() => {
     if (activeView !== "candidate-pool") return;
     if (!candidateReport.signalCount || !candidateReport.ruleCount) return;
@@ -1797,7 +1818,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     referenceAutoSavedSignature.current = signature;
     if (referenceHistory.some((record) => record.signature === signature)) return;
     const saveTimer = window.setTimeout(() => {
-      void store.saveReferenceHistory(buildReferenceHistoryItem({
+      void saveReferenceToStore(buildReferenceHistoryItem({
         report: candidateReport,
         config,
         saveType: "auto",
@@ -1807,7 +1828,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       }));
     }, 500);
     return () => window.clearTimeout(saveTimer);
-  }, [activeDraws.length, activeView, candidateReport, config, dataSourceLabel, referenceHistory, store]);
+  }, [activeDraws.length, activeView, candidateReport, config, dataSourceLabel, referenceHistory, saveReferenceToStore]);
   const shouldBuildReferenceObservation = activeView === "candidate-pool"
     && candidateWorkspaceTab === "history"
     && isCandidatePoolReady
@@ -1877,10 +1898,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         rules,
         config,
         backtest: referenceObservationBacktest,
-        validationSummaries: ruleValidationSummaries,
+        validationSummaries: referenceValidationSummaries,
       } : undefined,
     });
-  }, [shouldBuildReferenceObservation, referenceObservationKey, referenceObservationDatasetKey, researchDraws, rules, config, referenceObservationBacktest, ruleValidationSummaries, referenceObservationWindow]);
+  }, [shouldBuildReferenceObservation, referenceObservationKey, referenceObservationDatasetKey, researchDraws, rules, config, referenceObservationBacktest, referenceValidationSummaries, referenceObservationWindow]);
   useEffect(() => () => referenceObservationWorkerRef.current?.terminate(), []);
   const referenceObservation = cachedReferenceObservation
     ?? (referenceObservationState.key === referenceObservationKey ? referenceObservationState.report : undefined)
@@ -1894,12 +1915,12 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     return resolveReferenceHistoryOutcomes(referenceHistory, activeDraws, config);
   }, [activeDraws, activeView, candidateWorkspaceTab, config, referenceHistory]);
   const manualComboRules = useMemo(() => {
-    return rules.filter((rule) => selectedComboRuleIds.includes(rule.id) && canRuleParticipateInReference(rule, ruleValidationById.get(rule.id)));
-  }, [rules, ruleValidationById, selectedComboRuleIds]);
+    return futureReferenceRules.filter((rule) => selectedComboRuleIds.includes(rule.id) && canRuleParticipateInReference(rule, ruleValidationById.get(rule.id)));
+  }, [futureReferenceRules, ruleValidationById, selectedComboRuleIds]);
   const manualComboReport = useMemo(() => {
-    if (activeView !== "candidate-pool" || candidateWorkspaceTab !== "combo" || !isCandidatePoolReady || !manualComboRules.length) return EMPTY_CANDIDATE_REPORT;
+    if (!observation.ready || activeView !== "candidate-pool" || candidateWorkspaceTab !== "combo" || !isCandidatePoolReady || !manualComboRules.length) return EMPTY_CANDIDATE_REPORT;
     return generateCandidatePool({ draws: researchDraws, rules: manualComboRules, config, backtest: candidateBacktest, validationSummaries: ruleValidationSummaries });
-  }, [activeView, candidateWorkspaceTab, isCandidatePoolReady, researchDraws, manualComboRules, config, candidateBacktest, ruleValidationSummaries]);
+  }, [observation.ready, activeView, candidateWorkspaceTab, isCandidatePoolReady, researchDraws, manualComboRules, config, candidateBacktest, ruleValidationSummaries]);
   const manualDrawValidation = useMemo(() => {
     const values = MANUAL_DRAW_KEYS.map((key) => ({ key, value: Number(manualDraw[key]) }));
     const invalidKeys = new Set<ManualDrawKey>();
@@ -1940,8 +1961,21 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     if (activeView !== "formula-detail" || !selectedRuleResult) return undefined;
     return buildFormulaLedger(selectedRuleResult, { draws: activeDraws, config });
   }, [activeView, selectedRuleResult, activeDraws, config]);
+  const requestedLedgerIssue = searchParams.get("issue");
+  const requestedLedgerIndex = selectedRuleLedger?.entries.findIndex((entry) => entry.currentIssue === requestedLedgerIssue) ?? -1;
+  const ledgerVisibleCount = Math.max(ledgerVisibleState.ruleId === selectedRuleId ? ledgerVisibleState.count : 20,
+    requestedLedgerIndex >= 0 ? (selectedRuleLedger?.entries.length ?? 0) - requestedLedgerIndex : 0);
+  useEffect(() => {
+    if (activeView !== "formula-detail" || !requestedLedgerIssue || requestedLedgerIndex < 0) return;
+    const timer = window.setTimeout(() => {
+      const row = document.getElementById(`formula-ledger-${requestedLedgerIssue}`);
+      row?.scrollIntoView({ block: "center" });
+      row?.focus({ preventScroll: true });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [activeView, requestedLedgerIssue, requestedLedgerIndex, selectedRuleId]);
   const selectedRuleValidation = selectedRule ? ruleValidationById.get(selectedRule.id) : undefined;
-  const discoveryRequestKey = useMemo(() => `${discoveryDepth}|${activeDraws.length}|${activeDraws.at(-1)?.issue ?? ""}|${JSON.stringify(config)}|${discoveryRefreshId}`, [activeDraws, config, discoveryDepth, discoveryRefreshId]);
+  const discoveryRequestKey = useMemo(() => `${discoveryDepth}|${drawRevision(activeDraws)}|${JSON.stringify(config)}|${discoveryRefreshId}`, [activeDraws, config, discoveryDepth, discoveryRefreshId]);
   const cachedDiscoveryCandidates = formulaDiscoveryCache.get(discoveryRequestKey);
   const discoveryCandidates = useMemo(
     () => discoveryResult.key === discoveryRequestKey ? discoveryResult.candidates : cachedDiscoveryCandidates ?? [],
@@ -2052,7 +2086,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     const isBackgroundCheck = !syncPreview && saveMode === "none";
     if (!isBackgroundCheck) {
       setSourceLoading(true);
-      setSourceStatus("正在同步配置的开奖源数据，请稍候...");
+      setSourceStatus("正在检查最新开奖，请稍候…");
     }
     try {
       const isGithubPagesHost = typeof window !== "undefined" && (window.location.hostname.endsWith("github.io") || process.env.NEXT_PUBLIC_STATIC_EXPORT === "true");
@@ -2126,10 +2160,11 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         }
       }
 
-      const fetchedRecords = data.records ?? [];
-      if (!fetchedRecords.length) {
+      const receivedRecords = data.records ?? [];
+      if (!receivedRecords.length) {
         throw new Error("网站本次没有返回有效开奖记录，已保留现有开奖库");
       }
+      const fetchedRecords = mergeCheckedDraws(activeDraws, receivedRecords);
       const fetchedSorted = sortDrawRecords(fetchedRecords);
       const latestFetched = fetchedSorted.at(-1);
       const currentLatest = sortDrawRecords(activeDraws).at(-1);
@@ -2139,41 +2174,48 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         && latestFetchedValue > 0
         && (!Number.isFinite(currentLatestValue) || latestFetchedValue > currentLatestValue);
       const syncedAt = new Date().toLocaleString("zh-CN", { hour12: false });
-      setLastSyncAt(syncedAt);
-      localStorage.setItem("rulequant:lastSyncAt", syncedAt);
-      localStorage.setItem("rulequant:lastSyncedIssue", latestFetched?.issue ?? "");
+      const recordsChanged = drawRevision(mergeDrawRecords(fetchedRecords, manualLocalDraws)) !== drawRevision(activeDraws);
+      const usedSnapshotFallback = isGithubPagesHost || data.errors?.some((message) => message.includes("备用") || message.includes("快照"));
+      const dataUpdatedAt = data.fetchedAt ?? data.state?.updatedAt;
+      const displayedSyncAt = usedSnapshotFallback
+        ? (dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleString("zh-CN", { hour12: false }) : latestFetched?.date ?? "更新时间未知")
+        : recordsChanged ? syncedAt : lastSyncAt;
+      setLastSyncAt(displayedSyncAt);
+      saveLocalMetadata("rulequant:lastCheckedAt", syncedAt);
+      if (displayedSyncAt) saveLocalMetadata("rulequant:lastSyncAt", displayedSyncAt);
+      saveLocalMetadata("rulequant:lastSyncedIssue", latestFetched?.issue ?? "");
       const nextSummaries = data.years ?? [];
-      setSourceRecords(fetchedRecords);
+      // A successful check of unchanged numbers must not invalidate every chart and formula.
+      if (recordsChanged) setSourceRecords(fetchedRecords);
       setSourceSummaries(nextSummaries);
       setImportErrors(data.errors ?? []);
       if (syncPreview) setPreviewDraws(fetchedRecords);
-      if (saveMode === "replace") {
-        await store.replaceDraws(fetchedRecords);
-      } else if (saveMode === "merge") {
-        await store.importDraws(fetchedRecords);
-      } else if (hasNewWebsiteDraw) {
+      if (saveMode === "replace" && recordsChanged) {
+        await replaceDrawsInStore(fetchedRecords);
+      } else if (saveMode === "merge" && recordsChanged) {
+        await importDrawsToStore(fetchedRecords);
+      } else if (recordsChanged) {
         // A background check must promote a newly published issue into the
         // calculation library. Otherwise the status can say "latest" while
         // Formula Engine is still reading yesterday's persisted snapshot.
-        await store.replaceDraws(fetchedRecords);
+        await replaceDrawsInStore(fetchedRecords);
       }
       // The automatic foreground check only needs the fetched snapshot. Rehydrating the
       // complete store here repeats IndexedDB and cloud reads and keeps every page in a
       // misleading "syncing" state for several seconds. Explicit sync actions still
       // rehydrate after replacing or merging the draw library.
-      if (data.state?.latestIssue && saveMode !== "none") {
-        await store.hydrate();
+      if (recordsChanged) {
+        clearCandidatePoolCache();
+        setReferenceRunId((current) => current + 1);
       }
-      clearCandidatePoolCache();
-      setReferenceRunId((current) => current + 1);
       const changed = hasNewWebsiteDraw;
-      const usedSnapshotFallback = data.errors?.some((message) => message.includes("备用") || message.includes("快照"));
       const nextSourceStatus = (
         usedSnapshotFallback
-          ? `实时开奖源暂时不可用，已使用备用快照 ${latestFetched?.issue ?? "-"} 期，共 ${fetchedRecords.length} 条记录；现有数据未丢失。`
+          ? `当前使用已保存开奖 ${latestFetched?.issue ?? "-"} 期，共 ${fetchedRecords.length} 条；检查时间 ${syncedAt} 不代表开奖已更新。`
           : changed
           ? `已同步到最新 ${latestFetched?.issue ?? "-"} 期，共 ${fetchedRecords.length} 条记录，页面已重新计算。`
-          : `已检查配置的开奖源，当前仍为 ${latestFetched?.issue ?? "-"} 期，共 ${fetchedRecords.length} 条记录。`
+          : recordsChanged ? `已更新 ${latestFetched?.issue ?? "-"} 期及历史更正，共 ${fetchedRecords.length} 条记录。`
+          : `已检查开奖，当前仍为 ${latestFetched?.issue ?? "-"} 期，共 ${fetchedRecords.length} 条记录，无需重新计算。`
       );
       sourceSessionSnapshot = { records: fetchedRecords, summaries: nextSummaries, status: nextSourceStatus };
       setSourceStatus(nextSourceStatus);
@@ -2182,12 +2224,15 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       setImportErrors([message]);
       setSourceStatus(`同步失败：${message}`);
     } finally {
+      initialSourceCheckComplete = true;
+      setFirstSourceCheckComplete(true);
+      window.dispatchEvent(new Event("rulequant:source-checked"));
       if (!isBackgroundCheck) setSourceLoading(false);
     }
-  }, [activeDraws, sourceUrl, sourceFromYear, sourceToYear, store]);
+  }, [activeDraws, manualLocalDraws, lastSyncAt, sourceUrl, sourceFromYear, sourceToYear, replaceDrawsInStore, importDrawsToStore, saveLocalMetadata]);
 
   useEffect(() => {
-    if (!hasHydrated || sourceLoading || !WEBSITE_FIRST_VIEWS.has(activeView)) return;
+    if (!hasHydrated || sourceLoading || (firstSourceCheckComplete && !WEBSITE_FIRST_VIEWS.has(activeView))) return;
 
     const syncLatest = (force = false) => {
       const now = Date.now();
@@ -2215,7 +2260,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       window.removeEventListener("online", syncAfterResume);
       document.removeEventListener("visibilitychange", syncWhenVisible);
     };
-  }, [activeView, fetchSourceDraws, hasHydrated, sourceLoading]);
+  }, [activeView, fetchSourceDraws, hasHydrated, sourceLoading, firstSourceCheckComplete]);
 
   async function handleParseImport() {
     const result = parseDrawText(importText);
@@ -2290,7 +2335,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     await store.replaceDraws(sourceRecords);
     const syncedAt = new Date().toLocaleString("zh-CN", { hour12: false });
     setLastSyncAt(syncedAt);
-    localStorage.setItem("rulequant:lastSyncAt", syncedAt);
+    saveLocalMetadata("rulequant:lastSyncAt", syncedAt);
     setSourceStatus(`已用网址 ${sourceRecords.length} 条记录替换本地开奖库`);
   }
 
@@ -2333,7 +2378,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     setReferenceRunId((current) => current + 1);
     const savedAt = new Date().toLocaleString("zh-CN", { hour12: false });
     setLastSyncAt(savedAt);
-    localStorage.setItem("rulequant:lastSyncAt", savedAt);
+    saveLocalMetadata("rulequant:lastSyncAt", savedAt);
     setSourceStatus(`已保存人工录入开奖：${record.issue}，${drawNumbersWithZodiac(record, config)}。开奖数据页顶部会单独显示。`);
     setOneClickStatus(`已保存人工录入开奖 ${record.issue}，后续计算会标记为人工数据；可在“开奖数据”页顶部查看。`);
     await store.addOperationLog({
@@ -2368,7 +2413,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     window.setTimeout(() => {
       const now = new Date().toLocaleString("zh-CN", { hour12: false });
       setLastCalculationAt(now);
-      localStorage.setItem("rulequant:lastCalculationAt", now);
+      saveLocalMetadata("rulequant:lastCalculationAt", now);
       setOneClickStatus(`已计算 ${oneClickResults.length} 条公式，使用期号 ${selectedOneClickDraw.issue}。`);
       setOneClickCalculating(false);
       void store.addOperationLog({
@@ -2419,7 +2464,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
         draws: archiveDraws,
         rules,
         config,
-        validationSummaries: ruleValidationSummaries,
+        validationSummaries: referenceValidationSummaries,
       });
 
       if (!archiveReport.ruleCount || !archiveReport.signalCount) {
@@ -2453,7 +2498,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
   }
 
   async function handleRegenerateReference() {
-    if (!backgroundBacktest) {
+    if (!backgroundBacktest || !observation.ready) {
       setReferenceStatus("历史表现仍在整理，请稍候再重新生成。");
       return;
     }
@@ -2464,13 +2509,13 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       candidatePoolReportCache.clear();
       referenceObservationCache.clear();
       const nextRunId = referenceRunId + 1;
-      const nextReportKey = `${backgroundBacktestKey}:${nextRunId}`;
+      const nextReportKey = `${backgroundBacktestKey}:${nextRunId}:participation:${participationRevision}`;
       const freshReport = await runCandidateReportWorker({
         draws: researchDraws,
-        rules,
+        rules: futureReferenceRules,
         config,
         backtest: compactCandidateBacktest(candidateBacktest),
-        validationSummaries: ruleValidationSummaries,
+        validationSummaries: referenceValidationSummaries,
       });
       candidatePoolReportCache.set(nextReportKey, freshReport);
       startTransition(() => {
@@ -2481,7 +2526,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
       const calculatedAt = new Date(generatedAt).toLocaleString("zh-CN", { hour12: false });
       setReferenceGeneratedAt(generatedAt);
       setLastCalculationAt(calculatedAt);
-      localStorage.setItem("rulequant:lastCalculationAt", calculatedAt);
+      saveLocalMetadata("rulequant:lastCalculationAt", calculatedAt);
       void store.addOperationLog({
         type: "generate_reference",
         message: `重新生成综合参考结果：${freshReport.ruleCount} 条公式参与，生成 ${freshReport.signalCount} 条依据`,
@@ -2502,6 +2547,20 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
     } finally {
       setReferenceCalculating(false);
     }
+  }
+
+  function exportFullBacktest(format: "excel" | "html") {
+    if (exportStatus.loading) return;
+    setExportStatus({ loading: true, message: "正在整理全部公式、全部期次和完整计算过程…" });
+    startBacktestRequest({ draws: activeDraws, rules, config }, {
+      fullDetails: true,
+      onResult: (result) => {
+        void loadExporters().then((module) => format === "excel" ? module.exportBacktestExcel(result) : module.exportHtmlReport(result, rules, config))
+          .then(() => setExportStatus({ loading: false, message: "完整报告已生成，请查看下载文件。" }))
+          .catch(() => setExportStatus({ loading: false, message: "文件暂时未能生成，请重试。" }));
+      },
+      onError: (message) => setExportStatus({ loading: false, message }),
+    });
   }
 
   function updateManualDraw(key: keyof DrawRecord, value: string) {
@@ -2747,6 +2806,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
               <div className="rq-topbar-actions flex min-w-0 max-w-full flex-wrap items-center gap-2 text-xs text-slate-400">
                 <Badge tone={hasSharedDraws ? "green" : "slate"}>{dataSourceLabel}</Badge>
                 <span className="shrink-0">最新期：{latestRawDraw?.issue ?? "-"}</span>
+                {observation.pausedRules.length > 0 && <Link href="/rules?tab=observation" className="rq-observation-shortcut" onClick={() => setRulesWorkspaceTab("observation")}>观察中 {observation.pausedRules.length} 条</Link>}
                 {activeGuideTarget && activeView !== "formula-analysis" && activeView !== "config" ? <ContextHelpLink {...activeGuideTarget} returnTo={activeReturnPath} /> : null}
                 <ThemeToggle />
                 {showCloudPublishControls && cloudPublishStatus === "failed" && cloudPublishMessage && <Badge tone="rose">{cloudPublishMessage}</Badge>}
@@ -2755,6 +2815,14 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
           </header>
 
           <div className="rq-content rq-view-enter mx-auto w-full max-w-[1720px] p-3 sm:p-5 lg:p-6">
+            {(activeView === "reports" || activeView === "backtest") && exportStatus.message && <p className="rq-analysis-status mb-4" role="status">{exportStatus.message}</p>}
+            {observation.unreadEvents.length > 0 && <div className="rq-observation-notice" role="status" aria-live="polite">
+              <div><strong>公式状态有更新</strong><span>{observation.unreadEvents.filter((event) => event.type === "paused").length} 次进入观察 · {observation.pausedRules.length} 条当前暂停</span></div>
+              <Link href="/rules?tab=observation" className="rq-link-button" onClick={() => setRulesWorkspaceTab("observation")}>查看记录</Link>
+              <Button size="sm" variant="ghost" onClick={observation.acknowledgeEvents} aria-label="已读公式状态提醒">知道了</Button>
+            </div>}
+            {observation.storageError && <p role="alert" className="rq-observation-notice">{observation.storageError}</p>}
+            {metadataStorageError && !observation.storageError && <p role="status" className="rq-observation-notice">浏览器暂时无法保存检查和计算时间，本页仍可继续使用；刷新后这些时间记录可能不保留。</p>}
             {!(["rules", "dashboard", "candidate-pool"] as ViewKey[]).includes(activeView) && (isBackgroundBacktestCalculating || backgroundBacktestError) && (
               <div className={cn("rq-analysis-status mb-4", isBackgroundBacktestCalculating && "is-loading", backgroundBacktestError && "is-error")} role="status" aria-live="polite">
                 {isBackgroundBacktestCalculating ? (
@@ -3081,9 +3149,10 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   {selectedRuleLedger && (
                     <div className="mt-5 flex min-w-0 flex-wrap gap-2">
                       {selectedRuleValidation && <Badge tone={selectedRuleValidation.tone}>{selectedRuleValidation.label}</Badge>}
-                      <Badge tone={selectedRule && canRuleParticipateInReference(selectedRule, selectedRuleValidation) ? "green" : "yellow"}>
-                        {selectedRule && canRuleParticipateInReference(selectedRule, selectedRuleValidation) ? "参与综合参考" : "不参与综合参考"}
+                      <Badge tone={selectedRule && !observation.pausedRuleIds.has(selectedRule.id) && canRuleParticipateInReference(selectedRule, selectedRuleValidation) ? "green" : "yellow"}>
+                        {selectedRule && observation.pausedRuleIds.has(selectedRule.id) ? "暂停观察中" : selectedRule && canRuleParticipateInReference(selectedRule, selectedRuleValidation) ? "参与综合参考" : "不参与综合参考"}
                       </Badge>
+                      {selectedRule && observation.pausedRuleIds.has(selectedRule.id) && <Button size="sm" onClick={() => observation.resumeRule(selectedRule.id)}>提前恢复</Button>}
                       <Badge className="max-w-full whitespace-normal py-1 leading-4" tone={selectedRuleLedger.summary.failedIssues.length ? "rose" : "green"}>错期：{selectedRuleLedger.summary.failedIssues.join("、") || "暂无"}</Badge>
                       {selectedRuleValidation && <span className="min-w-0 text-sm leading-6 text-slate-400">{selectedRuleValidation.reason}</span>}
                       <Button onClick={() => void store.toggleRule(selectedRuleLedger.summary.ruleId)}>{selectedRuleLedger.summary.enabled ? "停用公式" : "启用公式"}</Button>
@@ -3416,6 +3485,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                    <nav className="rq-workspace-tabs rq-rules-workspace-tabs mb-4" aria-label="公式管理工作区">
                     {[
                       ["library", "公式库", `${visibleRules.length} 条公式`],
+                      ["observation", "暂停观察", `${observation.pausedRules.length} 条观察中`],
                        ["health", "运行健康", isRuleManagementCalculating ? "整理中" : `${exceptionRules.length} 条异常`],
                       ["reconcile", "规则对账", `${rawRuleFiles.length} 个来源`],
                     ].map(([key, label, hint]) => <button key={key} type="button" className={cn("rq-workspace-tab", rulesWorkspaceTab === key && "rq-workspace-tab--active")} onClick={() => setRulesWorkspaceTab(key as typeof rulesWorkspaceTab)}><span>{label}</span><small>{hint}</small></button>)}
@@ -3429,6 +3499,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                        <><CheckCircle2 className="h-5 w-5" /><div><strong>历史表现已就绪</strong><small>已完成 {backtest.ruleResults.length} 条启用公式的历史回放与状态整理。</small></div></>
                      )}
                    </div>
+                   {rulesWorkspaceTab === "observation" && <RuleObservationPanel controller={observation} onInspectRule={(ruleId, issue) => { store.setSelectedRule(ruleId); router.push(`/formula-detail?issue=${encodeURIComponent(issue)}`); }} />}
                    {rulesWorkspaceTab === "library" && <>
                   <div className="rq-smart-note mb-4 p-3 text-sm leading-6">
                     智能学习排行会根据历史成功率、最近10期表现、当前连对、连错和错期自动调权；只是帮助排序和降权，排序依据是实际算出的结果与历史记录。
@@ -3469,7 +3540,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                         {pagedRules.map((rule) => {
                           const result = ruleResultMap.get(rule.id);
                           const summary = ruleValidationById.get(rule.id);
-                          const joinsReference = canRuleParticipateInReference(rule, summary);
+                          const joinsReference = !observation.pausedRuleIds.has(rule.id) && canRuleParticipateInReference(rule, summary);
                           return (
                             <button
                               type="button"
@@ -3480,7 +3551,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                               <span className={cn("rq-rule-row__status", isRuleManagementCalculating ? "is-loading" : result?.error || !result?.total ? "is-error" : joinsReference ? "is-active" : "is-muted")} />
                               <span className="rq-rule-row__body">
                                 <strong>{rule.name}</strong>
-                                <small>{categoryLabel(rule.category)} · {rule.orderMode}序 · {sourceTypeLabel(rule.sourceType)}</small>
+                                <small>{categoryLabel(rule.category)} · {rule.orderMode}序 · {observation.pausedRuleIds.has(rule.id) ? "暂停观察中" : sourceTypeLabel(rule.sourceType)}</small>
                               </span>
                               <span className="rq-rule-row__score">
                                 <strong>{isRuleManagementCalculating ? "计算中" : `${result?.successRate ?? 0}%`}</strong>
@@ -3501,8 +3572,8 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                               <h3>{inspectedRule.name}</h3>
                               <p>{categoryLabel(inspectedRule.category)} · {inspectedRule.orderMode}序 · {sourceTypeLabel(inspectedRule.sourceType)}</p>
                             </div>
-                            <Badge tone={canRuleParticipateInReference(inspectedRule, inspectedRuleSummary) ? "green" : "yellow"}>
-                              {canRuleParticipateInReference(inspectedRule, inspectedRuleSummary) ? "参与计算" : "不参与计算"}
+                            <Badge tone={!observation.pausedRuleIds.has(inspectedRule.id) && canRuleParticipateInReference(inspectedRule, inspectedRuleSummary) ? "green" : "yellow"}>
+                              {observation.pausedRuleIds.has(inspectedRule.id) ? "暂停观察中" : canRuleParticipateInReference(inspectedRule, inspectedRuleSummary) ? "参与参考" : "不参与参考"}
                             </Badge>
                           </div>
                           <div className="rq-formula-display"><span>公式</span><code>{inspectedRule.formula}</code></div>
@@ -3519,6 +3590,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                           </div>
                           {inspectedRuleSummary?.reason && <p className="rq-inspector-note">{inspectedRuleSummary.reason}</p>}
                           <div className="rq-inspector-actions">
+                            {observation.pausedRuleIds.has(inspectedRule.id) && <Button size="sm" onClick={() => observation.resumeRule(inspectedRule.id)}>提前恢复</Button>}
                             <Link href="/formula-detail" onClick={() => store.setSelectedRule(inspectedRule.id)} className="rq-link-button rq-link-button--primary"><Eye className="h-4 w-4" />逐期明细</Link>
                             <Link href={`/formula-editor?ruleId=${encodeURIComponent(inspectedRule.id)}`} className="rq-link-button">编辑规则</Link>
                             <details key={inspectedRule.id} className="rq-inspector-more">
@@ -3600,7 +3672,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                     </div>
                     <div className="flex gap-2">
                       <Button variant="primary"><Play className="h-4 w-4" />已实时运行</Button>
-                      <Button onClick={() => exportBacktestExcel(backtest)}><Download className="h-4 w-4" />导出结果</Button>
+                      <Button loading={exportStatus.loading} onClick={() => exportFullBacktest("excel")}><Download className="h-4 w-4" />导出完整结果</Button>
                     </div>
                   </div>
                   <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -3669,7 +3741,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                   <LatestDrawCard draw={latestRawDraw} config={config} issue={candidateReport.latestIssue ?? latestRawDraw?.issue} source="平1-6 + 特码，号码下方标注生肖" />
                   <Metric label="使用最新期号" value={candidateReport.latestIssue ?? "-"} hint={candidateReport.latestDate ?? "-"} tone="violet" />
                   <Metric label="数据来源" value={dataSourceLabel} hint={sourceRecords.length ? "已同步" : "本地"} />
-                  <Metric label="启用公式" value={enabledRuleCount} hint={`手动排除 ${excludedRuleCount}`} tone="green" />
+                  <Metric label="启用公式" value={enabledRuleCount} hint={`暂不参与 ${excludedRuleCount} · 其中观察 ${observation.pausedRules.length}`} tone="green" />
                   <Metric label="用户提供公式" value={userProvidedRuleCount} hint="默认可参与" tone="green" />
                   <Metric label="人工新增公式" value={manualRuleCount} hint="用户决定" tone="cyan" />
                   <Metric label="系统推荐公式" value={systemRecommendedRuleCount} hint="确认后参与" tone="violet" />
@@ -3757,8 +3829,9 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                 <OperationLogPanel logs={operationLogs} />
                 </>}
                 {candidateWorkspaceTab === "combo" && <>
+                {observation.pausedRules.length > 0 && <p className="rq-inspector-note">当前组合不会加入正在暂停观察的公式；下方历史对比仍保留全部公式，方便复盘。</p>}
                 <ManualCombinationPanel
-                  rules={rules}
+                  rules={futureReferenceRules}
                   selectedRuleIds={selectedComboRuleIds}
                   setSelectedRuleIds={setSelectedComboRuleIds}
                   report={manualComboReport}
@@ -3963,6 +4036,7 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                 config={config}
                 updateConfig={store.updateConfig}
                 resetSeed={store.resetSeed}
+                observation={observation}
                 diagnostics={[backgroundBacktestError, candidateReportError, referenceObservationError].filter(Boolean)}
               />
             )}
@@ -3973,14 +4047,14 @@ function RuleQuantTerminalClient({ activeView }: { activeView: ViewKey }) {
                 <ExportTile icon={Layers3} title="规则库备份" desc="保存当前全部规则，用于备份或迁移" action={() => exportJson(rules, "rulequant-rules.json")} />
                 <ExportTile icon={FileDown} title="全部公式 Word (.docx)" desc="导出手机和电脑都能打开的标准 Word 文档，包含新增公式、统一排版、总览和逐条详情" action={() => exportRuleLibraryWord(rules)} />
                 <ExportTile icon={Settings2} title="属性配置备份" desc="保存生肖、波色、五行和计算口径" action={() => exportJson(config, "rulequant-config.json")} />
-                <ExportTile icon={BarChart3} title="回测 Excel" desc="导出每期计算过程、输出和验证结果" action={() => exportBacktestExcel(backtest)} />
-                <ExportTile icon={Activity} title="候选池 Excel" desc="导出 Top 号码、Top 生肖和规则信号明细" action={() => exportCandidatePoolExcel(candidateReport)} />
-                <ExportTile icon={FileDown} title="候选池 HTML" desc="生成可直接转发查看的规则共识候选池报告" action={() => exportCandidatePoolHtml(candidateReport)} />
+                <ExportTile icon={BarChart3} title="回测 Excel" desc="导出每期计算过程、输出和验证结果" disabled={exportStatus.loading} action={() => exportFullBacktest("excel")} />
+                <ExportTile icon={Activity} title="候选池 Excel" desc="导出 Top 号码、Top 生肖和规则信号明细" disabled={isCandidateReferencePreparing || !candidateReport.signalCount} action={() => exportCandidatePoolExcel(candidateReport)} />
+                <ExportTile icon={FileDown} title="候选池 HTML" desc="生成可直接转发查看的规则共识候选池报告" disabled={isCandidateReferencePreparing || !candidateReport.signalCount} action={() => exportCandidatePoolHtml(candidateReport)} />
                 <ExportTile icon={TableProperties} title="综合推荐历史 Excel" desc="分工作表导出总览、Top8、Top12、Top18 和生肖明细，便于筛选复盘" action={() => exportReferenceHistoryExcel(resolvedReferenceHistory)} />
                 <ExportTile icon={FileDown} title="综合推荐历史 Word (.docx)" desc="导出手机和电脑通用的标准 Word 文档，包含表格、命中标记和完整推荐记录" action={() => exportReferenceHistoryWord(resolvedReferenceHistory)} />
                 <ExportTile icon={ClipboardCheck} title="综合推荐历史 TXT" desc="导出 UTF-8 文本文档，适合直接转发或保存，不会出现中文乱码" action={() => exportReferenceHistoryText(resolvedReferenceHistory)} />
-                <ExportTile icon={ClipboardCheck} title="样例校验" desc="导出手算样例对比和差异类型" action={() => exportSampleReport(sampleResults)} />
-                <ExportTile icon={FileDown} title="HTML 报告" desc="生成可直接打开的 HTML 回测报告" action={() => exportHtmlReport(backtest, rules, config)} />
+                <ExportTile icon={ClipboardCheck} title="样例校验" desc="导出手算样例对比和差异类型" disabled={isBackgroundBacktestCalculating || !backgroundBacktest} action={() => exportSampleReport(sampleResults)} />
+                <ExportTile icon={FileDown} title="HTML 报告" desc="生成可直接打开的 HTML 回测报告" disabled={exportStatus.loading} action={() => exportFullBacktest("html")} />
               </div>
             )}
 
@@ -4149,12 +4223,13 @@ function FormulaLedgerRow({ entry }: { entry: FormulaLedgerEntry }) {
 }
 
 type BuilderMode = "paste" | "template" | "advanced";
-type BuilderIntent = "include_zodiac" | "kill_zodiac" | "seven_tail" | "six_zodiac" | "eight_zodiac" | "nine_zodiac" | "kill_tail" | "kill_sum";
+type BuilderIntent = "include_zodiac" | "kill_zodiac" | "kill_number" | "seven_tail" | "six_zodiac" | "eight_zodiac" | "nine_zodiac" | "kill_tail" | "kill_sum";
 type BuilderValueKind = "number" | "head" | "tail" | "sum" | "sumTail" | "segment" | "element" | "color" | "parity" | "size";
 
 const builderIntentOptions: Array<{ value: BuilderIntent; label: string; hint: string }> = [
   { value: "include_zodiac", label: "选生肖", hint: "公式算出一个生肖，作为支持信号" },
   { value: "kill_zodiac", label: "杀生肖", hint: "公式算出一个生肖，作为排除信号" },
+  { value: "kill_number", label: "杀特码", hint: "结果超过49连续减49，只排除算出的一个特码号码" },
   { value: "seven_tail", label: "七尾", hint: "按定位尾数做 0-9 闭环偏移" },
   { value: "six_zodiac", label: "取六肖", hint: "按平码位置循环加减，生成一组生肖候选" },
   { value: "eight_zodiac", label: "八肖起点", hint: "从定位生肖扩展成八肖候选" },
@@ -4255,6 +4330,7 @@ function normalizeZodiacSetOffsetText(text: string) {
 }
 
 function normalizerForBuilder(intent: BuilderIntent, tailMode: string, customTailOffsets: string, zodiacOffsets: string) {
+  if (intent === "kill_number") return "subtract_49_to_1_49";
   if (intent === "seven_tail") {
     if (tailMode === "left2right4") return "tail_window:left=2,right=4";
     if (tailMode === "custom") return `tail_offsets:${normalizeTailOffsetText(customTailOffsets)}`;
@@ -4266,6 +4342,7 @@ function normalizerForBuilder(intent: BuilderIntent, tailMode: string, customTai
 }
 
 function targetForBuilder(intent: BuilderIntent) {
+  if (intent === "kill_number") return "special_number";
   if (intent === "kill_tail" || intent === "seven_tail") return "special_tail";
   if (intent === "kill_sum") return "special_sum";
   return "special_zodiac";
@@ -4296,7 +4373,9 @@ function inferRuleText(rawText: string, currentIssue?: string) {
   const issueNumbers = [...text.matchAll(/(?:20)?(\d{3})/g)].map((match) => Number(match[1]));
   const currentSuffix = currentIssue ? Number(currentIssue.replace(/\D/g, "").slice(-3)) : undefined;
   const verifyOffset = issueNumbers.length >= 2 ? Math.max(1, issueNumbers[1] - issueNumbers[0]) : issueNumbers.length === 1 && currentSuffix ? Math.max(1, issueNumbers[0] - currentSuffix) : 1;
-  const intent: BuilderIntent = isSixZodiacText
+  const intent: BuilderIntent = /杀(?:一?个?)?特码|杀特号/.test(text)
+    ? "kill_number"
+    : isSixZodiacText
     ? "six_zodiac"
     : /七尾|尾数|左右/.test(text)
       ? "seven_tail"
@@ -4354,8 +4433,20 @@ function NewRuleBuilder({
   const [positionPattern, setPositionPattern] = useState("");
   const [ruleName, setRuleName] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
+  const [advancedDraft, setAdvancedDraft] = useState<Partial<RuleRecord>>();
+  const pastedArithmetic = useMemo(() => mode === "paste" ? parsePastedKillNumberRule(rawText) : null, [mode, rawText]);
 
   function applyRawText() {
+    if (pastedArithmetic?.status === "error") {
+      setSaveStatus(`暂不能保存：${pastedArithmetic.message}`);
+      return;
+    }
+    if (pastedArithmetic?.status === "ready") {
+      setAdvancedDraft(pastedArithmetic.draft);
+      setSaveStatus("");
+      setMode("advanced");
+      return;
+    }
     const inferred = inferRuleText(rawText, draw?.issue);
     setIntent(inferred.intent);
     setPosition(inferred.position);
@@ -4404,6 +4495,8 @@ function NewRuleBuilder({
   }, [resolvedName, intent, formula, normalizer, target, verifyOffset, positionPattern, mode, rawText]);
 
   const trial = useMemo(() => {
+    if (pastedArithmetic) return { error: pastedArithmetic.status === "error"
+      ? pastedArithmetic.message : "已识别完整杀特码算式，请点击“开始理解”，在完整编辑器核对公式和顺序。" } as const;
     if (!draw) return { error: "暂无可试算开奖数据" } as const;
     try {
       const rule = buildRuleFromFormData(formData, { forceNew: true });
@@ -4412,7 +4505,7 @@ function NewRuleBuilder({
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) } as const;
     }
-  }, [formData, draw, config, periodIndex]);
+  }, [formData, draw, config, periodIndex, pastedArithmetic]);
 
   async function save() {
     if ("error" in trial) {
@@ -4435,9 +4528,9 @@ function NewRuleBuilder({
               </button>
             ))}
           </div>
-          <p className="mt-4 text-sm leading-6 text-slate-500">高级编辑保留旧公式输入方式，普通新增规则建议用前两个入口。</p>
+          <p className="mt-4 text-sm leading-6 text-slate-500">{advancedDraft ? "已保留原文的完整算式和号码顺序。核对后可试算并保存为新公式。" : "高级编辑保留旧公式输入方式，普通新增规则建议用前两个入口。"}</p>
         </Panel>
-        <RuleForm selectedRule={undefined} onSave={onSave} compact draw={draw} config={config} periodIndex={periodIndex} />
+        <RuleForm selectedRule={undefined} initialDraft={advancedDraft} onSave={onSave} compact draw={draw} config={config} periodIndex={periodIndex} />
       </div>
     );
   }
@@ -4465,8 +4558,8 @@ function NewRuleBuilder({
           {mode === "paste" ? (
           <div>
             <h3 className="font-semibold text-white">粘贴原文识别</h3>
-            <p className="mt-1 text-sm text-slate-500">例如：平码3虎05取值+1234567911，或 176特码10 预测178尾数左右各3。</p>
-            <Textarea value={rawText} onChange={(event) => setRawText(event.target.value)} className="mt-4 min-h-28 sm:min-h-32" />
+            <p className="mt-1 text-sm text-slate-500">例如：平码3虎05取值+1234567911，或 177杀特码[D序]平3尾+平4尾+特合+11。完整杀特码算式会进入编辑器核对。</p>
+            <Textarea value={rawText} onChange={(event) => { setRawText(event.target.value); setAdvancedDraft(undefined); setSaveStatus(""); }} className="mt-4 min-h-28 sm:min-h-32" />
             <div className="mt-4 grid grid-cols-2 gap-2 sm:flex">
               <Button className="w-full sm:w-auto" type="button" onClick={applyRawText}><Search className="h-4 w-4" />开始理解</Button>
               <Button className="w-full sm:w-auto xl:hidden" variant="primary" type="button" disabled={"error" in trial} onClick={() => void save()}><Save className="h-4 w-4" />保存规则</Button>
@@ -4619,7 +4712,7 @@ function NewRuleBuilder({
             {!saveStatus.includes("失败") && !saveStatus.includes("暂不能") && !saveStatus.includes("已存在") && <Link href="/rules" className="ml-3 text-cyan-100 underline-offset-4 hover:underline">去公式管理查看</Link>}
           </div>
         )}
-        <Button className="mt-4 w-full" variant="primary" type="button" onClick={() => void save()}><Save className="h-4 w-4" />保存到规则库</Button>
+        <Button className="mt-4 w-full" variant="primary" type="button" disabled={"error" in trial} onClick={() => void save()}><Save className="h-4 w-4" />保存到规则库</Button>
       </Panel>
     </div>
   );
@@ -4627,6 +4720,7 @@ function NewRuleBuilder({
 
 function RuleForm({
   selectedRule,
+  initialDraft,
   onSave,
   compact = false,
   draw,
@@ -4634,13 +4728,20 @@ function RuleForm({
   periodIndex,
 }: {
   selectedRule?: RuleRecord;
+  initialDraft?: Partial<RuleRecord>;
   onSave: (formData: FormData) => Promise<RuleSaveResult>;
   compact?: boolean;
   draw?: ReturnType<typeof normalizeDraw>;
   config?: ReturnType<typeof useRuleQuantStore.getState>["config"];
   periodIndex?: number;
 }) {
-  const [formulaText, setFormulaText] = useState(selectedRule?.formula ?? "平1 + 特码尾");
+  const formDefaults = selectedRule ?? initialDraft;
+  const [formulaText, setFormulaText] = useState(formDefaults?.formula ?? "平1 + 特码尾");
+  const [category, setCategory] = useState<RuleCategory>(formDefaults?.category ?? "kill_zodiac");
+  const editorNormalizer = category === "kill_number" ? "subtract_49_to_1_49"
+    : formDefaults?.category === "kill_number" ? "auto" : formDefaults?.normalizer ?? "auto";
+  const editorTarget = category === "kill_number" ? "special_number"
+    : formDefaults?.category === "kill_number" ? "special" : formDefaults?.target ?? "special";
   const [trialResult, setTrialResult] = useState<
     | { rule: RuleRecord; calculation: RuleCalculation; error?: never }
     | { error: string; rule?: never; calculation?: never }
@@ -4701,7 +4802,7 @@ function RuleForm({
     },
     {
       title: "总数期号",
-      items: ["总数", "总数尾", "总数合", "期号", "期号尾", "期数尾", "期合", "期合尾"].map((item) => ({ label: item, value: item })),
+      items: ["总数", "总数尾", "总数合", "总数合尾", "期号", "期号尾", "期数头", "期数尾", "期数合", "期数合尾"].map((item) => ({ label: item, value: item })),
     },
   ];
 
@@ -4767,17 +4868,17 @@ function RuleForm({
       <h2 className="font-semibold text-white">{selectedRule ? "编辑规则" : "新增规则"}</h2>
       <form ref={formRef} onSubmit={handleSubmit} className="mt-4 space-y-3">
         <input type="hidden" name="id" defaultValue={selectedRule?.id ?? ""} />
-        <div><Label>规则名</Label><Input name="name" defaultValue={selectedRule?.name ?? ""} /></div>
+        <div><Label>规则名</Label><Input name="name" defaultValue={formDefaults?.name ?? ""} /></div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <Label>类型</Label>
-            <Select aria-label="选择公式类型" name="category" defaultValue={selectedRule?.category ?? "kill_zodiac"}>
+            <Select aria-label="选择公式类型" name="category" value={category} onChange={(event) => setCategory(event.target.value as RuleCategory)}>
               {categories.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </Select>
           </div>
           <div>
             <Label>序列</Label>
-            <Select aria-label="选择号码顺序" name="orderMode" defaultValue={selectedRule?.orderMode ?? "L"}>
+            <Select aria-label="选择号码顺序" name="orderMode" defaultValue={formDefaults?.orderMode ?? "L"}>
               <option value="L">L序</option>
               <option value="D">D序</option>
               <option value="custom">自定义</option>
@@ -4832,14 +4933,14 @@ function RuleForm({
           </details>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <input type="hidden" name="normalizer" value={selectedRule?.normalizer ?? "auto"} readOnly />
-          <input type="hidden" name="target" value={selectedRule?.target ?? "special"} readOnly />
-          <div><Label>计算口径</Label><div className="rounded-lg border border-white/[0.08] bg-white/[0.035] px-3 py-2.5 text-sm text-slate-300">{normalizerLabel(selectedRule?.normalizer ?? "auto")}</div></div>
-          <div><Label>验证对象</Label><div className="rounded-lg border border-white/[0.08] bg-white/[0.035] px-3 py-2.5 text-sm text-slate-300">{targetLabel(selectedRule?.target ?? "special")}</div></div>
+          <input type="hidden" name="normalizer" value={editorNormalizer} readOnly />
+          <input type="hidden" name="target" value={editorTarget} readOnly />
+          <div><Label>计算口径</Label><div className="rounded-lg border border-white/[0.08] bg-white/[0.035] px-3 py-2.5 text-sm text-slate-300">{normalizerLabel(editorNormalizer)}</div></div>
+          <div><Label>验证对象</Label><div className="rounded-lg border border-white/[0.08] bg-white/[0.035] px-3 py-2.5 text-sm text-slate-300">{targetLabel(editorTarget)}</div></div>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div><Label>管期</Label><Input name="periodSpan" type="number" min={1} max={2} defaultValue={selectedRule?.periodSpan ?? 1} /></div>
-          <div><Label>平位序列</Label><Input name="positionPattern" defaultValue={selectedRule?.positionPattern?.join(",") ?? ""} /></div>
+          <div><Label>管期</Label><Input name="periodSpan" type="number" min={1} max={2} defaultValue={formDefaults?.periodSpan ?? 1} /></div>
+          <div><Label>平位序列</Label><Input name="positionPattern" defaultValue={formDefaults?.positionPattern?.join(",") ?? ""} /></div>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div><Label>锚点期号</Label><Input name="anchorIssue" defaultValue={selectedRule?.anchorIssue ?? ""} placeholder="例如 2026169" /></div>
@@ -4857,8 +4958,8 @@ function RuleForm({
         {!compact && <div><Label>说明</Label><Textarea name="description" defaultValue={selectedRule?.description ?? ""} /></div>}
         {compact && (
           <>
-            <input type="hidden" name="sourceFile" defaultValue={selectedRule?.sourceFile ?? "手动录入"} />
-            <input type="hidden" name="description" defaultValue={selectedRule?.description ?? ""} />
+            <input type="hidden" name="sourceFile" defaultValue={formDefaults?.sourceFile ?? "手动录入"} />
+            <input type="hidden" name="description" defaultValue={formDefaults?.description ?? ""} />
           </>
         )}
         <label className="flex items-center gap-2 text-sm text-slate-300">
@@ -5602,7 +5703,7 @@ function CandidateEvidencePanel({ candidate }: { candidate?: CandidateNumber | C
   );
 }
 
-function ExportTile({ icon: Icon, title, desc, action }: { icon: typeof Database; title: string; desc: string; action: () => void }) {
+function ExportTile({ icon: Icon, title, desc, action, disabled }: { icon: typeof Database; title: string; desc: string; action: () => void; disabled?: boolean }) {
   return (
     <Panel className="rq-export-tile">
       <div className="rq-export-tile__icon"><Icon aria-hidden="true" /></div>
@@ -5610,7 +5711,7 @@ function ExportTile({ icon: Icon, title, desc, action }: { icon: typeof Database
         <h3 className="font-semibold text-white">{title}</h3>
         <p className="mt-1 text-sm text-slate-500">{desc}</p>
       </div>
-      <Button className="rq-export-tile__action" onClick={action}><Download className="h-4 w-4" />导出</Button>
+      <Button className="rq-export-tile__action" disabled={disabled} onClick={action}><Download className="h-4 w-4" />导出</Button>
     </Panel>
   );
 }
@@ -5630,18 +5731,20 @@ function ConfigEditor({
   updateConfig,
   resetSeed,
   diagnostics = [],
+  observation,
 }: {
   config: ReturnType<typeof useRuleQuantStore.getState>["config"];
   updateConfig: (config: ReturnType<typeof useRuleQuantStore.getState>["config"]) => Promise<void>;
   resetSeed: () => Promise<void>;
   diagnostics?: string[];
+  observation: RuleObservationController;
 }) {
   const searchParams = useSearchParams();
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"overview" | "tables" | "advanced" | "maintenance" | "guide">(() => searchParams.get("tab") === "guide" ? "guide" : "overview");
+  const [settingsTab, setSettingsTab] = useState<"overview" | "automation" | "tables" | "advanced" | "maintenance" | "guide">(() => searchParams.get("tab") === "guide" ? "guide" : searchParams.get("tab") === "automation" ? "automation" : "overview");
 
   function toggleAdvancedConfig() {
     if (!advancedOpen && !text) {
@@ -5674,6 +5777,7 @@ function ConfigEditor({
       <aside className="rq-settings-nav" aria-label="设置分类">
         {[
           ["overview", "基础规则", "常用规则口径"],
+          ["automation", "公式自动管理", "错期暂停与恢复"],
           ["tables", "属性表", "生肖、波色、五行"],
           ["advanced", "高级设置", "规则参数"],
           ["maintenance", "数据维护", "导出与重置"],
@@ -5684,6 +5788,7 @@ function ConfigEditor({
       </aside>
 
       <Panel className="rq-settings-content p-5">
+        {settingsTab === "automation" && <RuleObservationSettings controller={observation} />}
         {settingsTab === "overview" && <>
           <div className="rq-section-head"><div><p className="rq-eyebrow">基础规则</p><h2>当前计算口径</h2></div><Link href="/config?tab=guide&topic=rule-understanding" className="rq-link-button">完整规则说明</Link></div>
           <div className="rq-settings-summary-grid">

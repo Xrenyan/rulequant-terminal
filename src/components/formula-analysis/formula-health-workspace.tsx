@@ -15,6 +15,7 @@ import { Input, Select } from "@/components/ui/field";
 import { Panel } from "@/components/ui/panel";
 import { ExpandableVisualization } from "@/components/ui/expandable-visualization";
 import { FormulaEffect } from "@/components/formula-analysis/formula-effect";
+import { paginateItems } from "@/lib/pagination";
 
 const STATUS_LABELS: Record<FormulaHealthStatus, { label: string; explanation: string; tone: "green" | "yellow" | "rose" | "slate" }> = {
   normal: { label: "状态正常", explanation: "可核对期数足够，最近没有明显连续出错或表现大幅变化。", tone: "green" },
@@ -31,14 +32,21 @@ function metricText(row: FormulaHealthRow, window: FormulaAnalysisWindow): strin
 }
 
 function PairRows({ rows, empty, onOpenIssue }: { rows: FormulaPairDiagnostic[]; empty: string; onOpenIssue: (issue: string) => void }) {
+  const [page, setPage] = useState(0);
+  const pagination = paginateItems(rows, page, 20);
   if (!rows.length) return <p className="rq-health-pairs__empty">{empty}</p>;
-  return <div className="rq-health-pairs__list">{rows.map((row) => (
+  return <><div className="rq-health-pairs__list">{pagination.items.map((row) => (
     <article key={`${row.kind}:${row.leftRuleId}:${row.rightRuleId}`} data-pair-row={row.kind}>
       <header><div><strong>{row.leftRuleName}</strong><span>与</span><strong>{row.rightRuleName}</strong></div><Badge tone={row.kind === "duplicate" ? "cyan" : "rose"}>{row.kind === "duplicate" ? "高度重复" : "方向冲突"}</Badge></header>
       <div><span>结果相近程度 <b>{Math.round(row.score * 100)}%</b></span><span>共同核对 {row.commonPeriods} 期</span><span>结果有重合 {row.overlapPeriods} 期</span><span>完全相同 {row.exactMatchPeriods} 期</span></div>
       <footer><small>证据期次</small>{row.exampleIssues.length ? row.exampleIssues.map((issue) => <button key={issue} type="button" data-pair-issue={issue} onClick={() => onOpenIssue(issue)}>{issue}</button>) : <span>暂无可列举期次</span>}</footer>
     </article>
-  ))}</div>;
+  ))}</div>{pagination.pageCount > 1 && <nav className="rq-health-pagination" aria-label="公式关系分页"><span>{pagination.start}–{pagination.end} / {rows.length} 组</span><Button size="sm" disabled={pagination.page === 0} onClick={() => setPage(pagination.page - 1)}>上一页关系</Button><Button size="sm" disabled={pagination.page === pagination.pageCount - 1} onClick={() => setPage(pagination.page + 1)}>下一页关系</Button></nav>}</>;
+}
+
+function EffectDisclosure({ row, onOpenIssue }: { row: FormulaHealthRow; onOpenIssue: (issue: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return <details data-effect-disclosure onToggle={(event) => { if (event.target === event.currentTarget) setOpen(event.currentTarget.open); }}><summary>这条公式表现怎么样</summary>{open && <FormulaEffect effect={row.effect} onOpenIssue={onOpenIssue} />}</details>;
 }
 
 export function FormulaHealthWorkspace({ report, onOpenIssue }: { report: FormulaAnalysisReport; onOpenIssue: (issue: string) => void }) {
@@ -46,6 +54,7 @@ export function FormulaHealthWorkspace({ report, onOpenIssue }: { report: Formul
   const [status, setStatus] = useState<FormulaHealthStatus | "all">("all");
   const [sort, setSort] = useState<"attention" | "rate10" | "failure-streak" | "name">("attention");
   const [pairMode, setPairMode] = useState<"duplicate" | "conflict">("duplicate");
+  const [page, setPage] = useState(0);
   const rows = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("zh-CN");
     const statusPriority: Record<FormulaHealthStatus, number> = { "calculation-error": 0, "consecutive-failure": 1, volatile: 2, "sample-low": 3, normal: 4 };
@@ -60,6 +69,7 @@ export function FormulaHealthWorkspace({ report, onOpenIssue }: { report: Formul
         || right.currentFailureStreak - left.currentFailureStreak;
     });
   }, [query, report.health.rows, sort, status]);
+  const pagination = paginateItems(rows, page, 20);
   const healthTotal = report.health.rows.length;
   const healthSummary = STATUS_ORDER.map((key) => `${report.health.counts[key]} 条${STATUS_LABELS[key].label}`).join("，");
   const attentionCount = healthTotal - report.health.counts.normal;
@@ -101,16 +111,16 @@ export function FormulaHealthWorkspace({ report, onOpenIssue }: { report: Formul
               data-health-status-share={percentage}
               aria-label={`${item.label}，${count}条，占${percentage.toFixed(1)}%，${item.explanation}`}
               aria-pressed={status === key}
-              onClick={() => setStatus((current) => current === key ? "all" : key)}
+              onClick={() => { setPage(0); setStatus((current) => current === key ? "all" : key); }}
             ><span><i className={`is-${key}`} /><b>{item.label}</b></span><strong>{count}<small>条 · {percentage.toFixed(1)}%</small></strong><em><i style={{ width: `${percentage}%` }} /></em><p>{item.explanation}</p></button>;
           })}
         </div>
       </section></ExpandableVisualization>
 
       <section className="rq-health-toolbar" aria-label="公式健康筛选">
-        <label><span><Search className="h-4 w-4" />搜索公式</span><Input aria-label="搜索公式" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="输入公式名称" /></label>
-        <label><span><ShieldCheck className="h-4 w-4" />状态筛选</span><Select aria-label="状态筛选" value={status} onChange={(event) => setStatus(event.target.value as FormulaHealthStatus | "all")}><option value="all">全部状态</option>{Object.entries(STATUS_LABELS).map(([value, item]) => <option key={value} value={value}>{item.label}</option>)}</Select></label>
-        <label><span><ArrowDownUp className="h-4 w-4" />排序方式</span><Select aria-label="排序方式" value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="attention">需留意优先</option><option value="rate10">最近10期通过率</option><option value="failure-streak">连续未通过</option><option value="name">公式名称</option></Select></label>
+        <label><span><Search className="h-4 w-4" />搜索公式</span><Input aria-label="搜索公式" value={query} onChange={(event) => { setPage(0); setQuery(event.target.value); }} placeholder="输入公式名称" /></label>
+        <label><span><ShieldCheck className="h-4 w-4" />状态筛选</span><Select aria-label="状态筛选" value={status} onChange={(event) => { setPage(0); setStatus(event.target.value as FormulaHealthStatus | "all"); }}><option value="all">全部状态</option>{Object.entries(STATUS_LABELS).map(([value, item]) => <option key={value} value={value}>{item.label}</option>)}</Select></label>
+        <label><span><ArrowDownUp className="h-4 w-4" />排序方式</span><Select aria-label="排序方式" value={sort} onChange={(event) => { setPage(0); setSort(event.target.value as typeof sort); }}><option value="attention">需留意优先</option><option value="rate10">最近10期通过率</option><option value="failure-streak">连续未通过</option><option value="name">公式名称</option></Select></label>
       </section>
 
       <Panel className="rq-health-table-panel">
@@ -118,10 +128,10 @@ export function FormulaHealthWorkspace({ report, onOpenIssue }: { report: Formul
         <div className="rq-health-table-scroll">
           <table className="rq-health-table">
             <thead><tr><th scope="col">公式</th><th scope="col">状态</th><th scope="col">最近10期</th><th scope="col">最近30期</th><th scope="col">最近50期</th><th scope="col">当前连续通过</th><th scope="col">当前连续未通过</th><th scope="col">最长连续未通过</th><th scope="col">计算说明</th></tr></thead>
-            <tbody>{rows.map((row) => {
+            <tbody>{pagination.items.map((row) => {
               const state = STATUS_LABELS[row.status];
               return <tr key={row.ruleId} data-health-row={row.ruleId}>
-                <td data-label="公式"><strong>{row.ruleName}</strong><p>已选 {report.window} 期：{metricText(row, report.window)}</p><details><summary>这条公式表现怎么样</summary><FormulaEffect effect={row.effect} onOpenIssue={onOpenIssue} /></details></td>
+                <td data-label="公式"><strong>{row.ruleName}</strong><p>已选 {report.window} 期：{metricText(row, report.window)}</p><EffectDisclosure row={row} onOpenIssue={onOpenIssue} /></td>
                 <td data-label="状态"><Badge tone={state.tone}>{state.label}</Badge><small>{state.explanation}</small></td>
                 <td data-label="最近10期"><b>{metricText(row, 10)}</b>{row.windows[10].sampleSize < 10 && <small>可核对记录不足10期</small>}</td>
                 <td data-label="最近30期"><b>{metricText(row, 30)}</b></td>
@@ -134,12 +144,13 @@ export function FormulaHealthWorkspace({ report, onOpenIssue }: { report: Formul
             })}</tbody>
           </table>
         </div>
+        <nav className="rq-health-pagination" aria-label="公式健康分页"><span role="status">第 {pagination.start}–{pagination.end} 条，共 {rows.length} 条</span><Button size="sm" aria-label="上一页公式健康记录" disabled={pagination.page === 0} onClick={() => setPage(pagination.page - 1)}>上一页</Button><span>{pagination.page + 1} / {pagination.pageCount}</span><Button size="sm" aria-label="下一页公式健康记录" disabled={pagination.page === pagination.pageCount - 1} onClick={() => setPage(pagination.page + 1)}>下一页</Button></nav>
       </Panel>
 
       <Panel className="rq-health-pairs">
         <header><div><span>公式关系诊断</span><h2>高度重复与方向冲突</h2><p>只比较同一种结果，且两条公式至少都有 {report.pairs.minimumCommonPeriods} 期可核对记录。结果相近程度达到 {Math.round(report.pairs.duplicateThreshold * 100)}% 才列为高度重复；排除和支持意见的重合达到 {Math.round(report.pairs.conflictThreshold * 100)}% 才提醒方向冲突。</p></div><div className="rq-segmented-control"><Button size="sm" variant={pairMode === "duplicate" ? "primary" : "ghost"} aria-pressed={pairMode === "duplicate"} onClick={() => setPairMode("duplicate")}><CopyCheck className="h-4 w-4" />高度重复</Button><Button size="sm" variant={pairMode === "conflict" ? "primary" : "ghost"} aria-pressed={pairMode === "conflict"} onClick={() => setPairMode("conflict")}><AlertTriangle className="h-4 w-4" />方向冲突</Button></div></header>
         <div className="rq-health-pairs__explain"><CircleAlert className="h-4 w-4" /><p>{pairMode === "duplicate" ? "两条公式经常给出高度相似的结果集合，可能重复贡献同一种意见。" : "排除与支持公式经常指向相同结果，需要逐期核对是否逻辑相抵。"}</p></div>
-        <PairRows rows={pairMode === "duplicate" ? report.pairs.duplicates : report.pairs.conflicts} empty={pairMode === "duplicate" ? "当前没有发现达到上述程度的重复公式。" : "当前没有发现达到上述程度的方向冲突。"} onOpenIssue={onOpenIssue} />
+        <PairRows key={pairMode} rows={pairMode === "duplicate" ? report.pairs.duplicates : report.pairs.conflicts} empty={pairMode === "duplicate" ? "当前没有发现达到上述程度的重复公式。" : "当前没有发现达到上述程度的方向冲突。"} onOpenIssue={onOpenIssue} />
       </Panel>
       <p className="rq-health-workspace__note"><Braces className="h-4 w-4" />先看核对了几期、其中对了几期，再看百分比；核对期数少时不要急着下结论。</p>
     </div>

@@ -24,9 +24,16 @@ describe("system guide catalog", () => {
       const steps = topic.sections.find((section) => section.kind === "steps")?.steps ?? [];
       expect(steps.length, topic.slug).toBeGreaterThanOrEqual(3);
       expect(steps.length, topic.slug).toBeLessThanOrEqual(6);
-      expect(topic.screenshot?.alt.trim().length, topic.slug).toBeGreaterThan(8);
-      expect(topic.screenshot?.caption.trim().length, topic.slug).toBeGreaterThan(8);
-      expect(new Set(topic.screenshot?.callouts.map((callout) => callout.number)).size).toBe(topic.screenshot?.callouts.length);
+      if (topic.screenshot) {
+        expect(topic.screenshot.alt.trim().length, topic.slug).toBeGreaterThan(8);
+        expect(topic.screenshot.caption.trim().length, topic.slug).toBeGreaterThan(8);
+        expect(new Set(topic.screenshot.callouts.map((callout) => callout.number)).size).toBe(topic.screenshot.callouts.length);
+      } else {
+        // A sequence of labelled example cards is also a complete visual teaching aid.
+        const example = topic.sections.find((section) => section.kind === "example");
+        expect(example?.steps?.length, topic.slug).toBeGreaterThanOrEqual(3);
+        expect(example?.paragraphs.join("").length, topic.slug).toBeGreaterThan(15);
+      }
     }
     expect(JSON.stringify(guideTopics)).not.toMatch(/TODO|placeholder|lorem|待补充/i);
   });

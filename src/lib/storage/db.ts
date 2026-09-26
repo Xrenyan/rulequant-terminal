@@ -1,6 +1,7 @@
 "use client";
 
 import Dexie, { type Table } from "dexie";
+import { diffRecords } from "@/lib/storage/record-diff";
 import type { DrawRecord, OperationLog, ReferenceHistoryItem, RuleLibraryBackup, RuleQuantConfig, RuleRecord, SampleCase } from "@/types/domain";
 import {
   mergeRuleSnapshots,
@@ -64,6 +65,13 @@ class RuleQuantDatabase extends Dexie {
 export const db = new RuleQuantDatabase();
 
 let persistenceQueue: Promise<void> = Promise.resolve();
+let savedRuleSnapshot = "";
+
+async function syncRecords<T>(table: Table<T, string>, records: T[], key: (item: T) => string) {
+  const diff = diffRecords(await table.toArray(), records, key);
+  if (diff.removed.length) await table.bulkDelete(diff.removed);
+  if (diff.changed.length) await table.bulkPut(diff.changed);
+}
 
 const STORAGE_READ_TIMEOUT_MS = 1_500;
 
@@ -150,24 +158,22 @@ export async function persistAll(input: {
   };
 
   await enqueuePersistence(async () => {
-    const localSnapshotSaved = writeRuleLibrarySnapshot(snapshot.rules);
-    const cacheSnapshotSaved = await writeRuleLibraryCacheSnapshot(snapshot.rules);
+    const ruleSnapshot = JSON.stringify(snapshot.rules);
+    const sameRules = savedRuleSnapshot === ruleSnapshot;
+    const localSnapshotSaved = sameRules || writeRuleLibrarySnapshot(snapshot.rules);
+    const cacheSnapshotSaved = sameRules || await writeRuleLibraryCacheSnapshot(snapshot.rules);
     const backupSaved = localSnapshotSaved || cacheSnapshotSaved;
+    if (backupSaved) savedRuleSnapshot = ruleSnapshot;
     try {
       await db.transaction("rw", [db.draws, db.rules, db.samples, db.config, db.logs, db.backups, db.referenceHistory], async () => {
-        await db.draws.clear();
-        await db.rules.clear();
-        await db.samples.clear();
-        await db.logs.clear();
-        await db.backups.clear();
-        await db.referenceHistory.clear();
-        await db.draws.bulkPut(snapshot.draws);
-        await db.rules.bulkPut(snapshot.rules);
-        await db.samples.bulkPut(snapshot.samples);
-        await db.config.put({ id: "default", value: snapshot.config });
-        await db.logs.bulkPut(snapshot.logs);
-        await db.backups.bulkPut(snapshot.backups);
-        await db.referenceHistory.bulkPut(snapshot.referenceHistory);
+        await syncRecords(db.draws, snapshot.draws, (row) => row.issue);
+        await syncRecords(db.rules, snapshot.rules, (row) => row.id);
+        await syncRecords(db.samples, snapshot.samples, (row) => row.id);
+        const previousConfig = await db.config.get("default");
+        if (JSON.stringify(previousConfig?.value) !== JSON.stringify(snapshot.config)) await db.config.put({ id: "default", value: snapshot.config });
+        await syncRecords(db.logs, snapshot.logs, (row) => row.id);
+        await syncRecords(db.backups, snapshot.backups, (row) => row.id);
+        await syncRecords(db.referenceHistory, snapshot.referenceHistory, (row) => row.id);
       });
     } catch (error) {
       if (!backupSaved) throw error;
@@ -180,10 +186,8 @@ export async function persistReferenceHistoryAndLogs(referenceHistory: Reference
   const nextLogs = [...logs];
   await enqueuePersistence(async () => {
     await db.transaction("rw", [db.referenceHistory, db.logs], async () => {
-      await db.referenceHistory.clear();
-      await db.logs.clear();
-      await db.referenceHistory.bulkPut(nextReferenceHistory);
-      await db.logs.bulkPut(nextLogs);
+      await syncRecords(db.referenceHistory, nextReferenceHistory, (row) => row.id);
+      await syncRecords(db.logs, nextLogs, (row) => row.id);
     });
   });
 }

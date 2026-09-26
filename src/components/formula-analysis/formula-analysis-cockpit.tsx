@@ -157,7 +157,8 @@ export function FormulaAnalysisCockpit({ draws, rules, config, dataSourceLabel, 
     if (typeof window !== "undefined") {
       if (urlUpdateTimer.current) window.clearTimeout(urlUpdateTimer.current);
       urlUpdateTimer.current = window.setTimeout(() => {
-        window.history.replaceState(window.history.state, "", `/formula-result-statistics/analysis?${serializeAnalysisSearchParams(next)}`);
+        // Keep the host's deployment prefix (for example GitHub Pages) intact.
+        window.history.replaceState(window.history.state, "", `${window.location.pathname}?${serializeAnalysisSearchParams(next)}`);
       }, 320);
     }
   };

@@ -1,4 +1,5 @@
 import { normalizeDraw } from "@/lib/engine/attributes";
+import { backtestDatasetKey, backtestMathKey, ruleMathIdentity } from "@/lib/backtest/backtest-identity";
 import { calculateRule, calculateRuleDetail, type CalculateRuleContext } from "@/lib/formula-engine/formula-engine";
 import type {
   BacktestDetail,
@@ -9,7 +10,7 @@ import type {
   RuleRecord,
 } from "@/types/domain";
 
-type RunBacktestInput = {
+export type RunBacktestInput = {
   draws: Array<Parameters<typeof normalizeDraw>[0]>;
   rules: RuleRecord[];
   config: RuleQuantConfig;
@@ -22,37 +23,29 @@ export { calculateRule, type CalculateRuleContext };
 
 const backtestCache = new Map<string, BacktestResult>();
 const BACKTEST_CACHE_LIMIT = 6;
+let ruleDatasetKey = "";
+const ruleResultCache = new Map<string, RuleBacktestResult>();
+const RULE_RESULT_CACHE_LIMIT = 600;
 
 function backtestCacheKey(input: RunBacktestInput): string {
-  return JSON.stringify({
-    fromIssue: input.fromIssue ?? "",
-    toIssue: input.toIssue ?? "",
-    draws: input.draws.map((draw) => [draw.issue, draw.n1, draw.n2, draw.n3, draw.n4, draw.n5, draw.n6, draw.special]),
-    rules: input.rules.map((rule) => [
-      rule.id,
-      rule.updatedAt,
-      rule.enabled,
-      rule.category,
-      rule.orderMode,
-      rule.formula,
-      rule.normalizer,
-      rule.target,
-      rule.positionPattern,
-      rule.anchorIssue ?? "",
-      rule.anchorPatternIndex ?? "",
-      rule.periodSpan,
-      rule.verifyOffset ?? "",
-    ]),
-    config: input.config,
-  });
+  return backtestMathKey(input);
 }
 
 export function clearBacktestCache(): void {
   backtestCache.clear();
+  ruleResultCache.clear();
+  ruleDatasetKey = "";
 }
 
 export function getBacktestCacheSize(): number {
   return backtestCache.size;
+}
+
+/** Cached calculations must never bring an older name or participation flag back. */
+export function refreshBacktestRuleMetadata(result: RuleBacktestResult, rule: RuleRecord): RuleBacktestResult {
+  if (result.rule === rule) return result;
+  return { ...result, rule, details: result.rule.name === rule.name ? result.details
+    : result.details.map((detail) => ({ ...detail, ruleName: rule.name })) };
 }
 
 function streak(values: boolean[]): { current: number; max: number } {
@@ -135,8 +128,21 @@ export function runBacktest(input: RunBacktestInput): BacktestResult {
   const cached = shouldCache ? backtestCache.get(key) : undefined;
   if (cached) {
     backtestCache.delete(key);
-    backtestCache.set(key, cached);
-    return cached;
+    const rules = new Map(input.rules.map((rule) => [rule.id, rule]));
+    const ruleResults = cached.ruleResults.map((result) => refreshBacktestRuleMetadata(result, rules.get(result.rule.id)!));
+    const refreshed = ruleResults.every((result, index) => result === cached.ruleResults[index]) ? cached : { ...cached, ruleResults };
+    backtestCache.set(key, refreshed);
+    return refreshed;
+  }
+
+  if (shouldCache) {
+    const datasetKey = backtestDatasetKey(input);
+    if (datasetKey !== ruleDatasetKey) {
+      // A persistent worker should not retain six complete versions of changing draw history.
+      backtestCache.clear();
+      ruleResultCache.clear();
+      ruleDatasetKey = datasetKey;
+    }
   }
 
   const normalizedDraws = input.draws
@@ -147,7 +153,17 @@ export function runBacktest(input: RunBacktestInput): BacktestResult {
     generatedAt: new Date().toISOString(),
     ruleResults: input.rules
       .filter((rule) => rule.enabled)
-      .map((rule) => buildRuleResult(rule, normalizedDraws, input.config, shouldCache)),
+      .map((rule) => {
+        if (!shouldCache) return buildRuleResult(rule, normalizedDraws, input.config, false);
+        const ruleKey = JSON.stringify(ruleMathIdentity(rule));
+        const previous = ruleResultCache.get(ruleKey);
+        // This cache already owns complete results. Avoid a second, enormous per-expression cache.
+        const computed = previous ? refreshBacktestRuleMetadata(previous, rule) : buildRuleResult(rule, normalizedDraws, input.config, false);
+        ruleResultCache.delete(ruleKey);
+        ruleResultCache.set(ruleKey, computed);
+        while (ruleResultCache.size > RULE_RESULT_CACHE_LIMIT) ruleResultCache.delete(ruleResultCache.keys().next().value!);
+        return computed;
+      }),
   };
 
   if (shouldCache) {

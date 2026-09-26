@@ -1,6 +1,7 @@
 "use client";
 
 import { Moon, Sun } from "lucide-react";
+import { writeBrowserLocalStorage } from "@/lib/storage/safe-browser-storage";
 
 type Theme = "light" | "dark";
 
@@ -14,7 +15,7 @@ export function ThemeToggle() {
     const currentTheme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
     const nextTheme = currentTheme === "light" ? "dark" : "light";
     applyTheme(nextTheme);
-    window.localStorage.setItem("rulequant-theme", nextTheme);
+    writeBrowserLocalStorage("rulequant-theme", nextTheme);
   }
 
   return (

@@ -22,7 +22,8 @@ it("searches all 95 records, loads every match, resets paging and selected detai
   expect(template).toBeDefined();
   const records = Array.from({ length: 95 }, (_, i) => ({ ...template, id: `test-${i}`, ruleName: i >= 90 ? `末尾公式${i}` : `公式${i}` }));
   const data = { ...report, landing: { ...report.landing, domain: [...report.landing.domain].sort((a, b) => Number(b.target === template.targets[0]) - Number(a.target === template.targets[0])) }, summary: { ...report.summary, periods: [{ ...report.summary.periods[0], contributions: records }] } };
-  const view = await render(<FormulaEvidenceWorkspace report={data} />);
+  const view = await render(<FormulaEvidenceWorkspace report={data} initialIssue="" />);
+  expect(view.querySelector(".rq-evidence-workspace__focus")?.textContent).toContain("全部计算期");
   expect(view.querySelectorAll("[data-evidence-row]")).toHaveLength(40);
   await click(view.querySelector(".rq-evidence-load-more")!);
   expect(view.querySelectorAll("[data-evidence-row]")).toHaveLength(80);

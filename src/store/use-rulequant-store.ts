@@ -20,6 +20,7 @@ import {
 import type { RuleQuantCloudState } from "@/lib/cloud/cloud-state";
 import type { DrawRecord, OperationLog, ReferenceHistoryItem, RuleLibraryBackup, RuleQuantConfig, RuleRecord, RuleSourceType, SampleCase } from "@/types/domain";
 import { fetchJsonWithSessionCache, uniqueResolvedUrls } from "@/lib/network/urls";
+import { readBrowserLocalStorage } from "@/lib/storage/safe-browser-storage";
 
 const REMOTE_CLOUD_STATE_ENDPOINT = "https://rulequant-terminal.vercel.app/api/cloud/state";
 
@@ -417,13 +418,13 @@ export const useRuleQuantStore = create<RuleQuantState>((set, get) => ({
       referenceHistory: state.referenceHistory,
     });
     if (typeof window !== "undefined") {
-      const token = window.localStorage.getItem("rulequant:adminToken") || "";
+      const token = readBrowserLocalStorage("rulequant:adminToken");
       if (token) void get().publishCloudState("auto");
     }
   },
   publishCloudState: async (reason = "manual") => {
     if (typeof window === "undefined") return;
-    const token = window.localStorage.getItem("rulequant:adminToken") || "";
+    const token = readBrowserLocalStorage("rulequant:adminToken");
     const endpoint = window.location.hostname.endsWith("github.io") || process.env.NEXT_PUBLIC_STATIC_EXPORT === "true" ? REMOTE_CLOUD_STATE_ENDPOINT : "/api/cloud/state";
     const state = get();
     set({ cloudPublishStatus: "publishing", cloudPublishMessage: "正在发布到云端..." });

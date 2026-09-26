@@ -1,4 +1,5 @@
 import { getNumberAttributes } from "@/lib/engine/attributes";
+import { canonicalVariableName } from "@/lib/formula/variable-aliases";
 import type { FormulaEvaluation, NormalizedDraw, OrderMode, RuleQuantConfig } from "@/types/domain";
 
 type Token = { type: "number" | "identifier" | "operator" | "paren"; value: string };
@@ -150,6 +151,7 @@ function specialVariable(name: string, draw: NormalizedDraw): number | undefined
     总数: draw.total,
     总数尾: draw.totalTail,
     总数合: draw.totalSum,
+    总数合尾: draw.totalSum % 10,
     总分: draw.total,
     总分尾: draw.totalTail,
     总分合: draw.totalSum,
@@ -158,10 +160,12 @@ function specialVariable(name: string, draw: NormalizedDraw): number | undefined
     期数尾: draw.issueTail,
     期号尾: draw.issueTail,
     期尾: draw.issueTail,
+    期头: Math.floor(issuePeriodNumber / 10) % 10,
     期合: draw.issueSum,
     期合尾: draw.issueSumTail,
   };
-  return map[name];
+  const canonicalName = canonicalVariableName(name);
+  return Object.hasOwn(map, canonicalName) ? map[canonicalName] : undefined;
 }
 
 function resolveIdentifier(name: string, draw: NormalizedDraw, orderMode: OrderMode, config: RuleQuantConfig): number {

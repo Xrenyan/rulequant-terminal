@@ -129,6 +129,23 @@ function reduceBy(
   return { value, steps };
 }
 
+export function normalizeNumber(raw: number): { value: number; steps: number[] } {
+  if (!Number.isSafeInteger(raw)) {
+    throw new Error(`杀特码结果必须是有限的安全整数，当前为 ${raw}`);
+  }
+  const remainder = raw % 49;
+  const value = remainder > 0 ? remainder : remainder + 49;
+  const operationCount = Math.abs((raw - value) / 49);
+  // Preserve each subtraction for ordinary formulas while keeping large inputs bounded.
+  if (operationCount > 16) return { value, steps: [raw, value] };
+  const direction = raw > 49 ? -49 : 49;
+  const steps = [raw];
+  for (let index = 0; index < operationCount; index += 1) {
+    steps.push(steps[steps.length - 1] + direction);
+  }
+  return { value, steps };
+}
+
 export function normalizeZodiacNumber(raw: number): { value: number; steps: number[] } {
   const steps = [raw];
   let value = raw;

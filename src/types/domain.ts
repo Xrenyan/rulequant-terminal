@@ -1,6 +1,7 @@
 export type OrderMode = "L" | "D" | "custom";
 
 export type RuleCategory =
+  | "kill_number"
   | "kill_zodiac"
   | "include_zodiac"
   | "kill_color"

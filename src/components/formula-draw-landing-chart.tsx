@@ -44,7 +44,10 @@ export function FormulaDrawLandingChart({
     return <p className="rq-formula-landing-chart__empty">当前暂无已开奖期可验证实际结果</p>;
   }
 
-  const width = 760;
+  const width = Math.max(760, 212 + Math.max(0, records.length - 1) * 56);
+  const labelStride = records.length <= 8 ? 1 : Math.max(2, Math.ceil(records.length / 32));
+  const showLabel = (index: number) => index === records.length - 1
+    || (index % labelStride === 0 && records.length - 1 - index >= labelStride);
   const height = 360;
   const left = 62;
   const right = 78;
@@ -73,7 +76,7 @@ export function FormulaDrawLandingChart({
     values.indexOf(value) === index
   ));
   const visibleRankTicks = rankTicks(maxRank);
-  const summary = records.map((record) => (
+  const summary = records.length > 20 ? "可横向滚动查看每一期，使用下方期次按钮或左右方向键查看完整详情。" : records.map((record) => (
     `${record.targetIssue}期，实际${record.actualLabel}，特码${String(record.specialNumber).padStart(2, "0")}，${unitLabel}${record.count}，${record.rankLabel}`
   )).join("；");
 
@@ -83,6 +86,16 @@ export function FormulaDrawLandingChart({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, record: FormulaDrawLandingRecord) => {
+    if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      event.preventDefault();
+      const controls = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("[data-landing-issue]");
+      if (!controls) return;
+      const index = records.findIndex((item) => item.calculationIssue === record.calculationIssue);
+      const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? records.length - 1 : Math.max(0, Math.min(records.length - 1, index + (event.key === "ArrowRight" ? 1 : -1)));
+      controls[nextIndex]?.focus();
+      controls[nextIndex]?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+      return;
+    }
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       setFocusedControlIssue(record.calculationIssue);
@@ -92,7 +105,7 @@ export function FormulaDrawLandingChart({
 
   const chart = (
     <div className="rq-formula-landing-chart">
-      <div className="rq-formula-landing-chart__plot">
+      <div className="rq-formula-landing-chart__plot" style={{ width, minWidth: width }}>
         <svg
           viewBox={`0 0 ${width} ${height}`}
           role="img"
@@ -139,9 +152,9 @@ export function FormulaDrawLandingChart({
                   rx="5"
                   className={cn("rq-formula-landing-chart__bar", isFocused && "is-focused")}
                 />
-                <text x={x} y={Math.max(countTop + 13, countY - 7)} textAnchor="middle" className="rq-formula-landing-chart__count-label">
+                {showLabel(index) && <text x={x} y={Math.max(countTop + 13, countY - 7)} textAnchor="middle" className="rq-formula-landing-chart__count-label">
                   {record.count}
-                </text>
+                </text>}
               </g>
             );
           })}
@@ -172,20 +185,21 @@ export function FormulaDrawLandingChart({
               <g key={record.calculationIssue} aria-hidden="true">
                 {isFocused && <line x1={x} y1={countTop} x2={x} y2={rankBottom} className="rq-formula-landing-chart__focus-guide" />}
                 <circle cx={x} cy={rankY} r={isFocused ? 6 : 5} className={cn("rq-formula-landing-chart__rank-dot", isFocused && "is-focused")} />
-                <text
+                {showLabel(index) && <text
                   x={x + (isLast ? -10 : 10)}
                   y={labelY}
                   textAnchor={isLast ? "end" : "start"}
                   className="rq-formula-landing-chart__direct-label"
                 >
                   {record.actualLabel} · {twoDigitNumber}
-                </text>
+                </text>}
               </g>
             );
           })}
         </g>
 
         {records.map((record, index) => {
+          if (!showLabel(index)) return null;
           const x = xAt(index, records.length, dataLeft, dataWidth);
           return (
             <text key={record.calculationIssue} x={x} y={height - 30} textAnchor="middle" className="rq-formula-landing-chart__axis-label is-target-issue">
@@ -237,6 +251,10 @@ export function FormulaDrawLandingChart({
         <span className="is-rank"><i />下图 · 当期位置</span>
         {records.length >= 2 && <span className="is-average"><i />虚线 · 平均次数</span>}
       </div>
+      <p className="rq-formula-landing-chart__detail" role="status">{(() => {
+        const record = records.find((item) => item.calculationIssue === (focusedControlIssue ?? focusedIssue)) ?? records.at(-1)!;
+        return `${record.targetIssue}期开奖 · 实际${record.actualLabel} · 特码${String(record.specialNumber).padStart(2, "0")} · ${unitLabel}${record.count} · ${record.rankLabel}`;
+      })()}</p>
     </div>
   );
   return <ExpandableVisualization title="实际落点图">{chart}</ExpandableVisualization>;

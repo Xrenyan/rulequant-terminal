@@ -166,6 +166,8 @@ function uniqueTargets(targets: FormulaSummaryTarget[]): FormulaSummaryTarget[] 
 
 function categoryTarget(category: RuleCategory): CategoryTarget | undefined {
   switch (category) {
+    case "kill_number":
+      return { action: "exclude", targetType: "number" };
     case "kill_zodiac":
       return { action: "exclude", targetType: "zodiac" };
     case "include_zodiac":

@@ -4,6 +4,7 @@ import { normalizeFormulaAnalysisWindow } from "@/lib/formula-analysis/windows";
 import type { BacktestDetail, DrawRecord, NumberAttributes, RuleQuantConfig, RuleRecord } from "@/types/domain";
 
 const TARGET_ATTRIBUTE: Record<RuleRecord["category"], keyof NumberAttributes> = {
+  kill_number: "number",
   kill_zodiac: "zodiac", include_zodiac: "zodiac", six_zodiac: "zodiac", eight_zodiac: "zodiac", eight_zodiac_two_period: "zodiac", nine_zodiac: "zodiac", kill_three_as_nine: "zodiac",
   kill_color: "color", include_color: "color", kill_parity: "parity", include_parity: "parity", kill_size: "size", include_size: "size",
   kill_sum: "sum", kill_tail: "tail", seven_tail: "tail", kill_head: "head", kill_half_head: "number", kill_half_color: "number", kill_door: "number", kill_element: "element", kill_segment: "segment", custom_set: "number",

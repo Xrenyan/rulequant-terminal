@@ -52,6 +52,7 @@ const ruleSourceLabels: Record<string, string> = {
 };
 
 const ruleCategoryLabels: Record<string, string> = {
+  kill_number: "杀特码",
   kill_zodiac: "杀一肖",
   include_zodiac: "选生肖",
   kill_color: "杀一波",

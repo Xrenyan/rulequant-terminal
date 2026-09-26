@@ -2,6 +2,7 @@ import {
   getNumberAttributes,
   normalizeElement,
   normalizeHead,
+  normalizeNumber,
   normalizeSegment,
   normalizeSum,
   normalizeTail,
@@ -571,6 +572,19 @@ function calculateRuleUncached(
   const trace = [...dynamicFormula.patternTrace, ...formula.trace];
 
   switch (rule.category) {
+    case "kill_number": {
+      const normalized = normalizeNumber(rawResult);
+      return {
+        rawResult,
+        normalizerSteps: normalized.steps,
+        finalResult: normalized.value,
+        mappedResult: [normalized.value],
+        process: [...trace, ...reductionProcess(normalized.steps, 49), `杀特码 ${normalized.value}`],
+        variables: formula.variables,
+        expression: formula.expression,
+        trace,
+      };
+    }
     case "kill_zodiac": {
       const normalized = normalizeZodiacNumber(rawResult);
       const zodiac = getNumberAttributes(normalized.value, config).zodiac;
@@ -930,6 +944,7 @@ export function checkRuleSuccess(rule: RuleRecord, calculation: RuleCalculation,
       return !resultSet.includes(special.tail);
     case "kill_head":
       return !resultSet.includes(special.head);
+    case "kill_number":
     case "kill_half_head":
     case "kill_half_color":
     case "kill_door":

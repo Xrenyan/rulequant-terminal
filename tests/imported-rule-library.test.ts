@@ -6,9 +6,9 @@ import { buildRuleSignature } from "@/lib/rules/rule-library";
 
 describe("cleaned rule library import", () => {
   it("contains every unique exported formula with stable source counts", () => {
-    expect(seedRules).toHaveLength(246);
+    expect(seedRules).toHaveLength(246 + 12);
     expect(seedRules.filter((rule) => rule.sourceType === "manual")).toHaveLength(183);
-    expect(seedRules.filter((rule) => rule.sourceType === "user_provided")).toHaveLength(53);
+    expect(seedRules.filter((rule) => rule.sourceType === "user_provided")).toHaveLength(53 + 12);
     expect(seedRules.filter((rule) => rule.sourceType === "system_recommended")).toHaveLength(10);
     expect(seedRules.filter((rule) => rule.id.startsWith("rq-docx-20260727-"))).toHaveLength(14);
     expect(seedRules.filter((rule) => rule.id.startsWith("rq-docx-20260729-"))).toHaveLength(25);

@@ -41,9 +41,8 @@ describe("rank change explanation", () => {
   it("renders added and removed influences as changes specific to the selected candidate", () => {
     const old = report.allNumbers.find((number) => number.supportRules.length > 0)!;
     const removed = old.supportRules[0];
-    const added = report.allNumbers
-      .flatMap((number) => number.supportRules)
-      .find((rule) => !old.supportRules.some((existing) => existing.ruleId === rule.ruleId))!;
+    // A genuinely new influence; don't depend on which formulas the latest live draw happens to use.
+    const added = { ...removed, ruleId: "rank-change-new-influence", ruleName: "本期新增影响" };
     const candidate = { ...old, supportRules: [added, ...old.supportRules.filter((rule) => rule.ruleId !== removed.ruleId)] };
     const current = { ...next, allNumbers: report.allNumbers.map((number) => number.number === candidate.number ? candidate : number) };
 

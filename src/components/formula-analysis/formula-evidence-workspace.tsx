@@ -20,7 +20,7 @@ function displayTarget(target: number | string): string {
 export function FormulaEvidenceWorkspace({ report, initialRecord, initialIssue }: { report: FormulaAnalysisReport; initialRecord?: FormulaDrawLandingRecord; initialIssue?: string }) {
   const defaultTarget = initialRecord?.actualTargetKey ?? report.landing.domain[0]?.targetKey ?? "";
   const [selectedTargetKey, setSelectedTargetKey] = useState(defaultTarget);
-  const [focusedIssue, setFocusedIssue] = useState(initialRecord?.calculationIssue ?? initialIssue ?? "all");
+  const [focusedIssue, setFocusedIssue] = useState(initialRecord?.calculationIssue || initialIssue || "all");
   const [query, setQuery] = useState("");
   const [selectedContributionId, setSelectedContributionId] = useState("");
   const selectionKey = `${selectedTargetKey}|${focusedIssue}|${query}`;

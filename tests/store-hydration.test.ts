@@ -19,6 +19,24 @@ function draw(issue: string, special: number): DrawRecord {
 }
 
 describe("store hydration draw freshness", () => {
+  it("补齐12条杀特码且重复打开不重复、不覆盖原公式启停和本地自建公式", () => {
+    const prefix = "rq-user-20260926-kill-number-";
+    const oldRules = seedRules.filter((rule) => !rule.id.startsWith(prefix));
+    const disabledRule = { ...oldRules[0], enabled: false, participatesInReference: false };
+    const localRule = { ...oldRules[1], id: "local-preserved-september", sourceType: "manual" as const, formula: "平1尾 + 888", name: "原有本地公式" };
+    const persisted = { draws: seedDraws, rules: [disabledRule, ...oldRules.slice(1), localRule], samples: seedSampleCases, config: seedConfig, logs: [], backups: [], referenceHistory: [] };
+    const current = { draws: seedDraws, rules: persisted.rules, selectedRuleId: localRule.id };
+    const first = buildHydratedState({ persisted, current });
+    const second = buildHydratedState({ persisted: { ...persisted, rules: first.rules }, current: { ...current, rules: first.rules } });
+    for (const result of [first, second]) {
+      expect(result.rules.filter((rule) => rule.id.startsWith(prefix))).toHaveLength(12);
+      expect(result.rules.find((rule) => rule.id === disabledRule.id)).toMatchObject({ enabled: false, participatesInReference: false });
+      expect(result.rules.find((rule) => rule.id === localRule.id)).toMatchObject({ name: localRule.name, formula: localRule.formula });
+      expect(new Set(result.rules.map((rule) => rule.id)).size).toBe(result.rules.length);
+    }
+    expect(second.rules).toHaveLength(first.rules.length);
+  });
+
   it("retires a bundled formula removed by the latest full-library snapshot", () => {
     const retiredRule = {
       ...seedRules[0],
