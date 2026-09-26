@@ -26,7 +26,8 @@ describe("September 320-entry Word add-only sync", () => {
     const cloud = JSON.parse(readFileSync(new URL("../public/static-cloud-state.json", import.meta.url), "utf8"));
     expect(cloud.rules).toEqual(rawRules);
     expect(newRules).toHaveLength(73);
-    expect(seedRules.filter((rule) => rule.category === "kill_number")).toHaveLength(12);
+    // This is a historical import assertion; later batches may append more number rules.
+    expect(seedRules.slice(0, report.total).filter((rule) => rule.category === "kill_number")).toHaveLength(12);
   });
 
   it("adds nothing on repeat and keeps local disabled/participation state", () => {

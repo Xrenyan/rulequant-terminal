@@ -19,7 +19,7 @@ function draw(issue: string, special: number): DrawRecord {
 }
 
 describe("store hydration draw freshness", () => {
-  it("补齐12条杀特码且重复打开不重复、不覆盖原公式启停和本地自建公式", () => {
+  it("补齐42条杀特码且重复打开不重复、不覆盖原公式启停和本地自建公式", () => {
     const prefix = "rq-user-20260926-kill-number-";
     const oldRules = seedRules.filter((rule) => !rule.id.startsWith(prefix));
     const disabledRule = { ...oldRules[0], enabled: false, participatesInReference: false };
@@ -29,7 +29,7 @@ describe("store hydration draw freshness", () => {
     const first = buildHydratedState({ persisted, current });
     const second = buildHydratedState({ persisted: { ...persisted, rules: first.rules }, current: { ...current, rules: first.rules } });
     for (const result of [first, second]) {
-      expect(result.rules.filter((rule) => rule.id.startsWith(prefix))).toHaveLength(12);
+      expect(result.rules.filter((rule) => rule.id.startsWith(prefix))).toHaveLength(42);
       expect(result.rules.find((rule) => rule.id === disabledRule.id)).toMatchObject({ enabled: false, participatesInReference: false });
       expect(result.rules.find((rule) => rule.id === localRule.id)).toMatchObject({ name: localRule.name, formula: localRule.formula });
       expect(new Set(result.rules.map((rule) => rule.id)).size).toBe(result.rules.length);

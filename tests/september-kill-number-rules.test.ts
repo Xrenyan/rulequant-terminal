@@ -24,13 +24,14 @@ const suppliedFormulas = [
   [188, "D", "平5头+平1波+平4段+平2位+平2码+期尾+37"],
 ] as const;
 
-const septemberRules = seedRules.filter((rule) => rule.id.startsWith(prefix));
+const suppliedIds = new Set(suppliedFormulas.map(([number]) => `${prefix}${number}`));
+const septemberRules = seedRules.filter((rule) => suppliedIds.has(rule.id));
 
 describe("2026-09-26 用户补充的第177—188条杀特码规则", () => {
   it("在种子规则和静态快照中各保存完整且唯一的12条原公式", () => {
     const expectedIds = suppliedFormulas.map(([number]) => `${prefix}${number}`);
     expect(septemberRules.map((rule) => rule.id)).toEqual(expectedIds);
-    expect(staticCloudState.rules.filter((rule) => rule.id.startsWith(prefix))).toEqual(septemberRules);
+    expect(staticCloudState.rules.filter((rule) => suppliedIds.has(rule.id))).toEqual(septemberRules);
     expect(new Set(seedRules.map((rule) => rule.id)).size).toBe(seedRules.length);
     expect(new Set(staticCloudState.rules.map((rule) => rule.id)).size).toBe(staticCloudState.rules.length);
 

@@ -159,10 +159,21 @@
 
 .rq-formula-stats__toolbar {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 12px;
 }
+
+.rq-formula-stats__period-picker { min-width: 0; max-width: 560px; margin-top: 16px; }
+.rq-formula-stats__period-label { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin-bottom: 8px; }
+.rq-formula-stats__period-label label { color: var(--rq-text); font-size: 14px; font-weight: 650; }
+.rq-formula-stats__period-label small { color: var(--rq-muted); font-size: 12px; }
+.rq-formula-stats__period-controls { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.rq-formula-stats__period-controls .rq-button { height: 44px; min-height: 44px; gap: 4px; }
+.rq-formula-stats__period-controls .rq-select__trigger { height: 44px; font-variant-numeric: tabular-nums; }
+.rq-formula-stats__period-note { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 12px; color: var(--rq-muted); font-size: 12px; line-height: 1.6; }
+.rq-formula-stats__period-note b { color: var(--rq-text-soft); font-weight: 600; }
 
 .rq-formula-stats__segmented {
   display: inline-flex;
@@ -297,7 +308,13 @@
   .rq-formula-stats__workspace,
   .rq-formula-stats__evidence { padding: 14px; }
   .rq-formula-stats__toolbar { align-items: stretch; flex-direction: column; }
-  .rq-formula-stats__segmented { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rq-formula-stats__period-picker { max-width: none; }
+  .rq-formula-stats__period-controls { gap: 6px; }
+  .rq-formula-stats__period-controls .rq-button { padding-inline: 8px; }
+  .rq-formula-stats__period-controls .rq-button svg { display: none; }
+  .rq-formula-stats__period-note { flex-direction: column; }
+  .rq-formula-stats__toolbar .rq-formula-stats__segmented.rq-segmented-control { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rq-formula-stats__toolbar .rq-formula-stats__segmented.rq-formula-stats__range { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .rq-formula-stats__ranking-head { align-items: start; flex-direction: column; gap: 5px; }
   .rq-formula-stats__rank-row { grid-template-columns: minmax(70px, .34fr) minmax(84px, 1fr) 52px; gap: 9px; padding-inline: 10px; }
   .rq-formula-stats__rank-label { gap: 7px; }

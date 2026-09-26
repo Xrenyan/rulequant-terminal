@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   BarChart3,
   CalendarRange,
+  ChevronLeft,
   ChevronRight,
   CircleAlert,
   Layers3,
@@ -24,14 +25,15 @@ import type { DrawRecord, RuleQuantConfig, RuleRecord } from "@/types/domain";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
+import { Select } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 
 type FormulaSummaryWorkerResponse = { ok: true; report: FormulaSummaryReport } | { ok: false; error: string };
 type FormulaSummaryCacheEntry = { rules: RuleRecord[]; config: RuleQuantConfig; report: FormulaSummaryReport };
-type FormulaSummaryAsyncState = FormulaSummaryCacheEntry & { draws: DrawRecord[]; error?: string };
+type FormulaSummaryAsyncState = FormulaSummaryCacheEntry & { draws: DrawRecord[]; ready: boolean; error?: string };
 
 const formulaSummaryReportCache = new WeakMap<DrawRecord[], FormulaSummaryCacheEntry>();
-const FORMULA_SUMMARY_PREPARED_PERIODS = 11;
+const FORMULA_SUMMARY_PREPARED_PERIODS = 20;
 const FORMULA_SUMMARY_VISIBLE_PERIODS = 10;
 const EMPTY_FORMULA_SUMMARY_REPORT: FormulaSummaryReport = {
   periods: [],
@@ -70,11 +72,12 @@ export type FormulaResultStatisticsViewProps = {
   config: RuleQuantConfig;
 };
 
-type RangeMode = "latest" | "ten";
+type RangeMode = "latest" | "ten" | "period";
 
 const rangeOptions: Array<{ value: RangeMode; label: string }> = [
   { value: "latest", label: "最新输出" },
   { value: "ten", label: "最近十期" },
+  { value: "period", label: "按期查看" },
 ];
 
 const actionOptions: Array<{ value: FormulaSummaryAction; label: string; description: string }> = [
@@ -122,6 +125,8 @@ function FormulaEvidenceRow({ contribution }: { contribution: FormulaSummaryCont
 
 export function FormulaResultStatisticsView({ draws, rules, config }: FormulaResultStatisticsViewProps) {
   const [rangeMode, setRangeMode] = useState<RangeMode>("latest");
+  // An empty selection follows the latest draw; a historical selection stays on its issue.
+  const [requestedIssue, setRequestedIssue] = useState("");
   const [action, setAction] = useState<FormulaSummaryAction>("exclude");
   const [requestedTargetType, setRequestedTargetType] = useState<FormulaSummaryTargetType | "">("");
   const [requestedTarget, setRequestedTarget] = useState("");
@@ -135,6 +140,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
     draws,
     rules,
     config,
+    ready: Boolean(cachedFormulaSummary(draws, rules, config)),
     report: cachedFormulaSummary(draws, rules, config) ?? EMPTY_FORMULA_SUMMARY_REPORT,
   }));
 
@@ -143,7 +149,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
 
     const cached = cachedFormulaSummary(draws, rules, config);
     if (cached) {
-      queueMicrotask(() => setAsyncState({ draws, rules, config, report: cached }));
+      queueMicrotask(() => setAsyncState({ draws, rules, config, report: cached, ready: true }));
       return;
     }
 
@@ -153,7 +159,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
     const settle = (nextReport: FormulaSummaryReport, error?: string) => {
       if (disposed || settled) return;
       settled = true;
-      startTransition(() => setAsyncState({ draws, rules, config, report: nextReport, error }));
+      startTransition(() => setAsyncState({ draws, rules, config, report: nextReport, ready: true, error }));
       worker?.terminate();
     };
     const recoverFromWorkerFailure = (error: unknown) => {
@@ -177,7 +183,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
       }
     };
     queueMicrotask(() => {
-      if (!disposed && !settled) setAsyncState({ draws, rules, config, report: EMPTY_FORMULA_SUMMARY_REPORT });
+      if (!disposed && !settled) setAsyncState({ draws, rules, config, report: EMPTY_FORMULA_SUMMARY_REPORT, ready: false });
     });
     try {
       worker = new Worker(new URL("../workers/formula-summary.worker.ts", import.meta.url));
@@ -203,16 +209,19 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
     };
   }, [workerAvailable, draws, rules, config]);
 
-  const asyncReport = asyncState.draws === draws && asyncState.rules === rules && asyncState.config === config && asyncState.report.periods.length
+  const asyncReport = asyncState.draws === draws && asyncState.rules === rules && asyncState.config === config && asyncState.ready && !asyncState.error
     ? asyncState.report
     : undefined;
   const report = synchronousReport ?? asyncReport ?? EMPTY_FORMULA_SUMMARY_REPORT;
   const reportError = asyncState.draws === draws && asyncState.rules === rules && asyncState.config === config ? asyncState.error : undefined;
+  const availablePeriods = useMemo(() => report.periods.slice(-FORMULA_SUMMARY_PREPARED_PERIODS).reverse(), [report.periods]);
+  const selectedPeriod = (rangeMode === "period" ? availablePeriods.find((period) => period.calculationIssue === requestedIssue) : undefined) ?? availablePeriods[0];
+  const selectedIndex = availablePeriods.indexOf(selectedPeriod);
+  const selectedIssue = selectedPeriod?.calculationIssue ?? "";
+  const selectionExpired = rangeMode === "period" && Boolean(requestedIssue && selectedIssue && selectedIssue !== requestedIssue);
   const visiblePeriods = useMemo(
-    () => rangeMode === "latest"
-      ? report.periods.slice(-1)
-      : report.periods.slice(-FORMULA_SUMMARY_VISIBLE_PERIODS),
-    [rangeMode, report.periods],
+    () => rangeMode === "ten" ? report.periods.slice(-FORMULA_SUMMARY_VISIBLE_PERIODS) : selectedPeriod ? [selectedPeriod] : [],
+    [rangeMode, report.periods, selectedPeriod],
   );
   const groups = useMemo(() => buildFormulaSummaryGroups(visiblePeriods), [visiblePeriods]);
   const actionGroups = groups.filter((group) => group.action === action);
@@ -220,10 +229,11 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
     ? requestedTargetType
     : (actionGroups[0]?.targetType ?? "");
   const activeGroup = actionGroups.find((group) => group.targetType === activeTargetType);
-  const activeTarget = requestedTarget || activeGroup?.items[0]?.targetKey || "";
+  const activeTarget = activeGroup?.items.some((item) => item.targetKey === requestedTarget)
+    ? requestedTarget
+    : activeGroup?.items[0]?.targetKey || "";
   const activeItem = activeGroup?.items.find((item) => item.targetKey === activeTarget);
   const maxCount = activeGroup?.items[0]?.count ?? 1;
-  const latest = report.latestPeriod;
   const actionCopy = actionOptions.find((option) => option.value === action)!;
   const analysisHref = `/formula-result-statistics/analysis?${new URLSearchParams({
     tab: "overview",
@@ -232,8 +242,14 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
     type: activeTargetType || "zodiac",
   })}`;
 
+  const changePeriod = (issue: string) => {
+    setRequestedIssue(issue === availablePeriods[0]?.calculationIssue ? "" : issue);
+    setRequestedTarget("");
+  };
+
   const changeRange = (nextRange: RangeMode) => {
-    startTransition(() => setRangeMode(nextRange));
+    setRangeMode(nextRange);
+    setRequestedTarget("");
   };
 
   const changeAction = (nextAction: FormulaSummaryAction) => {
@@ -252,7 +268,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 id="formula-statistics-title">公式结果统计</h2>
-            <p className="mt-1 text-sm text-slate-500">按最新一期或最近十期，统计每条启用公式产生的排除与支持次数。</p>
+            <p className="mt-1 text-sm text-slate-500">看最新输出、最近十期合计，或按期查看最近20期中的某一期。</p>
           </div>
           <Link href={analysisHref} className="rq-button rq-button--primary inline-flex h-10 min-h-10 w-full items-center justify-center gap-2 border px-4 text-sm font-medium sm:w-auto">
              <ChartSpline className="h-4 w-4" />进入公式结果分析
@@ -260,32 +276,23 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
         </div>
         <div className="rq-formula-stats__sync-note mt-4">
           <Badge tone="green">实时统计</Badge>
-          <span><b>随开奖自动更新</b><small>直接读取现有开奖与公式，不保存过期统计副本</small></span>
+          <span><b>随开奖自动更新</b><small>按当前启用公式统计，新增开奖后自动更新</small></span>
         </div>
       </Panel>
 
       <div className="rq-workspace-tabs rq-formula-stats__status" aria-label="统计运行概况">
-        <div className="rq-workspace-tab rq-workspace-tab--active"><CalendarRange className="h-4 w-4" /><span>最新计算期</span><strong>{latest?.calculationIssue ?? "-"}</strong></div>
-        <div className="rq-workspace-tab"><ChevronRight className="h-4 w-4" /><span>对应期</span><strong>{latest?.targetLabel ?? "-"}</strong></div>
+        <div className="rq-workspace-tab rq-workspace-tab--active"><CalendarRange className="h-4 w-4" /><span>{rangeMode === "period" ? "当前计算期" : "最新计算期"}</span><strong>{selectedIssue || "-"}</strong></div>
+        <div className="rq-workspace-tab"><ChevronRight className="h-4 w-4" /><span>对应期</span><strong>{selectedPeriod?.targetLabel ?? "-"}</strong></div>
         <div className="rq-workspace-tab"><Layers3 className="h-4 w-4" /><span>参与统计公式</span><strong>{report.formulaCount} 条</strong></div>
-        <div className="rq-workspace-tab"><BarChart3 className="h-4 w-4" /><span>当前范围</span><strong>{visiblePeriods.length} 个计算期</strong></div>
+        <div className="rq-workspace-tab"><BarChart3 className="h-4 w-4" /><span>统计范围</span><strong>{rangeMode === "ten" ? `${visiblePeriods.length} 个计算期合计` : selectedPeriod ? "只算这1期" : "暂无期次"}</strong></div>
         <div className="rq-workspace-tab"><CircleAlert className="h-4 w-4" /><span>跳过异常</span><strong>{visiblePeriods.reduce((sum, period) => sum + period.skippedRules.length, 0)} 条</strong></div>
       </div>
 
       <Panel className="rq-formula-stats__workspace">
         <div className="rq-formula-stats__toolbar">
-          <div className="rq-formula-stats__segmented rq-segmented-control" aria-label="统计时间范围">
+          <div className="rq-formula-stats__segmented rq-formula-stats__range rq-segmented-control" aria-label="统计时间范围">
             {rangeOptions.map((option) => (
-              <Button
-                key={option.value}
-                type="button"
-                size="sm"
-                variant={rangeMode === option.value ? "primary" : "ghost"}
-                aria-pressed={rangeMode === option.value}
-                onClick={() => changeRange(option.value)}
-              >
-                {option.label}
-              </Button>
+              <Button key={option.value} type="button" size="sm" variant={rangeMode === option.value ? "primary" : "ghost"} aria-pressed={rangeMode === option.value} onClick={() => changeRange(option.value)}>{option.label}</Button>
             ))}
           </div>
           <div className="rq-formula-stats__segmented rq-segmented-control" aria-label="统计动作">
@@ -302,6 +309,22 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
               </Button>
             ))}
           </div>
+        </div>
+
+        {rangeMode === "period" && <div className="rq-formula-stats__period-picker">
+          <div className="rq-formula-stats__period-label"><label htmlFor="formula-statistics-period">选择计算期</label><small>最近{availablePeriods.length}期可选 · 含最新一期</small></div>
+          <div className="rq-formula-stats__period-controls">
+            <Button type="button" size="sm" disabled={selectedIndex < 0 || selectedIndex >= availablePeriods.length - 1} onClick={() => changePeriod(availablePeriods[selectedIndex + 1].calculationIssue)}><ChevronLeft className="h-4 w-4" aria-hidden="true" />上一期</Button>
+            <Select id="formula-statistics-period" aria-label="选择计算期" value={selectedIssue} disabled={!availablePeriods.length} onChange={(event) => changePeriod(event.target.value)}>
+              {availablePeriods.length ? availablePeriods.map((period, index) => <option key={period.calculationIssue} value={period.calculationIssue}>{period.calculationIssue}期{index === 0 ? "（最新）" : ""}</option>) : <option value="">暂无期次</option>}
+            </Select>
+            <Button type="button" size="sm" disabled={selectedIndex <= 0} onClick={() => changePeriod(availablePeriods[selectedIndex - 1].calculationIssue)}>下一期<ChevronRight className="h-4 w-4" aria-hidden="true" /></Button>
+          </div>
+        </div>}
+
+        <div className="rq-formula-stats__period-note" role="status" aria-live="polite" aria-atomic="true">
+          {rangeMode === "ten" && visiblePeriods.length ? <><b>计算期 {visiblePeriods[0].calculationIssue} — {selectedIssue}</b><span>合计这{visiblePeriods.length}期的次数；想看某一期，请选“按期查看”。</span></> : selectedPeriod ? <><b>计算期 {selectedIssue} → 对应 {selectedPeriod.targetLabel}</b><span>只统计这一期，不与其他期相加。</span></> : <span>暂无开奖记录，同步开奖后即可按期查看。</span>}
+          {selectionExpired && <span>原来选择的期次已不在最近20期内，已显示最新一期。</span>}
         </div>
 
         {actionGroups.length ? (
@@ -359,7 +382,7 @@ export function FormulaResultStatisticsView({ draws, rules, config }: FormulaRes
         ) : (
           <div className="rq-formula-stats__empty">
             <CircleAlert className="h-6 w-6" />
-            <strong>当前范围暂无{action === "exclude" ? "排除" : "支持"}结果</strong>
+            <strong>{rangeMode === "ten" ? "当前范围" : "这一期"}暂无{action === "exclude" ? "排除" : "支持"}结果</strong>
             <p>同步开奖或启用对应类型的公式后，这里会自动显示完整统计。</p>
           </div>
         )}

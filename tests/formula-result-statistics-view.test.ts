@@ -93,7 +93,153 @@ async function rerenderView({ draws: viewDraws = draws }: { draws?: DrawRecord[]
   });
 }
 
+const historyDraws: DrawRecord[] = Array.from({ length: 25 }, (_, index) => ({
+  ...draws[0], issue: String(101 + index),
+}));
+
+async function choosePeriod(issue: string) {
+  const select = host?.querySelector<HTMLButtonElement>('[aria-label="选择计算期"]');
+  if (!select) throw new Error("期次选择未显示");
+  await act(async () => select.click());
+  const option = [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+    .find((item) => item.textContent === `${issue}期` || item.textContent === `${issue}期（最新）`);
+  if (!option) throw new Error(`期次不存在：${issue}`);
+  await act(async () => option.click());
+}
+
 describe("formula result statistics view", () => {
+  it("places independent period browsing beside the existing two modes and defaults to latest", async () => {
+    await renderView();
+    const tabs = host?.querySelector('[aria-label="统计时间范围"]');
+    expect([...tabs!.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["最新输出", "最近十期", "按期查看"]);
+    expect(findButton("最新输出").getAttribute("aria-pressed")).toBe("true");
+    expect(host?.querySelector('[aria-label="选择计算期"]')).toBeNull();
+    await act(async () => findButton("按期查看").click());
+    expect(host?.querySelector('[aria-label="选择计算期"]')?.textContent).toBe("103期（最新）");
+    expect(host?.textContent).toContain("只统计这一期，不与其他期相加。");
+  });
+
+  it("lists exactly twenty latest periods, newest first, even with unordered draw input", async () => {
+    await renderView({ draws: [...historyDraws].reverse() });
+    await act(async () => findButton("按期查看").click());
+    await act(async () => host?.querySelector<HTMLButtonElement>('[aria-label="选择计算期"]')?.click());
+    const options = [...document.querySelectorAll('[role="option"]')];
+    expect(options).toHaveLength(20);
+    expect(options[0].textContent).toBe("125期（最新）");
+    expect(options.at(-1)?.textContent).toBe("106期");
+    expect(host?.textContent).toContain("最近20期可选");
+  });
+
+  it("never adds other periods to a selected period, while preserving recent-ten totals", async () => {
+    await renderView({ draws: historyDraws });
+    await act(async () => findButton("最近十期").click());
+    expect(host?.querySelector(".rq-formula-stats__rank-value")?.textContent).toBe("20次");
+    expect(host?.querySelector(".rq-formula-stats__period-note")?.textContent).toContain("合计这10期");
+    await act(async () => findButton("按期查看").click());
+    for (const draw of historyDraws.slice(-20)) {
+      await choosePeriod(draw.issue);
+      expect(host?.querySelector(".rq-formula-stats__rank-value")?.textContent, draw.issue).toBe("2次");
+      const rows = host?.querySelectorAll(".rq-formula-stats__evidence-row") ?? [];
+      expect(rows, draw.issue).toHaveLength(2);
+      expect([...rows].every((row) => row.querySelector("summary small")?.textContent?.startsWith(`${draw.issue} 计算`)), draw.issue).toBe(true);
+      expect(host?.textContent).toContain("只算这1期");
+    }
+  });
+
+  it("updates the header, ranking and evidence together and disables navigation at both ends", async () => {
+    await renderView();
+    await act(async () => findButton("按期查看").click());
+    expect(findButton("下一期").disabled).toBe(true);
+    await act(async () => findButton("上一期").click());
+    expect(host?.querySelector(".rq-formula-stats__status .rq-workspace-tab strong")?.textContent).toBe("102");
+    expect(host?.querySelector(".rq-formula-stats__period-note")?.textContent).toContain("计算期 102 → 对应 103");
+    expect(host?.querySelector(".rq-formula-stats__evidence-row summary small")?.textContent).toBe("102 计算 · 103 对应");
+    await choosePeriod("101");
+    expect(findButton("上一期").disabled).toBe(true);
+    expect(findButton("下一期").disabled).toBe(false);
+    await act(async () => findButton("下一期").click());
+    expect(host?.querySelector('[aria-label="选择计算期"]')?.textContent).toBe("102期");
+  });
+
+  it("keeps the historical selection when visiting latest or totals and then returning", async () => {
+    await renderView();
+    await act(async () => findButton("按期查看").click());
+    await choosePeriod("101");
+    await act(async () => findButton("最新输出").click());
+    expect(host?.querySelector(".rq-formula-stats__period-note")?.textContent).toContain("计算期 103");
+    await act(async () => findButton("最近十期").click());
+    expect(host?.querySelector('[aria-label="选择计算期"]')).toBeNull();
+    expect(host?.textContent).toContain("3 个计算期合计");
+    await act(async () => findButton("按期查看").click());
+    expect(host?.querySelector('[aria-label="选择计算期"]')?.textContent).toBe("101期");
+  });
+
+  it("keeps action and result type while switching periods and shows only that period's evidence", async () => {
+    await renderView();
+    await act(async () => findButton("按期查看").click());
+    await act(async () => findButton("半波").click());
+    await choosePeriod("101");
+    expect(host?.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain("半波");
+    expect(host?.querySelector(".rq-formula-stats__evidence-row summary small")?.textContent).toBe("101 计算 · 102 对应");
+    await act(async () => findButton("支持统计").click());
+    await choosePeriod("102");
+    expect(findButton("支持统计").getAttribute("aria-pressed")).toBe("true");
+    expect(host?.querySelector(".rq-formula-stats__rank-value")?.textContent).toBe("1次");
+    expect(host?.querySelector(".rq-formula-stats__evidence-row summary strong")?.textContent).toBe("参考一肖");
+  });
+
+  it("follows incoming draws on latest, but does not switch away from a selected historical issue", async () => {
+    await renderView();
+    await act(async () => findButton("按期查看").click());
+    const moreDraws = [...draws, { ...draws[0], issue: "104" }];
+    await rerenderView({ draws: moreDraws });
+    expect(host?.querySelector('[aria-label="选择计算期"]')?.textContent).toBe("104期（最新）");
+    await choosePeriod("102");
+    await rerenderView({ draws: [...moreDraws, { ...draws[0], issue: "105" }] });
+    expect(host?.querySelector('[aria-label="选择计算期"]')?.textContent).toBe("102期");
+    await choosePeriod("105");
+    await rerenderView({ draws: [...moreDraws, { ...draws[0], issue: "105" }, { ...draws[0], issue: "106" }] });
+    expect(host?.querySelector('[aria-label="选择计算期"]')?.textContent).toBe("106期（最新）");
+  });
+
+  it("returns to latest with an explanation when a selected issue leaves the twenty-period window", async () => {
+    await renderView({ draws: historyDraws });
+    await act(async () => findButton("按期查看").click());
+    await choosePeriod("106");
+    await rerenderView({ draws: [...historyDraws, { ...draws[0], issue: "126" }] });
+    expect(host?.querySelector('[aria-label="选择计算期"]')?.textContent).toBe("126期（最新）");
+    expect(host?.textContent).toContain("原来选择的期次已不在最近20期内");
+    expect(findButton("下一期").disabled).toBe(true);
+  });
+
+  it("shows available periods honestly when there are fewer than twenty or none", async () => {
+    await renderView({ draws: [draws[0]] });
+    await act(async () => findButton("按期查看").click());
+    expect(host?.textContent).toContain("最近1期可选");
+    expect(findButton("上一期").disabled).toBe(true);
+    expect(findButton("下一期").disabled).toBe(true);
+    await rerenderView({ draws: [] });
+    expect(host?.textContent).toContain("暂无开奖记录");
+    expect(host?.querySelector<HTMLButtonElement>('[aria-label="选择计算期"]')?.disabled).toBe(true);
+    expect(host?.textContent).not.toContain("正在整理完整统计");
+  });
+
+  it("finishes loading after a successful empty worker response", async () => {
+    class EmptyWorkerStub {
+      static instance: EmptyWorkerStub;
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      postMessage = vi.fn();
+      terminate = vi.fn();
+      constructor() { EmptyWorkerStub.instance = this; }
+    }
+    workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Worker");
+    Object.defineProperty(globalThis, "Worker", { configurable: true, writable: true, value: EmptyWorkerStub });
+    await renderView({ draws: [] });
+    await act(async () => EmptyWorkerStub.instance.onmessage?.({ data: { ok: true, report: buildFormulaSummaryReport({ draws: [], rules, config: defaultConfig }) } } as MessageEvent));
+    expect(host?.textContent).toContain("暂无开奖记录");
+    expect(host?.textContent).not.toContain("正在整理完整统计");
+  });
+
   it("switches from the complete latest output to the complete recent-ten-period view", async () => {
     await renderView();
 
@@ -125,7 +271,7 @@ describe("formula result statistics view", () => {
     expect(host?.textContent).toContain("参考一肖");
   });
 
-  it("builds the ten-period report off the main thread when Web Workers are available", async () => {
+  it("prepares twenty periods off the main thread and switches periods without another calculation", async () => {
     class WorkerStub {
       static instance: WorkerStub | undefined;
       onmessage: ((event: MessageEvent<{ ok: boolean; report?: ReturnType<typeof buildFormulaSummaryReport> }>) => void) | null = null;
@@ -142,15 +288,19 @@ describe("formula result statistics view", () => {
     Object.defineProperty(globalThis, "Worker", { configurable: true, writable: true, value: WorkerStub });
     await renderView();
 
-    expect(WorkerStub.instance?.postMessage).toHaveBeenCalledWith({ draws, rules, config: defaultConfig, maxPeriods: 11 });
+    expect(WorkerStub.instance?.postMessage).toHaveBeenCalledWith({ draws, rules, config: defaultConfig, maxPeriods: 20 });
     expect(host?.textContent).toContain("正在整理完整统计");
 
-    const report = buildFormulaSummaryReport({ draws, rules, config: defaultConfig, maxPeriods: 11 });
+    const report = buildFormulaSummaryReport({ draws, rules, config: defaultConfig, maxPeriods: 20 });
     await act(async () => WorkerStub.instance?.onmessage?.({ data: { ok: true, report } } as MessageEvent));
 
     expect(host?.textContent).toContain("最新输出");
     await act(async () => findButton("最近十期").click());
     expect(host?.textContent).toContain("3 个计算期");
+    await act(async () => findButton("按期查看").click());
+    await act(async () => findButton("上一期").click());
+    expect(host?.querySelector(".rq-formula-stats__period-note")?.textContent).toContain("计算期 102 → 对应 103");
+    expect(WorkerStub.instance?.postMessage).toHaveBeenCalledTimes(1);
   });
 
   it("opens the route-based analysis cockpit with the current action and type", async () => {
